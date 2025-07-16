@@ -5,7 +5,8 @@ import datetime as dt
 from shared.shared import clean_timestamp, get_input_value, process_feed
 from models.models_a import run_a_model_detection
 from models.models_b import run_b_model_detection
-# run_c_model_detection
+from models.models_c import run_c_model_detection
+
 
 # 🔌 Streamlit interface (UI + orchestration)
 
@@ -38,6 +39,7 @@ scope_value = st.number_input(f"Enter number of {scope_type.lower()}", min_value
 # ✅ Model Detection toggles
 run_a_models = st.sidebar.checkbox("Run Model A Detection")
 run_b_models = st.sidebar.checkbox("Run Model B Detection")
+run_c_models = st.sidebar.checkbox("Run Model C Detection")
 
 # 🧠 Process feeds if ready
 if small_feed_file and big_feed_file and measurement_file:
@@ -105,6 +107,10 @@ if small_feed_file and big_feed_file and measurement_file:
             if run_b_models:
                 st.markdown("---")
                 run_b_model_detection(final_df)
+
+            if run_c_models:
+                st.markdown("---")
+                run_c_model_detection(final_df)
 
 
 
