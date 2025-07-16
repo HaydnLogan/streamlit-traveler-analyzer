@@ -23,11 +23,62 @@ def detect_B_models(df):
         return any(origin.lower() in key for origin in seq["Origin"])
 
     def classify_b_sequence(seq, report_time):
-        # This will be the logic where we match to one of 12 B types
-        # Will return something like: ("B01b[0]", "Mixed Polarity to |40| Today")
-
-        # Stub for now, until we wire the rule logic next
+        epic = {"trinidad", "tobago", "wasp-12b", "macedonia"}
+        anchor = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
+        origins = set(seq["Origin"].str.lower())
+        has_anchor_or_epic = bool(origins & (epic | anchor))
+    
+        day_tags = seq["Day"].astype(str).str.lower()
+        today_count = sum("[0]" in d for d in day_tags)
+        last_day = day_tags.iloc[-1]
+        is_today = "[0]" in last_day
+    
+        last_m = seq.iloc[-1]["M #"]
+        is_40 = last_m == 40
+        polarity = "same" if all(m > 0 for m in seq["M #"]) or all(m < 0 for m in seq["M #"]) else "mixed"
+        feeds = seq["Feed"].nunique()
+        same_feed = feeds == 1
+    
+        if seq.shape[0] < 3:
+            return None, None
+    
+        # B01 group: *Origin present
+        if has_anchor_or_epic:
+            if is_40:
+                if polarity == "same" and same_feed and today_count >= 2 and is_today:
+                    return "B01a[0]", "Same Polarity to |40| Today w/ Anchor/EPIC"
+                if polarity == "same" and same_feed and not is_today:
+                    return "B01a[≠0]", "Same Polarity to |40| Not Today w/ Anchor/EPIC"
+                if polarity == "mixed" and today_count >= 2 and is_today:
+                    return "B01b[0]", "Mixed Polarity to |40| Today w/ Anchor/EPIC"
+                if polarity == "mixed" and not is_today:
+                    return "B01b[≠0]", "Mixed Polarity to |40| Not Today w/ Anchor/EPIC"
+            else:
+                if polarity == "same" and same_feed and today_count >= 2 and is_today:
+                    return "B03a[0]", "Same Polarity to ≠|40| Today w/ Anchor/EPIC"
+                if polarity == "same" and same_feed and not is_today:
+                    return "B03a[≠0]", "Same Polarity to ≠|40| Not Today w/ Anchor/EPIC"
+                if polarity == "mixed" and today_count >= 2 and is_today:
+                    return "B03b[0]", "Mixed Polarity to ≠|40| Today w/ Anchor/EPIC"
+                if polarity == "mixed" and not is_today:
+                    return "B03b[≠0]", "Mixed Polarity to ≠|40| Not Today w/ Anchor/EPIC"
+    
+        # B02 group: no *Origin
+        else:
+            if is_40:
+                if polarity == "same" and same_feed and today_count >= 2 and is_today:
+                    return "B02a[0]", "Same Polarity to |40| Today no Anchor/EPIC"
+                if polarity == "same" and same_feed and not is_today:
+                    return "B02a[≠0]", "Same Polarity to |40| Not Today no Anchor/EPIC"
+                if polarity == "mixed" and today_count >= 2 and is_today:
+                    return "B02b[0]", "Mixed Polarity to |40| Today no Anchor/EPIC"
+                if polarity == "mixed" and not is_today:
+                    return "B02b[≠0]", "Mixed Polarity to |40| Not Today no Anchor/EPIC"
+            else:
+                return None, None
+    
         return None, None
+
 
     report_time = df["Arrival"].max()
     model_outputs = defaultdict(list)
