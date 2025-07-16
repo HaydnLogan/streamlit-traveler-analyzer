@@ -42,11 +42,9 @@ def find_valid_sequences(df):
                     continue
                 if not is_strict_descending_by_abs(seq):
                     continue
-                if seq["Feed"].nunique() > 1:
-                    continue
-                if seq.iloc[-1]["M #"] != 40:
-                    continue
                 if seq["Day"].astype(str).str.contains("\\[0\\]").sum() < 2:
+                    continue
+                if seq.iloc[-1]["M #"] != 40 and seq["M #"].iloc[-1] == 40:
                     continue
                 seen_signatures.add(sig)
                 sequences.append(seq)
@@ -65,12 +63,13 @@ def detect_B_models(df, report_time):
         epic_present = has_epic_origin(seq)
         has_special_origin = anchor_present or epic_present
         ends_at_40 = seq.iloc[-1]["M #"] == 40
+        same_feed = seq["Feed"].nunique() == 1
 
         if has_special_origin and ends_at_40:
             model = f"B01{polarity_type}[0]" if is_today else f"B01{polarity_type}[≠0]"
         elif not has_special_origin and ends_at_40:
             model = f"B02{polarity_type}[0]" if is_today else f"B02{polarity_type}[≠0]"
-        elif not ends_at_40:
+        elif has_special_origin and not ends_at_40:
             model = f"B03{polarity_type}[0]" if is_today else f"B03{polarity_type}[≠0]"
         else:
             continue
