@@ -13,14 +13,6 @@ def get_most_recent_time(df, col="time"):
     """Return the most recent non-null timestamp in the specified column."""
     return pd.to_datetime(df[col], errors='coerce').max()
 
-def get_input_value(df, report_time):
-    """Find the last known 'Input' value before report_time."""
-    df = df.copy()
-    df["time"] = pd.to_datetime(df["time"], errors="coerce")
-    if "input" not in df.columns:
-        return None
-    valid = df[df["time"] <= report_time]
-    return valid["input"].iloc[-1] if not valid.empty else None
 
 def process_feed(df, feed_label, report_time, scope_type, scope_value, day_start_hour, measurements, input_value):
     """Process and structure a feed for analysis."""
