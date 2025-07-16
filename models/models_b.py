@@ -5,7 +5,6 @@ from collections import defaultdict
 # --- Constants ---
 ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62f", "kepler-442b"}
 EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
-STRENGTH_TRAVELERS = {0, 40, -40, 54, -54}
 
 # --- Helpers ---
 def feed_icon(feed):
@@ -50,31 +49,31 @@ def find_valid_sequences(df):
                 last_abs = abs_m
                 feed_set.add(row["Feed"])
 
-                if len(path) >= 3:
-                    seq = rows.iloc[path]
-                    sig = sequence_signature(seq)
-                    if sig in seen_signatures:
-                        continue
-                    seen_signatures.add(sig)
+                seq = rows.iloc[path]
+                if len(seq) < 3:
+                    continue
+                sig = sequence_signature(seq)
+                if sig in seen_signatures:
+                    continue
 
-                    # Validation criteria
-                    if seq.iloc[-1]["M #"] != 40:
-                        continue
-                    if not is_same_polarity(seq):
-                        continue
-                    if not is_descending_by_abs(seq):
-                        continue
-                    if len(feed_set) > 1:
-                        continue
-                    if sum("[0]" in str(day) for day in seq["Day"]) < 2:
-                        continue
-                    if not (has_anchor_origin(seq) or has_epic_origin(seq)):
-                        continue
+                if not is_descending_by_abs(seq):
+                    continue
+                if not is_same_polarity(seq):
+                    continue
+                if len(feed_set) > 1:
+                    continue
+                if seq.iloc[-1]["M #"] != 40:
+                    continue
+                if sum("[0]" in str(day) for day in seq["Day"]) < 2:
+                    continue
+                if not (has_anchor_origin(seq) or has_epic_origin(seq)):
+                    continue
 
-                    sequences.append(seq)
+                seen_signatures.add(sig)
+                sequences.append(seq)
     return sequences
 
-def detect_B_models(df):
+def detect_B_models(df, report_time):
     model_outputs = defaultdict(list)
     sequences = find_valid_sequences(df)
 
@@ -161,8 +160,7 @@ def show_b_model_results(model_outputs, report_time):
             if other_results:
                 render_group("📦 Other Days", other_results)
 
-
 def run_b_model_detection(df):
-    model_outputs = detect_B_models(df)
     report_time = df["Arrival"].max()
+    model_outputs = detect_B_models(df, report_time)
     show_b_model_results(model_outputs, report_time)
