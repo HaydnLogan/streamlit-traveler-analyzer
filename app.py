@@ -51,6 +51,9 @@ if small_feed_file and big_feed_file and measurement_file:
         big_df.columns = big_df.columns.str.strip().str.lower()
         small_df["time"] = small_df["time"].apply(clean_timestamp)
         big_df["time"] = big_df["time"].apply(clean_timestamp)
+        small_df["time"] = pd.to_datetime(small_df["time"], errors="coerce").dt.tz_localize(None)
+        big_df["time"] = pd.to_datetime(big_df["time"], errors="coerce").dt.tz_localize(None)
+
 
         # 📈 Measurements
         xls = pd.ExcelFile(measurement_file)
