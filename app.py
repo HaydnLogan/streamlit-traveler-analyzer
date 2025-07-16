@@ -3,7 +3,7 @@ import pandas as pd
 import datetime as dt
 
 from shared import clean_timestamp, get_input_value, process_feed
-# from models import run_a_model_detection, run_b_model_detection, run_c_model_detection
+from models import run_a_model_detection, # run_b_model_detection, run_c_model_detection
 
 # 🔌 Streamlit interface (UI + orchestration)
 
@@ -91,9 +91,13 @@ if small_feed_file and big_feed_file and measurement_file:
             st.download_button("📥 Download Report CSV", data=final_df.to_csv(index=False).encode(), file_name=filename, mime="text/csv")
 
             # 📣 Model detection placeholder
-            # st.markdown("---")
-            # if run_models:
-            #     run_a_model_detection(final_df)
+            # ✅ Run Model Detection if enabled
+            run_a_models = st.sidebar.checkbox("Run Model A Detection")
+            if run_a_models:
+                st.markdown("---")
+                run_a_model_detection(final_df)
+
+
 
     except Exception as e:
         st.error(f"❌ Error processing feeds: {e}")
