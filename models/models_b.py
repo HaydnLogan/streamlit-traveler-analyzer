@@ -26,7 +26,7 @@ def has_epic_origin(seq):
 
 def is_descending_by_abs(seq):
     abs_values = [abs(m) for m in seq["M #"]]
-    return abs_values == sorted(abs_values, reverse=True)
+    return abs_values == sorted(abs_values, reverse=True) and len(abs_values) == len(set(abs_values))
 
 def find_valid_sequences(df):
     sequences = []
@@ -133,23 +133,34 @@ def show_b_model_results(model_outputs, report_time):
                 st.markdown("No matching outputs.")
                 continue
 
-            grouped = defaultdict(list)
-            for r in results:
-                grouped[r["output"]].append(r)
+            today_results = [r for r in results if "[0]" in str(r["sequence"].iloc[-1]["Day"]).lower()]
+            other_results = [r for r in results if "[0]" not in str(r["sequence"].iloc[-1]["Day"]).lower()]
 
-            for out_val, items in grouped.items():
-                latest = max(items, key=lambda r: r["timestamp"])
-                hrs = int((report_time - latest["timestamp"]).total_seconds() / 3600)
-                ts = latest["timestamp"].strftime('%-m/%-d/%y %H:%M')
-                subhead = f"🔹 Output {out_val:,.3f} – {len(items)} sequence(s) {hrs} hours ago at {ts}"
+            def render_group(name, group):
+                st.markdown(f"#### {name}")
+                grouped = defaultdict(list)
+                for r in group:
+                    grouped[r["output"]].append(r)
 
-                with st.expander(subhead):
-                    for res in items:
-                        seq = res["sequence"]
-                        m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
-                        icons = "".join([feed_icon(row["Feed"]) for _, row in seq.iterrows()])
-                        st.markdown(f"{m_path} Cross [{icons}]")
-                        st.table(seq.reset_index(drop=True))
+                for out_val, items in grouped.items():
+                    latest = max(items, key=lambda r: r["timestamp"])
+                    hrs = int((report_time - latest["timestamp"]).total_seconds() / 3600)
+                    ts = latest["timestamp"].strftime('%-m/%-d/%y %H:%M')
+                    subhead = f"🔹 Output {out_val:,.3f} – {len(items)} sequence(s) {hrs} hours ago at {ts}"
+
+                    with st.expander(subhead):
+                        for res in items:
+                            seq = res["sequence"]
+                            m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
+                            icons = "".join([feed_icon(row["Feed"]) for _, row in seq.iterrows()])
+                            st.markdown(f"{m_path} Cross [{icons}]")
+                            st.table(seq.reset_index(drop=True))
+
+            if today_results:
+                render_group("📅 Today", today_results)
+            if other_results:
+                render_group("📦 Other Days", other_results)
+
 
 def run_b_model_detection(df):
     model_outputs = detect_B_models(df)
