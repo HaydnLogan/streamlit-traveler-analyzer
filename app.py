@@ -35,6 +35,10 @@ day_start_hour = int(day_start_choice.split(":")[0])
 scope_type = st.radio("Scope by", ["Rows", "Days"])
 scope_value = st.number_input(f"Enter number of {scope_type.lower()}", min_value=1, value=10)
 
+# ✅ Model Detection toggles
+run_a_models = st.sidebar.checkbox("Run Model A Detection")
+run_b_models = st.sidebar.checkbox("Run Model B Detection")
+
 # 🧠 Process feeds if ready
 if small_feed_file and big_feed_file and measurement_file:
     try:
@@ -92,14 +96,12 @@ if small_feed_file and big_feed_file and measurement_file:
             filename = f"origin_report_{timestamp_str}.csv"
             st.download_button("📥 Download Report CSV", data=final_df.to_csv(index=False).encode(), file_name=filename, mime="text/csv")
 
-            # 📣 Model detection placeholder
-            # ✅ Run Model Detection if enabled
-            run_a_models = st.sidebar.checkbox("Run Model A Detection")
+            # 📣 Model detection placeholders
             if run_a_models:
                 st.markdown("---")
+                st.subheader("🤖 A Model Detection Results")
                 run_a_model_detection(final_df)
-
-            run_b_models = st.sidebar.checkbox("Run Model B Detection")
+          
             if run_b_models:
                 st.markdown("---")
                 run_b_model_detection(final_df)
