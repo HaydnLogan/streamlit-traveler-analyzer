@@ -64,6 +64,7 @@ if small_feed_file and big_feed_file and measurement_file:
         # ⏱️ Set report time (if not already chosen)
         if report_mode == "Most Current":
             report_time = max(small_df["time"].max(), big_df["time"].max())
+            st.write(f"DEBUG: report_time is {report_time}")
 
         # ✅ Filter feeds to exclude data after report_time
         if filter_future_data and report_time:
@@ -76,10 +77,16 @@ if small_feed_file and big_feed_file and measurement_file:
         st.success(f"✅ Using report time: {report_time.strftime('%d-%b-%y %H:%M')}")
 
         # 🧮 Input value
+        st.write("DEBUG: Checking for 'input' in small_df")
+        st.write(small_df[["time", "input"]].head(10))
+
         input_value = get_input_value(small_df, report_time)
         if input_value is None:
             input_value = get_input_value(big_df, report_time)
+        if input_value is None:
+            st.warning("DEBUG: No 'input' value found in either feed before report time.")
 
+        
         if report_time is None or input_value is None:
             st.error("⚠️ Could not determine Report Time or Input Value.")
         else:
