@@ -9,7 +9,7 @@ from models.models_c import run_c_model_detection
 # this works, different model b, finds B01a[0] but still misses B01b[0]
 # 🔌 Streamlit UI
 st.set_page_config(layout="wide")
-st.header("🧬 Data Feed Processor + Model A/B/C Detector. v01")
+st.header("🧬 Data Feed Processor + Model A/B/C Detector. v01p")
 
 # 📤 Upload feeds
 small_feed_file = st.file_uploader("Upload small feed", type="csv")
