@@ -102,7 +102,7 @@ if small_feed_file and big_feed_file and measurement_file:
             final_df["Arrival Display"] = final_df["Arrival"].dt.strftime("%#d-%b-%y %H:%M")  # human-readable version
 
             st.subheader("📊 Final Traveler Report")
-            st.dataframe(final_df[["Feed", "Arrival Display", "Origin", "M Name", "M #", "Output", "Type"]])
+            st.dataframe(final_df[["Feed", "Arrival Display", "Origin", "M Name", "M #", "Output"]])
 
 
             # 📥 Download
