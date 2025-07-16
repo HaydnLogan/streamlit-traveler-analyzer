@@ -1,51 +1,143 @@
 import pandas as pd
-import numpy as np
 import datetime as dt
 
 def clean_timestamp(value):
-    """Parse timestamp or return NaT if invalid."""
     try:
         return pd.to_datetime(value)
     except Exception:
         return pd.NaT
 
-def get_most_recent_time(df, col="time"):
-    """Return the most recent non-null timestamp in the specified column."""
-    return pd.to_datetime(df[col], errors='coerce').max()
+# ✅ Extract origin column groups
+def extract_origins(columns):
+    origins = {}
+    for col in columns:
+        col = col.strip().lower()
+        if col in ["time", "open"]:
+            continue
+        if any(suffix in col for suffix in [" h", " l", " c"]):
+            bracket = ""
+            if "[" in col and "]" in col:
+                bracket = col[col.find("["):col.find("]")+1]
+            core = col.replace(" h", "").replace(" l", "").replace(" c", "")
+            if bracket and not core.endswith(bracket):
+                core += bracket
+            origins.setdefault(core, []).append(col)
+    return {origin: cols for origin, cols in origins.items() if len(cols) == 3}
 
+# ✅ Calculate pivot output
+def calculate_pivot(H, L, C, M_value):
+    return ((H + L + C) / 3) + M_value * (H - L)
 
-def process_feed(df, feed_label, report_time, scope_type, scope_value, day_start_hour, measurements, input_value):
-    """Process and structure a feed for analysis."""
-    results = []
-    df = df.copy()
-    df["Feed"] = feed_label
-    df["Arrival"] = pd.to_datetime(df["time"], errors="coerce")
+# ✅ Get day index label
+def get_day_index(arrival, report_time, start_hour):
+    if not report_time:
+        return "[0] Today"
+    report_day_start = report_time.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    if report_time.hour < start_hour:
+        report_day_start -= dt.timedelta(days=1)
+    days_diff = (arrival - report_day_start) // dt.timedelta(days=1)
+    return f"[{int(days_diff)}]"
 
-    # Apply day partitioning
-    df["Traveler Day"] = df["Arrival"].apply(lambda t: (
-        t - pd.Timedelta(days=1) if t.hour < day_start_hour else t
-    ).strftime("%Y-%m-%d"))
+# ✅ Calculate weekly anchor time
+def get_weekly_anchor(report_time, weeks_back, start_hour):
+    days_since_sunday = (report_time.weekday() + 1) % 7
+    anchor_date = report_time - dt.timedelta(days=days_since_sunday + 7 * (weeks_back - 1))
+    return anchor_date.replace(hour=start_hour, minute=0, second=0, microsecond=0)
 
-    recent = df.sort_values(by="Arrival", ascending=False)
+# ✅ Calculate monthly anchor time
+def get_monthly_anchor(report_time, months_back, start_hour):
+    year = report_time.year
+    month = report_time.month - (months_back - 1)
+    while month <= 0:
+        month += 12
+        year -= 1
+    return dt.datetime(year, month, 1, hour=start_hour, minute=0, second=0, microsecond=0)
 
-    if scope_type == "Rows":
-        trimmed = recent.head(scope_value)
-    elif scope_type == "Days":
-        unique_days = recent["Traveler Day"].unique()[:scope_value]
-        trimmed = recent[recent["Traveler Day"].isin(unique_days)]
-    else:
-        trimmed = recent
+# ✅ Main feed processor
+def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value):
+    df.columns = df.columns.str.strip().str.lower()
+    df["time"] = df["time"].apply(clean_timestamp)
+    df = df.iloc[::-1]  # reverse chronological
 
-    for _, row in trimmed.iterrows():
-        result = {
-            "Feed": feed_label,
-            "Row": int(row.get("row", -1)),
-            "Arrival": row["Arrival"],
-            "M #": int(row.get("m #", 0)),
-            "Origin": row.get("origin", "Unknown"),
-            "Output": float(row.get("output", np.nan)),
-            "Type": row.get("type", "N/A"),
-        }
-        results.append(result)
+    if report_time:
+        if scope_type == "Rows":
+            try:
+                start_index = df[df["time"] == report_time].index[0]
+                df = df.iloc[start_index:start_index + scope_value]
+            except:
+                pass
+        else:
+            cutoff = report_time - pd.Timedelta(days=scope_value)
+            df = df[df["time"] >= cutoff]
 
-    return results
+    origins = extract_origins(df.columns)
+    new_data_rows = []
+
+    for origin, cols in origins.items():
+        relevant_rows = df[["time", "open"] + cols].dropna()
+        origin_name = origin.lower()
+        is_special = any(tag in origin_name for tag in ["wasp", "macedonia"])
+
+        if is_special:
+            report_row = relevant_rows[relevant_rows["time"] == report_time]
+            if report_row.empty:
+                continue
+            current = report_row.iloc[0]
+            bracket_number = 0
+            if "[" in origin_name and "]" in origin_name:
+                try:
+                    bracket_number = int(origin_name.split("[")[-1].replace("]", ""))
+                except:
+                    pass
+            if "wasp" in origin_name:
+                arrival_time = get_weekly_anchor(report_time, max(1, bracket_number), start_hour)
+            elif "macedonia" in origin_name:
+                arrival_time = get_monthly_anchor(report_time, max(1, bracket_number), start_hour)
+            else:
+                arrival_time = report_time
+            H, L, C = current[cols[0]], current[cols[1]], current[cols[2]]
+            for _, row in measurements.iterrows():
+                output = calculate_pivot(H, L, C, row["m value"])
+                day = get_day_index(arrival_time, report_time, start_hour)
+                new_data_rows.append({
+                    "Feed": feed_type,
+                    "Arrival": arrival_time,
+                    "Origin": origin,
+                    "M Name": row["m name"],
+                    "M #": row["m #"],
+                    "R #": row["r #"],
+                    "Tag": row["tag"],
+                    "Family": row["family"],
+                    "Input": input_value,
+                    "Output": output,
+                    "Diff": output - input_value,
+                    "Day": day
+                })
+            continue
+
+        for i in range(len(relevant_rows) - 1):
+            current = relevant_rows.iloc[i]
+            above = relevant_rows.iloc[i + 1]
+            changed = any(current[col] != above[col] for col in cols)
+            if changed:
+                arrival_time = current["time"]
+                H, L, C = current[cols[0]], current[cols[1]], current[cols[2]]
+                for _, row in measurements.iterrows():
+                    output = calculate_pivot(H, L, C, row["m value"])
+                    day = get_day_index(arrival_time, report_time, start_hour)
+                    new_data_rows.append({
+                        "Feed": feed_type,
+                        "Arrival": arrival_time,
+                        "Origin": origin,
+                        "M Name": row["m name"],
+                        "M #": row["m #"],
+                        "R #": row["r #"],
+                        "Tag": row["tag"],
+                        "Family": row["family"],
+                        "Input": input_value,
+                        "Output": output,
+                        "Diff": output - input_value,
+                        "Day": day
+                    })
+
+    return new_data_rows
