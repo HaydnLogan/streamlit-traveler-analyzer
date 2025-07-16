@@ -80,7 +80,7 @@ def detect_B_models(df):
 
     return model_outputs
 
-def show_b_model_results(model_outputs):
+def show_b_model_results(model_outputs, report_time):
     base_names = {
         "B01a[0]": "Same Polarity Descenders, *Origin to |40| today",
         "B01a[≠0]": "Same Polarity Descenders, *Origin to |40| ≠[0]",
@@ -113,7 +113,7 @@ def show_b_model_results(model_outputs):
 
             for out_val, items in grouped.items():
                 latest = max(items, key=lambda r: r["timestamp"])
-                hrs = int((pd.Timestamp.now() - latest["timestamp"]).total_seconds() / 3600)
+                hrs = int((report_time - latest["timestamp"]).total_seconds() / 3600)
                 ts = latest["timestamp"].strftime('%-m/%-d/%y %H:%M')
                 subhead = f"🔹 Output {out_val:,.3f} – {len(items)} sequence(s) {hrs} hours ago at {ts}"
 
@@ -127,4 +127,5 @@ def show_b_model_results(model_outputs):
 
 def run_b_model_detection(df):
     model_outputs = detect_B_models(df)
-    show_b_model_results(model_outputs)
+    report_time = df["Arrival"].max()
+    show_b_model_results(model_outputs, report_time)
