@@ -31,6 +31,8 @@ else:
 
 # input_value = None
 
+input_value = None
+
 if "open" in small_df.columns:
     if report_mode == "Most Current":
         input_value = small_df["open"].dropna().iloc[-1]
