@@ -23,7 +23,7 @@ def has_anchor_origin(seq):
 def has_epic_origin(seq):
     return any(origin.lower() in EPIC_ORIGINS for origin in seq["Origin"])
 
-def is_descending_by_abs(seq):
+def is_strict_descending_by_abs(seq):
     abs_values = [abs(m) for m in seq["M #"]]
     return abs_values == sorted(abs_values, reverse=True) and len(abs_values) == len(set(abs_values))
 
@@ -33,42 +33,25 @@ def find_valid_sequences(df):
 
     for output in df["Output"].unique():
         rows = df[df["Output"] == output].sort_values("Arrival").reset_index(drop=True)
-        for start in range(len(rows)):
-            path = []
-            seen_mags = set()
-            last_abs = float('inf')
-            feed_set = set()
-            for idx in range(start, len(rows)):
-                row = rows.iloc[idx]
-                m = row["M #"]
-                abs_m = abs(m)
-                if abs_m in seen_mags or abs_m >= last_abs:
-                    continue
-                path.append(idx)
-                seen_mags.add(abs_m)
-                last_abs = abs_m
-                feed_set.add(row["Feed"])
-
-                seq = rows.iloc[path]
-                if len(seq) < 3:
-                    continue
+        n = len(rows)
+        for i in range(n):
+            for j in range(i + 3, n + 1):  # start with at least 3-length window
+                seq = rows.iloc[i:j]
                 sig = sequence_signature(seq)
                 if sig in seen_signatures:
                     continue
-
-                if not is_descending_by_abs(seq):
+                if not is_strict_descending_by_abs(seq):
                     continue
                 if not is_same_polarity(seq):
                     continue
-                if len(feed_set) > 1:
+                if seq["Feed"].nunique() > 1:
                     continue
                 if seq.iloc[-1]["M #"] != 40:
                     continue
-                if sum("[0]" in str(day) for day in seq["Day"]) < 2:
+                if seq["Day"].astype(str).str.contains("\\[0\\]").sum() < 2:
                     continue
                 if not (has_anchor_origin(seq) or has_epic_origin(seq)):
                     continue
-
                 seen_signatures.add(sig)
                 sequences.append(seq)
     return sequences
