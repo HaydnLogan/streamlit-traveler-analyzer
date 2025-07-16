@@ -98,10 +98,12 @@ if small_feed_file and big_feed_file and measurement_file:
 
             final_df = pd.DataFrame(results)
             final_df.sort_values(by=["Output", "Arrival"], ascending=[False, True], inplace=True)
-            final_df["Arrival"] = pd.to_datetime(final_df["Arrival"]).dt.strftime("%#d-%b-%y %H:%M")
+            final_df["Arrival"] = pd.to_datetime(final_df["Arrival"], errors="coerce")  # keeps as datetime for models
+            final_df["Arrival Display"] = final_df["Arrival"].dt.strftime("%#d-%b-%y %H:%M")  # human-readable version
 
             st.subheader("📊 Final Traveler Report")
-            st.dataframe(final_df)
+            st.dataframe(final_df[["Feed", "Arrival Display", "Origin", "M Name", "M #", "Output", "Type"]])
+
 
             # 📥 Download
             timestamp_str = report_time.strftime("%y-%m-%d_%H-%M")
