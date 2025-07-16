@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 
-from shared.shared import clean_timestamp, get_input_value, process_feed
+from shared.shared import clean_timestamp, process_feed
 from models.models_a import run_a_model_detection
 from models.models_b import run_b_model_detection
 from models.models_c import run_c_model_detection
