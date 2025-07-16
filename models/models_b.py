@@ -42,15 +42,11 @@ def find_valid_sequences(df):
                     continue
                 if not is_strict_descending_by_abs(seq):
                     continue
-                if not is_same_polarity(seq):
-                    continue
                 if seq["Feed"].nunique() > 1:
                     continue
                 if seq.iloc[-1]["M #"] != 40:
                     continue
                 if seq["Day"].astype(str).str.contains("\\[0\\]").sum() < 2:
-                    continue
-                if not (has_anchor_origin(seq) or has_epic_origin(seq)):
                     continue
                 seen_signatures.add(sig)
                 sequences.append(seq)
