@@ -27,29 +27,22 @@ if report_mode == "Choose a time":
 else:
     report_time = None  # will be computed later
 
-input_value = get_input_value(small_df, report_time)
-if input_value is None:
-    input_value = get_input_value(big_df, report_time)
+(small_df, report_time)
 
-if report_time is None or input_value is None:
-    st.error("⚠️ Could not determine Report Time or Input Value.")
-else:
-    st.success(f"✅ Input value: {input_value:.3f}")
+# input_value = None
 
-input_value = None
+# if "open" in small_df.columns:
+#     if report_mode == "Most Current":
+#         input_value = small_df["open"].dropna().iloc[-1]
+#     else:
+#         valid = small_df[small_df["time"] <= report_time]
+#         if not valid.empty:
+#             input_value = valid["open"].iloc[-1]
 
-if "open" in small_df.columns:
-    if report_mode == "Most Current":
-        input_value = small_df["open"].dropna().iloc[-1]
-    else:
-        valid = small_df[small_df["time"] <= report_time]
-        if not valid.empty:
-            input_value = valid["open"].iloc[-1]
-
-if report_time is None or input_value is None:
-    st.error("⚠️ Could not determine Report Time or Input Value.")
-else:
-    st.success(f"✅ Input value: {input_value:.3f}")
+# if report_time is None or input_value is None:
+#     st.error("⚠️ Could not determine Report Time or Input Value.")
+# else:
+#     st.success(f"✅ Input value: {input_value:.3f}")
 
 
 # ✅ Add option to filter out future data
@@ -105,17 +98,21 @@ if small_feed_file and big_feed_file and measurement_file:
         st.write("DEBUG: Checking for 'input' in small_df")
         st.write(small_df[["time", "input"]].head(10))
 
-        input_value = get_input_value(small_df, report_time)
-        if input_value is None:
-            input_value = get_input_value(big_df, report_time)
-        if input_value is None:
-            st.warning("DEBUG: No 'input' value found in either feed before report time.")
-
+        input_value = None
+        
+        if "open" in small_df.columns:
+            if report_mode == "Most Current":
+                input_value = small_df["open"].dropna().iloc[-1]
+            else:
+                valid = small_df[small_df["time"] <= report_time]
+                if not valid.empty:
+                    input_value = valid["open"].iloc[-1]
         
         if report_time is None or input_value is None:
             st.error("⚠️ Could not determine Report Time or Input Value.")
         else:
             st.success(f"✅ Input value: {input_value:.3f}")
+
 
             results = []
             results += process_feed(small_df, "Sm", report_time, scope_type, scope_value, day_start_hour, measurements, input_value)
