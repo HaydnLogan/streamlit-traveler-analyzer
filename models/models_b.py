@@ -30,23 +30,48 @@ def is_descending_by_abs(seq):
 
 def find_valid_sequences(df):
     sequences = []
-    seen_sigs = set()
+    seen_signatures = set()
+
     for output in df["Output"].unique():
         rows = df[df["Output"] == output].sort_values("Arrival").reset_index(drop=True)
-        for i in range(len(rows)):
-            for j in range(i + 2, min(i + 6, len(rows))):
-                seq = rows.iloc[[i, (i + j) // 2, j]]  # get first, middle, last
-                if seq.shape[0] != 3:
+        for start in range(len(rows)):
+            path = []
+            seen_mags = set()
+            last_abs = float('inf')
+            feed_set = set()
+            for idx in range(start, len(rows)):
+                row = rows.iloc[idx]
+                m = row["M #"]
+                abs_m = abs(m)
+                if abs_m in seen_mags or abs_m >= last_abs:
                     continue
-                if not is_descending_by_abs(seq):
-                    continue
-                if seq.iloc[-1]["M #"] != 40:
-                    continue
-                sig = sequence_signature(seq)
-                if sig in seen_sigs:
-                    continue
-                seen_sigs.add(sig)
-                sequences.append(seq)
+                path.append(idx)
+                seen_mags.add(abs_m)
+                last_abs = abs_m
+                feed_set.add(row["Feed"])
+
+                if len(path) >= 3:
+                    seq = rows.iloc[path]
+                    sig = sequence_signature(seq)
+                    if sig in seen_signatures:
+                        continue
+                    seen_signatures.add(sig)
+
+                    # Validation criteria
+                    if seq.iloc[-1]["M #"] != 40:
+                        continue
+                    if not is_same_polarity(seq):
+                        continue
+                    if not is_descending_by_abs(seq):
+                        continue
+                    if len(feed_set) > 1:
+                        continue
+                    if sum("[0]" in str(day) for day in seq["Day"]) < 2:
+                        continue
+                    if not (has_anchor_origin(seq) or has_epic_origin(seq)):
+                        continue
+
+                    sequences.append(seq)
     return sequences
 
 def detect_B_models(df):
