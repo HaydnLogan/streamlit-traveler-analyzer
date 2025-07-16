@@ -33,19 +33,20 @@ def find_valid_sequences(df):
     seen_sigs = set()
     for output in df["Output"].unique():
         rows = df[df["Output"] == output].sort_values("Arrival").reset_index(drop=True)
-        for i in range(len(rows) - 2):
-            seq = rows.iloc[i:i+3]
-            if seq.shape[0] < 3:
-                continue
-            if not is_descending_by_abs(seq):
-                continue
-            if seq.iloc[-1]["M #"] != 40:
-                continue
-            sig = sequence_signature(seq)
-            if sig in seen_sigs:
-                continue
-            seen_sigs.add(sig)
-            sequences.append(seq)
+        for i in range(len(rows)):
+            for j in range(i + 2, min(i + 6, len(rows))):
+                seq = rows.iloc[[i, (i + j) // 2, j]]  # get first, middle, last
+                if seq.shape[0] != 3:
+                    continue
+                if not is_descending_by_abs(seq):
+                    continue
+                if seq.iloc[-1]["M #"] != 40:
+                    continue
+                sig = sequence_signature(seq)
+                if sig in seen_sigs:
+                    continue
+                seen_sigs.add(sig)
+                sequences.append(seq)
     return sequences
 
 def detect_B_models(df):
