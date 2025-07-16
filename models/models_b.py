@@ -3,7 +3,7 @@ import pandas as pd
 from collections import defaultdict
 
 # --- Constants ---
-ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62f", "kepler-442b"}
+ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
 
 # --- Helpers ---
