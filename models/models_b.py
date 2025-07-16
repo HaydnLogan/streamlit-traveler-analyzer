@@ -146,4 +146,7 @@ def show_b_model_results(model_outputs, report_time):
 def run_b_model_detection(df):
     report_time = df["Arrival"].max()
     model_outputs = detect_B_models(df, report_time)
+
+    st.write("🔬 Detected B Model outputs:", sum(len(v) for v in model_outputs.values()))
+    
     show_b_model_results(model_outputs, report_time)
