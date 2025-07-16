@@ -4,7 +4,8 @@ import datetime as dt
 
 from shared.shared import clean_timestamp, get_input_value, process_feed
 from models.models_a import run_a_model_detection
-# run_b_model_detection, run_c_model_detection
+from models.models_b import run_b_model_detection
+# run_c_model_detection
 
 # 🔌 Streamlit interface (UI + orchestration)
 
@@ -97,6 +98,12 @@ if small_feed_file and big_feed_file and measurement_file:
             if run_a_models:
                 st.markdown("---")
                 run_a_model_detection(final_df)
+
+            run_b_models = st.sidebar.checkbox("Run Model B Detection")
+            if run_b_models:
+                st.markdown("---")
+                run_b_model_detection(final_df)
+
 
 
 
