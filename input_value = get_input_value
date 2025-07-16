@@ -31,18 +31,18 @@ else:
 
 # input_value = None
 
-# if "open" in small_df.columns:
-#     if report_mode == "Most Current":
-#         input_value = small_df["open"].dropna().iloc[-1]
-#     else:
-#         valid = small_df[small_df["time"] <= report_time]
-#         if not valid.empty:
-#             input_value = valid["open"].iloc[-1]
+if "open" in small_df.columns:
+    if report_mode == "Most Current":
+        input_value = small_df["open"].dropna().iloc[-1]
+    else:
+        valid = small_df[small_df["time"] <= report_time]
+        if not valid.empty:
+            input_value = valid["open"].iloc[-1]
 
-# if report_time is None or input_value is None:
-#     st.error("⚠️ Could not determine Report Time or Input Value.")
-# else:
-#     st.success(f"✅ Input value: {input_value:.3f}")
+if report_time is None or input_value is None:
+    st.error("⚠️ Could not determine Report Time or Input Value.")
+else:
+    st.success(f"✅ Input value: {input_value:.3f}")
 
 
 # ✅ Add option to filter out future data
@@ -96,22 +96,22 @@ if small_feed_file and big_feed_file and measurement_file:
 
         # 🧮 Input value
         st.write("DEBUG: Checking for 'input' in small_df")
-        st.write(small_df[["time", "input"]].head(10))
+        st.write(small_df[["time", "input"]].head(10)) 
 
-        input_value = None
-        
-        if "open" in small_df.columns:
-            if report_mode == "Most Current":
-                input_value = small_df["open"].dropna().iloc[-1]
-            else:
-                valid = small_df[small_df["time"] <= report_time]
-                if not valid.empty:
-                    input_value = valid["open"].iloc[-1]
-        
-        if report_time is None or input_value is None:
-            st.error("⚠️ Could not determine Report Time or Input Value.")
-        else:
-            st.success(f"✅ Input value: {input_value:.3f}")
+#        input_value = None
+#        
+#        if "open" in small_df.columns:
+#            if report_mode == "Most Current":
+#                input_value = small_df["open"].dropna().iloc[-1]
+#            else:
+#                valid = small_df[small_df["time"] <= report_time]
+#                if not valid.empty:
+#                    input_value = valid["open"].iloc[-1]
+#        
+#        if report_time is None or input_value is None:
+#            st.error("⚠️ Could not determine Report Time or Input Value.")
+#        else:
+#            st.success(f"✅ Input value: {input_value:.3f}")
 
 
             results = []
