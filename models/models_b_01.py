@@ -60,21 +60,25 @@ def classify_b_sequence(seq):
     has_anchor_or_epic = bool(origins & (epic | anchor))
 
     day_tags = seq["Day"].astype(str).str.lower()
-    today_count = sum("[0]" in d for d in day_tags)
-    last_day = day_tags.iloc[-1]
-    is_today = "[0]" in last_day
+    today_tags = [tag for tag in day_tags if "[0]" in tag]
+    is_today = "[0]" in day_tags.iloc[-1]
+    today_count = len(today_tags)
 
-    last_m = seq.iloc[-1]["M #"]
-    is_40 = last_m == 40
-
-    signs = set(1 if m > 0 else -1 for m in seq["M #"] if m != 0)
-    polarity = "a" if len(signs) == 1 else "b"
-    feeds = seq["Feed"].nunique()
-    same_feed = feeds == 1
-
-    if seq.shape[0] < 3:
+    if seq.shape[0] < 3 or not has_anchor_or_epic or not is_today or today_count < 2:
         return None, None
 
+    final_m = seq.iloc[-1]["M #"]
+    is_40 = final_m == 40
+
+    sign_set = set(1 if m > 0 else -1 for m in seq["M #"] if m != 0)
+    polarity = "a" if len(sign_set) == 1 else "b"
+
+    if is_40:
+        return f"B01{polarity}[0]", f"Polarity and Feed may vary to |40| Today w/ Anchor/EPIC"
+    else:
+        return f"B03{polarity}[0]", f"Polarity and Feed may vary to ≠|40| Today w/ Anchor/EPIC"
+
+#   below may need to be deleted as well.
     if has_anchor_or_epic:
         if is_40:
             if polarity == "a" and same_feed and today_count >= 2 and is_today:
