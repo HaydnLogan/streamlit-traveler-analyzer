@@ -27,6 +27,31 @@ if report_mode == "Choose a time":
 else:
     report_time = None  # will be computed later
 
+input_value = get_input_value(small_df, report_time)
+if input_value is None:
+    input_value = get_input_value(big_df, report_time)
+
+if report_time is None or input_value is None:
+    st.error("⚠️ Could not determine Report Time or Input Value.")
+else:
+    st.success(f"✅ Input value: {input_value:.3f}")
+
+input_value = None
+
+if "open" in small_df.columns:
+    if report_mode == "Most Current":
+        input_value = small_df["open"].dropna().iloc[-1]
+    else:
+        valid = small_df[small_df["time"] <= report_time]
+        if not valid.empty:
+            input_value = valid["open"].iloc[-1]
+
+if report_time is None or input_value is None:
+    st.error("⚠️ Could not determine Report Time or Input Value.")
+else:
+    st.success(f"✅ Input value: {input_value:.3f}")
+
+
 # ✅ Add option to filter out future data
 filter_future_data = st.checkbox("Restrict analysis to Report Time or earlier only", value=True)
 
