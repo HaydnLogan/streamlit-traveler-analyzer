@@ -29,6 +29,11 @@ else:
 run_a_models = st.sidebar.checkbox("Run Model A Detection")
 run_b_models = st.sidebar.checkbox("Run Model B Detection")
 run_c_models = st.sidebar.checkbox("Run Model C Detection")
+st.sidebar.subheader("🔧 C Model Filters")
+run_c01 = st.sidebar.checkbox("C Flips", value=True)
+run_c02 = st.sidebar.checkbox("C Opposites", value=True)
+run_c04 = st.sidebar.checkbox("C Ascending", value=True)
+
 
 # ✅ Option to restrict data
 filter_future_data = st.checkbox("Restrict analysis to Report Time or earlier only", value=True)
@@ -118,6 +123,20 @@ if small_feed_file and big_feed_file and measurement_file:
             if run_b_models:
                 st.markdown("---")
                 run_b_model_detection(final_df)
+
+            if run_c_models:
+                st.markdown("---")
+                
+                st.subheader("🧪 Choose C Models to Run")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    run_c01 = st.checkbox("C Flips", value=True)
+                with col2:
+                    run_c02 = st.checkbox("C Opposites", value=True)
+                with col3:
+                    run_c04 = st.checkbox("C Ascending", value=True)
+            
+    run_c_model_detection(final_df, run_c01=run_c01, run_c02=run_c02, run_c04=run_c04)
 
             if run_c_models:
                 st.markdown("---")
