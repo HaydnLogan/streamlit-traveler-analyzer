@@ -195,69 +195,56 @@ def show_c_cluster_table(model_outputs):
     st.table(rows)
 
 # --- Streamlit Display ---
-def show_c_model_results(model_outputs, report_time):
-    st.subheader("🔬 C Model Results")
-
-    # Define expected tags and labels
-    expected_tags = {
+# Define all C model tags and their labels
+MODEL_C_TAGS = {
+    "C.01": {
         "C.01.o.[aft0]": "After Midnight Influence Shift *Origin Today",
         "C.01.o.[fwd0]": "Before Midnight Influence Shift *Origin Today",
         "C.01.t.[aft0]": "After Midnight Influence Shift No *Origin Today",
         "C.01.t.[fwd0]": "Before Midnight Influence Shift No *Origin Today",
+    },
+    "C.02": {
         "C.02.p1.[L0]": "Late Opposites, 0 Mid today",
         "C.02.p2.[E0]": "Early Opposites, 0 Mid today",
         "C.02.p3.[O0]": "Open Opposites, 0 Mid today",
         "C.02.n1.[L0]": "Late Opposites, ≠0 Mid today",
         "C.02.n2.[E0]": "Early Opposites, ≠0 Mid today",
         "C.02.n3.[O0]": "Open Opposites, ≠0 Mid today",
+    },
+    "C.04": {
         "C.04.∀1.[0]": "Trio up to |54| today",
-        "C.04.∀2.[±1]": "Trio up to |54| other days"
+        "C.04.∀2.[±1]": "Trio up to |54| other days",
     }
+}
 
-    grouped_outputs = {
-        "C.01": [],
-        "C.02": [],
-        "C.04": [],
-    }
+def show_c_model_results(model_outputs, report_time):
+    st.subheader("🔬 C Model Results")
 
-    # Bucket results by series
-    for tag, items in model_outputs.items():
-        if tag.startswith("C.01"):
-            grouped_outputs["C.01"].append((tag, items))
-        elif tag.startswith("C.02"):
-            grouped_outputs["C.02"].append((tag, items))
-        elif tag.startswith("C.04"):
-            grouped_outputs["C.04"].append((tag, items))
+    for model_series, tag_dict in MODEL_C_TAGS.items():
+        with st.expander(f"🔹 {model_series} Models", expanded=True):
+            for tag_code, label in tag_dict.items():
+                results = model_outputs.get(tag_code, [])
 
-    # Utility to display each series
-    def render_series(series_name, tag_items):
-        with st.expander(f"🔹 {series_name} Models"):
-            if not tag_items:
-                st.info(f"No {series_name} model results.")
-            for tag, items in sorted(tag_items):
-                label = expected_tags.get(tag, "Unnamed Pattern")
-                output_count = len(set(r["output"] for r in items))
-                header = f"{tag}. {label} – {output_count} output{'s' if output_count != 1 else ''}"
-                with st.expander(header):
-                    grouped = defaultdict(list)
-                    for r in items:
-                        grouped[r["output"]].append(r)
-                    for out_val, group in grouped.items():
-                        latest = max(group, key=lambda r: r["timestamp"])
-                        hrs = int((report_time - latest["timestamp"]).total_seconds() / 3600)
-                        ts = latest["timestamp"].strftime('%-m/%-d/%y %H:%M')
-                        subhead = f"Output {out_val:,.3f} – {len(group)} sequence(s), {hrs} hrs ago at {ts}"
-                        st.markdown(f"**{subhead}**")
-                        for res in group:
-                            seq = res["sequence"]
-                            m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
-                            st.markdown(f"{m_path}")
-                            st.table(seq.reset_index(drop=True))
+                header = f"{tag_code}. {label} – {len(results)} result{'s' if len(results) != 1 else ''}"
+                with st.expander(header, expanded=(len(results) > 0)):
+                    if results:
+                        grouped = defaultdict(list)
+                        for r in results:
+                            grouped[r["output"]].append(r)
 
-    # Render each series
-    render_series("C.01", grouped_outputs["C.01"])
-    render_series("C.02", grouped_outputs["C.02"])
-    render_series("C.04", grouped_outputs["C.04"])
+                        for out_val, items in grouped.items():
+                            latest = max(items, key=lambda r: r["timestamp"])
+                            hrs = int((report_time - latest["timestamp"]).total_seconds() / 3600)
+                            ts = latest["timestamp"].strftime('%-m/%-d/%y %H:%M')
+                            st.markdown(f"**Output {out_val:,.3f} – {len(items)} sequence(s), {hrs} hrs ago at {ts}**")
+
+                            for res in items:
+                                seq = res["sequence"]
+                                m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
+                                st.markdown(f"{m_path}")
+                                st.table(seq.reset_index(drop=True))
+                    else:
+                        st.info("No results found.")
 
 # --- Entry Point ---
 def run_c_model_detection(df, run_c01=True, run_c02=True, run_c04=True):
