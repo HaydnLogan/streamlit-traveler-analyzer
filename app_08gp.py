@@ -9,7 +9,8 @@ from models.mod_c_02g2 import run_c_model_detection
 # to facilitate CavAir, Mod B.v04p3
 # 🔌 Streamlit UI
 st.set_page_config(layout="wide")
-st.header("🧬 Data Feed Processor + Model A/B/C Detector. CavAir_04p3 and mod C_1a_p")
+st.header("🧬 Data Feed Processor + Model A/B/C Detector. v08gp")
+# CavAir_Mod B_04p3 and mod C_2gp
 
 # 📤 Upload feeds
 small_feed_file = st.file_uploader("Upload small feed", type="csv")
