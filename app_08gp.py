@@ -44,6 +44,47 @@ day_start_hour = int(day_start_choice.split(":")[0])
 scope_type = st.radio("Scope by", ["Rows", "Days"])
 scope_value = st.number_input(f"Enter number of {scope_type.lower()}", min_value=1, value=10)
 
+# 📥 Optional bypass: Final Traveler Report
+st.markdown("### 📥 Optional: Upload Final Traveler Report (bypass feed upload)")
+final_report_file = st.file_uploader("Upload Final Traveler Report", type="csv", key="final_report_bypass")
+
+if final_report_file:
+    try:
+        final_df = pd.read_csv(final_report_file)
+        final_df.columns = final_df.columns.str.strip()
+        final_df["Arrival"] = pd.to_datetime(final_df["Arrival"], errors="coerce")
+        final_df["Arrival Display"] = final_df["Arrival"].dt.strftime("%#d-%b-%y %H:%M")
+
+        if report_mode == "Most Current":
+            report_time = final_df["Arrival"].max()
+
+        st.success(f"✅ Using Final Traveler Report with {len(final_df)} rows. Report time set to: {report_time.strftime('%d-%b-%y %H:%M')}")
+
+        st.subheader("📊 Final Traveler Report (Bypass Mode)")
+        st.dataframe(final_df[["Feed", "Arrival Display", "Origin", "M Name", "M #", "Output"]])
+
+        # 📥 Download (optional)
+        timestamp_str = report_time.strftime("%y-%m-%d_%H-%M")
+        filename = f"origin_report_{timestamp_str}.csv"
+        st.download_button("📥 Download Report CSV", data=final_df.to_csv(index=False).encode(), file_name=filename, mime="text/csv")
+
+        # 🔍 Run model detectors
+        if run_a_models:
+            st.markdown("---")
+            run_a_model_detection(final_df)
+
+        if run_b_models:
+            st.markdown("---")
+            run_b_model_detection(final_df)
+
+        if run_c_models:
+            st.markdown("---")
+            run_c_model_detection(final_df, run_c01=run_c01, run_c02=run_c02, run_c04=run_c04)
+
+    except Exception as e:
+        st.error(f"❌ Error processing Final Traveler Report: {e}")
+
+
 # 🧠 Process feeds if ready
 if small_feed_file and big_feed_file and measurement_file:
     try:
