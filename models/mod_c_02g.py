@@ -132,12 +132,20 @@ def find_descending_sequences(df):
                         sequences.append((output, seq_df))
     return sequences
 
-def detect_C_models(df):
+def detect_C_models(df, run_c01=True, run_c02=True, run_c04=True):
     sequences = find_descending_sequences(df)
     model_outputs = defaultdict(list)
 
     for output, seq in sequences:
-        for clf in [classify_c01_sequence, classify_c02_sequence, classify_c04_sequence]:
+        classifiers = []
+        if run_c01:
+            classifiers.append(classify_c01_sequence)
+        if run_c02:
+            classifiers.append(classify_c02_sequence)
+        if run_c04:
+            classifiers.append(classify_c04_sequence)
+
+        for clf in classifiers:
             tag, label = clf(seq)
             if tag:
                 model_outputs[tag].append({
@@ -212,9 +220,9 @@ def show_c_model_results(model_outputs, report_time):
                         st.table(seq.reset_index(drop=True))
 
 # --- Entry Point ---
-def run_c_model_detection(df):
+def run_c_model_detection(df, run_c01=True, run_c02=True, run_c04=True):
     report_time = df["Arrival"].max()
-    model_outputs = detect_C_models(df)
+    model_outputs = detect_C_models(df, run_c01, run_c02, run_c04)
     st.write("🧬 Detected C Model outputs:", sum(len(v) for v in model_outputs.values()))
     show_c_cluster_table(model_outputs)
     show_c_model_results(model_outputs, report_time)
