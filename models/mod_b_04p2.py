@@ -24,20 +24,26 @@ def find_descending_sequences(df):
 
     for i in range(n):
         seq = [df_sorted.iloc[i]]
-        for j in range(i + 1, n):
-            prev_m = seq[-1]["M #"]
-            next_m = df_sorted.iloc[j]["M #"]
+        output_val = df_sorted.iloc[i]["Output"]  # ✅ Pin output for sequence
 
-            # Check descending abs and same polarity
+        for j in range(i + 1, n):
+            row = df_sorted.iloc[j]
+            next_m = row["M #"]
+            prev_m = seq[-1]["M #"]
+
+            # ✅ Enforce same output across sequence
+            if row["Output"] != output_val:
+                break
+
+            # ✅ Descending and same polarity
             if abs(next_m) < abs(prev_m) and (next_m * prev_m > 0):
-                seq.append(df_sorted.iloc[j])
+                seq.append(row)
             else:
                 break
 
         if len(seq) >= 3:
             sequence_df = pd.DataFrame(seq)
-            output_value = sequence_df.iloc[-1]["Output"]
-            sequences.append((output_value, sequence_df))
+            sequences.append((output_val, sequence_df))
 
     return sequences
 
@@ -216,4 +222,5 @@ def run_b_model_detection(df):
     model_outputs = detect_B_models(df, report_time)
 
     st.write("🔬 Detected B Model outputs:", sum(len(v) for v in model_outputs.values()))
+    show_b40_today_cluster(model_outputs)
     show_b_model_results(model_outputs, report_time)
