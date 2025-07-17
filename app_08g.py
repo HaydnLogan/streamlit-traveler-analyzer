@@ -28,7 +28,7 @@ else:
 # ✅ Model toggles
 run_a_models = st.sidebar.checkbox("Run Model A Detection")
 run_b_models = st.sidebar.checkbox("Run Model B Detection")
-# run_c_models = st.sidebar.checkbox("Run Model C Detection")
+run_c_models = st.sidebar.checkbox("Run Model C Detection")
 st.sidebar.subheader("🔧 C Model Filters")
 run_c01 = st.sidebar.checkbox("C Flips", value=True)
 run_c02 = st.sidebar.checkbox("C Opposites", value=True)
