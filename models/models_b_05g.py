@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from collections import defaultdict
-
+# GroundTech. Detect same and mixed polarity sequences. Distinguish feed types (a = same feed, b = mixed feed). Require strictly descending absolute M #s (no duplicates).
 # --- Constants ---
 ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
