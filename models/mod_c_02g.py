@@ -56,7 +56,8 @@ def classify_c02_sequence(seq):
 
     m_vals = seq["M #"].tolist()
     signs = [1 if m > 0 else -1 if m < 0 else 0 for m in m_vals]
-    if signs[0] * signs[2] != -1:
+    if m_vals[0] != -m_vals[2]:
+        return None, None
         return None, None
 
     mid_m = m_vals[1]
