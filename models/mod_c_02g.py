@@ -1,11 +1,15 @@
 import streamlit as st
 import pandas as pd
 from collections import defaultdict
-# GroundTech correction of CavAir
+
 # --- Constants ---
 STRENGTH_TRAVELERS = {0, 40, -40, 54, -54}
-ANCHOR_ORIGINS = {"saturn", "jupiter", "kepler-62", "kepler-44", "spain"}
+ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
+
+# --- Helpers ---
+def feed_icon(feed):
+    return "👶" if "sm" in feed.lower() else "🧔"
 
 # --- Classifiers ---
 def classify_c01_sequence(seq):
@@ -31,21 +35,19 @@ def classify_c01_sequence(seq):
     if abs_path != sorted(abs_path, reverse=True):
         return None, None
 
-    origin_set = set(str(o).lower() for o in seq["Origin"])
-    has_star = origin_set & (ANCHOR_ORIGINS | EPIC_ORIGINS)
-
-    variant = "o" if has_star else "t"
+    origins = set(seq["Origin"].str.lower())
+    has_origin = origins & (ANCHOR_ORIGINS | EPIC_ORIGINS)
+    variant = "o" if has_origin else "t"
     suffix = "[aft0]" if final_hour >= 0 else "[fwd0]"
     tag = f"C.01.{variant}.{suffix}"
 
-    label_lookup = {
+    label_map = {
         "C.01.o.[aft0]": "After Midnight Influence Shift *Origin Today",
         "C.01.o.[fwd0]": "Before Midnight Influence Shift *Origin Today",
         "C.01.t.[aft0]": "After Midnight Influence Shift No *Origin Today",
-        "C.01.t.[fwd0]": "Before Midnight Influence Shift No *Origin Today",
+        "C.01.t.[fwd0]": "Before Midnight Influence Shift No *Origin Today"
     }
-
-    label = label_lookup.get(tag, f"C.01 unknown variant {tag}")
+    label = label_map.get(tag)
     return tag, label
 
 def classify_c02_sequence(seq):
@@ -66,7 +68,8 @@ def classify_c02_sequence(seq):
         return None, None
 
     time = pd.to_datetime(final["Arrival"]).time()
-    t_min = time.hour * 60 + time.minute
+    h, m = time.hour, time.minute
+    t_min = h * 60 + m
 
     if t_min in {1020, 1080}:
         suffix = "[O0]"; num = "3"
@@ -78,7 +81,7 @@ def classify_c02_sequence(seq):
         return None, None
 
     tag = f"C.02.{mid_type}{num}.{suffix}"
-    label_lookup = {
+    label_map = {
         "C.02.p1.[L0]": "Late Opposites, 0 Mid today",
         "C.02.p2.[E0]": "Early Opposites, 0 Mid today",
         "C.02.p3.[O0]": "Open Opposites, 0 Mid today",
@@ -86,7 +89,7 @@ def classify_c02_sequence(seq):
         "C.02.n2.[E0]": "Early Opposites, ≠0 Mid today",
         "C.02.n3.[O0]": "Open Opposites, ≠0 Mid today"
     }
-    label = label_lookup.get(tag, f"C.02 unknown variant {tag}")
+    label = label_map.get(tag)
     return tag, label
 
 def classify_c04_sequence(seq):
@@ -99,24 +102,48 @@ def classify_c04_sequence(seq):
 
     final_day = str(seq.iloc[-1]["Day"]).strip()
     if final_day == "[0]":
-        tag = "C.04.∀1.[0]"
-        label = "Trio up to |54| today"
+        return "C.04.∀1.[0]", "Trio up to |54| today"
     else:
-        tag = "C.04.∀2.[±1]"
-        label = "Trio up to |54| other days"
-    return tag, label
+        return "C.04.∀2.[±1]", "Trio up to |54| other days"
 
-# --- Detection Wrapper ---
-def detect_C_models(sequences):
+# --- Detection ---
+def find_descending_sequences(df):
+    sequences = []
+    seen_signatures = set()
+    for output in df["Output"].unique():
+        rows = df[df["Output"] == output].sort_values("Arrival").reset_index(drop=True)
+        for i in range(len(rows)):
+            path = []
+            abs_seen = set()
+            for j in range(i, len(rows)):
+                m = rows.loc[j, "M #"]
+                abs_m = abs(m)
+                if abs_m in abs_seen:
+                    continue
+                if path and abs_m >= abs(path[-1]["M #"]):
+                    continue
+                abs_seen.add(abs_m)
+                path.append(rows.loc[j])
+                if len(path) >= 3:
+                    sig = tuple([p["M #"] for p in path])
+                    if sig not in seen_signatures:
+                        seen_signatures.add(sig)
+                        seq_df = pd.DataFrame(path).reset_index(drop=True)
+                        sequences.append((output, seq_df))
+    return sequences
+
+def detect_C_models(df):
+    sequences = find_descending_sequences(df)
     model_outputs = defaultdict(list)
+
     for output, seq in sequences:
         for clf in [classify_c01_sequence, classify_c02_sequence, classify_c04_sequence]:
             tag, label = clf(seq)
             if tag:
                 model_outputs[tag].append({
                     "output": output,
-                    "tag": tag,
                     "label": label,
+                    "tag": tag,
                     "timestamp": pd.to_datetime(seq.iloc[-1]["Arrival"]),
                     "sequence": seq
                 })
@@ -124,7 +151,7 @@ def detect_C_models(sequences):
     return model_outputs
 
 # --- Cluster Table ---
-def show_c_model_cluster(model_outputs):
+def show_c_cluster_table(model_outputs):
     cluster = defaultdict(lambda: {"tags": set(), "count": 0, "latest": None})
 
     for tag, items in model_outputs.items():
@@ -144,12 +171,13 @@ def show_c_model_cluster(model_outputs):
     rows = []
     for out_val, c in cluster.items():
         rows.append({
-            "Output": out_val,
+            "Output": f"{out_val:,.3f}",
             "Sequences": c["count"],
             "Model Count": len(c["tags"]),
             "Tags Found": ", ".join(sorted(c["tags"])),
             "Latest Arrival": c["latest"].strftime('%-m/%-d/%y %H:%M')
         })
+
     rows.sort(key=lambda x: x["Output"], reverse=True)
     st.table(rows)
 
@@ -159,10 +187,7 @@ def show_c_model_results(model_outputs, report_time):
 
     sorted_tags = sorted(model_outputs.keys())
     for code in sorted_tags:
-        results = model_outputs.get(code, [])
-        if not results:
-            continue
-
+        results = model_outputs[code]
         label = results[0]["label"]
         output_count = len(set(r["output"] for r in results))
         header = f"{code}. {label} – {output_count} output{'s' if output_count != 1 else ''}"
@@ -182,13 +207,14 @@ def show_c_model_results(model_outputs, report_time):
                     for res in items:
                         seq = res["sequence"]
                         m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
-                        st.markdown(f"{m_path}")
+                        icons = "".join([feed_icon(row["Feed"]) for _, row in seq.iterrows()])
+                        st.markdown(f"{m_path} Cross [{icons}]")
                         st.table(seq.reset_index(drop=True))
 
-# --- App Entry Point ---
-def run_c_model_detection(df, sequences):
+# --- Entry Point ---
+def run_c_model_detection(df):
     report_time = df["Arrival"].max()
-    model_outputs = detect_C_models(sequences)
+    model_outputs = detect_C_models(df)
     st.write("🧬 Detected C Model outputs:", sum(len(v) for v in model_outputs.values()))
-    show_c_model_cluster(model_outputs)
+    show_c_cluster_table(model_outputs)
     show_c_model_results(model_outputs, report_time)
