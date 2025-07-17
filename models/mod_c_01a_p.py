@@ -173,7 +173,7 @@ def show_c_model_results(model_outputs, report_time):
 # --- App Entry Point ---
 def run_c_model_detection(df, sequences):
     report_time = df["Arrival"].max()
-    model_outputs = detect_C_models(sequences)
+    model_outputs = detect_C_models(sequences, report_time)
     st.write("🧬 Detected C Model outputs:", sum(len(v) for v in model_outputs.values()))
     show_c_model_cluster(model_outputs)
     show_c_model_results(model_outputs, report_time)
