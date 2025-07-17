@@ -4,7 +4,7 @@ import datetime as dt
 
 from shared.shared import clean_timestamp, process_feed
 from models.models_a import run_a_model_detection
-from models.mod_B_03 import run_mod_B_detection
+from models.mod_b_03 import run_mod_B_detection
 from models.models_c import run_c_model_detection
 # v00 seems to have a leak, Model B is printing old version info.  
 # 🔌 Streamlit UI
