@@ -97,14 +97,17 @@ def classify_c04_sequence(seq):
         return None, None
 
     m_vals = [abs(m) for m in seq["M #"]]
-    if m_vals != [0, 40, 54]:
+    if sorted(m_vals) != [0, 40, 54]:
         return None, None
+    if m_vals != sorted(m_vals):
+        return None, None  # Must be strictly ascending
 
     final_day = str(seq.iloc[-1]["Day"]).strip()
     if final_day == "[0]":
         return "C.04.∀1.[0]", "Trio up to |54| today"
     else:
         return "C.04.∀2.[±1]", "Trio up to |54| other days"
+
 
 # --- Detection ---
 def find_descending_sequences(df):
