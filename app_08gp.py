@@ -5,7 +5,7 @@ import datetime as dt
 from shared.shared import clean_timestamp, process_feed
 from models.models_a import run_a_model_detection
 from models.mod_b_04p3 import run_b_model_detection
-from models.mod_c_02g2 import run_c_model_detection
+from models.mod_c_02gp import run_c_model_detection
 # to facilitate CavAir, Mod B.v04p3
 # 🔌 Streamlit UI
 st.set_page_config(layout="wide")
