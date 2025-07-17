@@ -117,7 +117,7 @@ if small_feed_file and big_feed_file and measurement_file:
 
             if run_mod_B:
                 st.markdown("---")
-                run_b_model_detection(final_df)
+                run_mod_B_detection(final_df)
 
             if run_c_models:
                 st.markdown("---")
