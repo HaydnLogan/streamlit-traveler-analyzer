@@ -136,11 +136,8 @@ if small_feed_file and big_feed_file and measurement_file:
                 with col3:
                     run_c04 = st.checkbox("C Ascending", value=True)
             
-    run_c_model_detection(final_df, run_c01=run_c01, run_c02=run_c02, run_c04=run_c04)
+                run_c_model_detection(final_df, run_c01=run_c01, run_c02=run_c02, run_c04=run_c04)
 
-            if run_c_models:
-                st.markdown("---")
-                run_c_model_detection(final_df)
 
     except Exception as e:
         st.error(f"❌ Error processing feeds: {e}")
