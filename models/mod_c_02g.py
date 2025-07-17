@@ -55,7 +55,9 @@ def classify_c02_sequence(seq):
         return None, None
 
     m_vals = seq["M #"].tolist()
-    if m_vals[0] != -m_vals[2]:  # True opposite check
+    if abs(m_vals[0]) != abs(m_vals[2]):  # Opposite polarity, equal strength
+        return None, None
+    if not ((m_vals[0] > 0 and m_vals[2] < 0) or (m_vals[0] < 0 and m_vals[2] > 0)):
         return None, None
 
     mid_m = m_vals[1]
@@ -66,8 +68,7 @@ def classify_c02_sequence(seq):
     if final_day != "[0]":
         return None, None
 
-    time = pd.to_datetime(final["Arrival"]).time()
-    h, m = time.hour, time.minute
+    h, m = pd.to_datetime(final["Arrival"]).hour, pd.to_datetime(final["Arrival"]).minute
     t_min = h * 60 + m
 
     if t_min in {1020, 1080}:
@@ -92,21 +93,21 @@ def classify_c02_sequence(seq):
     return tag, label
 
 
+
 def classify_c04_sequence(seq):
     if seq.shape[0] != 3:
         return None, None
 
     m_vals = [abs(m) for m in seq["M #"]]
-    if sorted(m_vals) != [0, 40, 54]:
+    if m_vals != [0, 40, 54]:
         return None, None
-    if m_vals != sorted(m_vals):
-        return None, None  # Must be strictly ascending
 
     final_day = str(seq.iloc[-1]["Day"]).strip()
     if final_day == "[0]":
         return "C.04.∀1.[0]", "Trio up to |54| today"
     else:
         return "C.04.∀2.[±1]", "Trio up to |54| other days"
+
 
 
 # --- Detection ---
