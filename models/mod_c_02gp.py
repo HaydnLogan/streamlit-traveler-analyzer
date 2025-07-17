@@ -50,6 +50,7 @@ def classify_c01_sequence(seq):
     label = label_map.get(tag)
     return tag, label
 
+# find opposites like: -54, 0, +54
 def classify_c02_sequence(seq):
     if seq.shape[0] != 3:
         return None, None
@@ -93,7 +94,7 @@ def classify_c02_sequence(seq):
     return tag, label
 
 
-
+# find ascending: 0, |40|, |54|
 def classify_c04_sequence(seq):
     if seq.shape[0] != 3:
         return None, None
