@@ -42,29 +42,64 @@ def find_descending_sequences(df):
 
 # --- Classifier Logic ---
 def classify_b_sequence(seq):
-    epic = EPIC_ORIGINS
-    anchor = ANCHOR_ORIGINS
+    # --- Constants ---
+    epic = {"trinidad", "tobago", "wasp-12b", "macedonia"}
+    anchor = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
     origins = set(seq["Origin"].str.lower())
-    has_anchor_or_epic = bool(origins & (epic | anchor))
+    has_origin = bool(origins & (epic | anchor))
 
-    day_tags = seq["Day"].astype(str).str.lower()
-    today_tags = [tag for tag in day_tags if "[0]" in tag]
-    is_today = "[0]" in day_tags.iloc[-1]
-    today_count = len(today_tags)
-
-    if seq.shape[0] < 3 or not has_anchor_or_epic or not is_today or today_count < 2:
+    # --- Required Checks ---
+    if seq.shape[0] < 3:
         return None, None
 
+    abs_m = [abs(m) for m in seq["M #"]]
+    if abs_m != sorted(abs_m, reverse=True) or len(set(abs_m)) != len(abs_m):
+        return None, None  # Must descend strictly by abs and be unique
+
     final_m = seq.iloc[-1]["M #"]
-    is_40 = final_m == 40
+    final_day = str(seq.iloc[-1]["Day"]).lower()
+    ends_today = "[0]" in final_day
+    day_tags = seq["Day"].astype(str).str.lower()
+    today_count = day_tags.str.contains(r"\[0\]").sum()
 
+    # --- Feed + Polarity Detection ---
+    feeds = seq["Feed"].nunique()
     sign_set = set(1 if m > 0 else -1 for m in seq["M #"] if m != 0)
-    polarity = "a" if len(sign_set) == 1 else "b"
+    polarity_same = len(sign_set) == 1
+    feed_same = feeds == 1
 
-    if is_40:
-        return f"B01{polarity}[0]", f"Polarity and Feed may vary to |40| Today w/ Anchor/EPIC"
-    else:
-        return f"B03{polarity}[0]", f"Polarity and Feed may vary to ≠|40| Today w/ Anchor/EPIC"
+    # --- Day Tag Gate ---
+    if ends_today and today_count < 2:
+        return None, None  # [0] variants require ≥2
+
+    # --- Tag Builder ---
+    def build_tag(series_num, polarity_code, day_code):
+        label = f"B{series_num}{polarity_code}[{day_code}]"
+        return label
+
+    # --- Classify B01 ---
+    if has_origin and abs(final_m) == 40:
+        if polarity_same and feed_same:
+            return build_tag("01", "a", "0" if ends_today else "≠0"), "Same Polarity, *Origin to |40| " + ("today" if ends_today else "≠[0]")
+        else:
+            return build_tag("01", "b", "0" if ends_today else "≠0"), "Same or mixed polarities, *Origin to |40| " + ("today" if ends_today else "≠[0]")
+
+    # --- Classify B02 ---
+    if not has_origin and abs(final_m) == 40:
+        if polarity_same and feed_same:
+            return build_tag("02", "a", "0" if ends_today else "≠0"), "Same Polarity, no *Origin to |40| " + ("today" if ends_today else "≠[0]")
+        else:
+            return build_tag("02", "b", "0" if ends_today else "≠0"), "Same or mixed polarities, no *Origin to |40| " + ("today" if ends_today else "≠[0]")
+
+    # --- Classify B03 ---
+    if has_origin and abs(final_m) != 40:
+        if polarity_same and feed_same:
+            return build_tag("03", "a", "0" if ends_today else "≠0"), "Same Polarity, *Origin to ≠|40| " + ("today" if ends_today else "≠[0]")
+        else:
+            return build_tag("03", "b", "0" if ends_today else "≠0"), "Same or mixed polarities, *Origin to ≠|40| " + ("today" if ends_today else "≠[0]")
+
+    return None, None  # No match found
+
 
 # --- Detection Wrapper ---
 def detect_B_models(df, report_time):
@@ -86,24 +121,24 @@ def detect_B_models(df, report_time):
 
 # --- Streamlit Display ---
 def show_b_model_results(model_outputs, report_time):
-    base_names = {
-        "B01a[0]": "Same Polarity Descenders, *Origin to |40| today",
-        "B01b[0]": "Mixed Polarity Descenders, *Origin to |40| today",
-        "B03a[0]": "Same Polarity Descenders to ≠|40| today",
-        "B03b[0]": "Mixed Polarity Descenders to ≠|40| today"
-    }
-
     st.subheader("🔍 B Model Results")
-    for code, label in base_names.items():
+
+    # Sort tags for predictable ordering (optional)
+    sorted_tags = sorted(model_outputs.keys(), key=lambda x: (
+        int(x[1:3]), x[3], x[4:]  # Series, polarity, day variant
+    ))
+
+    for code in sorted_tags:
         results = model_outputs.get(code, [])
+        if not results:
+            continue
+
+        label_text = results[0]["label"] if results else "Unnamed pattern"
         output_count = len(set(r["output"] for r in results))
-        header = f"{code}. {label} – {output_count} output{'s' if output_count != 1 else ''}"
+        header = f"{code}. {label_text} – {output_count} output{'s' if output_count != 1 else ''}"
 
         with st.expander(header):
-            if not results:
-                st.markdown("No matching outputs.")
-                continue
-
+            # Split into today vs non-today results
             today_results = [r for r in results if "[0]" in str(r["sequence"].iloc[-1]["Day"]).lower()]
             other_results = [r for r in results if "[0]" not in str(r["sequence"].iloc[-1]["Day"]).lower()]
 
@@ -123,7 +158,7 @@ def show_b_model_results(model_outputs, report_time):
                         for res in items:
                             seq = res["sequence"]
                             m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
-                            icons = "".join([feed_icon(row["Feed"]) for _, row in seq.iterrows()])
+                            icons = "".join(["👶" if "sm" in row["Feed"].lower() else "🧔" for _, row in seq.iterrows()])
                             st.markdown(f"{m_path} Cross [{icons}]")
                             st.table(seq.reset_index(drop=True))
 
@@ -131,7 +166,7 @@ def show_b_model_results(model_outputs, report_time):
                 render_group("📅 Today", today_results)
             if other_results:
                 render_group("📦 Other Days", other_results)
-
+                
 # --- App Entry Point ---
 def run_b_model_detection(df):
     report_time = df["Arrival"].max()
