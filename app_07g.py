@@ -126,16 +126,6 @@ if small_feed_file and big_feed_file and measurement_file:
 
             if run_c_models:
                 st.markdown("---")
-                
-                st.subheader("🧪 Choose C Models to Run")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    run_c01 = st.checkbox("C Flips", value=True)
-                with col2:
-                    run_c02 = st.checkbox("C Opposites", value=True)
-                with col3:
-                    run_c04 = st.checkbox("C Ascending", value=True)
-            
                 run_c_model_detection(final_df, run_c01=run_c01, run_c02=run_c02, run_c04=run_c04)
 
 
