@@ -146,7 +146,7 @@ def show_b40_today_cluster(model_outputs):
 
         # Build table data
         table_data = []
-        for out_val in sorted(cluster.keys()):
+        for out_val in sorted(cluster.keys(), reverse=True):
             c = cluster[out_val]
             tags_str = ", ".join(sorted(c["tags"]))
             latest_str = c["latest"].strftime('%-m/%-d/%y %H:%M')
