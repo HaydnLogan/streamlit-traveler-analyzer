@@ -55,9 +55,7 @@ def classify_c02_sequence(seq):
         return None, None
 
     m_vals = seq["M #"].tolist()
-    signs = [1 if m > 0 else -1 if m < 0 else 0 for m in m_vals]
-    if m_vals[0] != -m_vals[2]:
-        return None, None
+    if m_vals[0] != -m_vals[2]:  # True opposite check
         return None, None
 
     mid_m = m_vals[1]
@@ -74,7 +72,7 @@ def classify_c02_sequence(seq):
 
     if t_min in {1020, 1080}:
         suffix = "[O0]"; num = "3"
-    elif 1021 <= t_min < 120:
+    elif t_min < 120:
         suffix = "[E0]"; num = "2"
     elif t_min >= 120:
         suffix = "[L0]"; num = "1"
@@ -92,6 +90,7 @@ def classify_c02_sequence(seq):
     }
     label = label_map.get(tag)
     return tag, label
+
 
 def classify_c04_sequence(seq):
     if seq.shape[0] != 3:
