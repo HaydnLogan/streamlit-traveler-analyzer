@@ -194,14 +194,31 @@ def show_c_cluster_table(model_outputs):
 def show_c_model_results(model_outputs, report_time):
     st.subheader("🔬 C Model Results")
 
-    sorted_tags = sorted(model_outputs.keys())
-    for code in sorted_tags:
-        results = model_outputs[code]
-        label = results[0]["label"]
-        output_count = len(set(r["output"] for r in results))
-        header = f"{code}. {label} – {output_count} output{'s' if output_count != 1 else ''}"
+    expected_tags = {
+        "C.01.o.[aft0]": "After Midnight Influence Shift *Origin Today",
+        "C.01.o.[fwd0]": "Before Midnight Influence Shift *Origin Today",
+        "C.01.t.[aft0]": "After Midnight Influence Shift No *Origin Today",
+        "C.01.t.[fwd0]": "Before Midnight Influence Shift No *Origin Today",
+        "C.02.p1.[L0]": "Late Opposites, 0 Mid today",
+        "C.02.p2.[E0]": "Early Opposites, 0 Mid today",
+        "C.02.p3.[O0]": "Open Opposites, 0 Mid today",
+        "C.02.n1.[L0]": "Late Opposites, ≠0 Mid today",
+        "C.02.n2.[E0]": "Early Opposites, ≠0 Mid today",
+        "C.02.n3.[O0]": "Open Opposites, ≠0 Mid today",
+        "C.04.∀1.[0]": "Trio up to |54| today",
+        "C.04.∀2.[±1]": "Trio up to |54| other days"
+    }
+
+    for tag, label in expected_tags.items():
+        results = model_outputs.get(tag, [])
+        output_count = len(set(r["output"] for r in results)) if results else 0
+        header = f"{tag}. {label} – {output_count} output{'s' if output_count != 1 else ''}"
 
         with st.expander(header):
+            if not results:
+                st.markdown("No matching sequences.")
+                continue
+
             grouped = defaultdict(list)
             for r in results:
                 grouped[r["output"]].append(r)
@@ -216,8 +233,7 @@ def show_c_model_results(model_outputs, report_time):
                     for res in items:
                         seq = res["sequence"]
                         m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
-                        icons = "".join([feed_icon(row["Feed"]) for _, row in seq.iterrows()])
-                        st.markdown(f"{m_path} Cross [{icons}]")
+                        st.markdown(f"{m_path}")
                         st.table(seq.reset_index(drop=True))
 
 # --- Entry Point ---
