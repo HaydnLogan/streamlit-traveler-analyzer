@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from collections import defaultdict
 
-# ***  Tester B, Mod B   ***
+# ***  Tester B, Model Bs   ***
 # ❗❗❗❌  As of 7.17.25, B02a[0] has 1 verified miss @ output 22,583.667 using origin report 25-06-25_08-00.  ❌❗❗❗
 
 # CavAir. Broad descending-sequence scanning; Inclusive classifier logic; Flexible polarity and feed checks; Visual expanders grouped by label and day
