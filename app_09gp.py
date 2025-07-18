@@ -121,17 +121,22 @@ if small_feed_file and big_feed_file and measurement_file:
             st.warning("⚠️ Future data is included.")
 
         # Display report time
-        st.success(f"✅ Using report time: {report_time.strftime('%d-%b-%y %H:%M')}")
+        st.success(f"📅⏱️ Using report time: {report_time.strftime('%d-%b-%y %H:%M')}")
 
-        # 🧮 Determine Input Value (same logic as older app)
+        # 🧮 Determine Input Value based on small_df only
         input_value = None
         input_row = None
-        
+
         if "open" in small_df.columns and pd.api.types.is_numeric_dtype(small_df["open"]):
-            valid_rows = small_df[small_df["time"] <= report_time].dropna(subset=["open"])
+            if report_mode == "Most Current":
+                valid_rows = small_df.dropna(subset=["open"])
+            else:
+                valid_rows = small_df[small_df["time"] <= report_time].dropna(subset=["open"])
+        
             if not valid_rows.empty:
                 input_row = valid_rows.iloc[-1]
                 input_value = input_row["open"]
+        
         
         # 🧾 Display results
         if report_time is None or input_value is None:
