@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 from collections import defaultdict
 
+# ***  Tester B, Model Cs   ***
+# ❗❗❗❌  As of 7.17.25, C.01.t[aft0] has 1 verified miss @ output 22,476.667 using origin report 25-06-25_08-00.  ❌❗❗❗
+# ❗❗❗❌  As of 7.17.25, C.02.p1.[L0] has 1 verified miss @ output 22,476.583 using origin report 25-06-25_08-00.  ❌❗❗❗
+
 # --- Constants ---
 STRENGTH_TRAVELERS = {0, 40, -40, 54, -54}
 ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
@@ -12,6 +16,7 @@ def feed_icon(feed):
     return "👶" if "sm" in feed.lower() else "🧔"
 
 # --- Classifiers ---
+# ❗❗❗❌  As of 7.17.25, C.01.t[aft0] has 1 verified miss @ output 22,476.667 using origin report 25-06-25_08-00.  ❌❗❗❗
 def classify_c01_sequence(seq):
     if seq.shape[0] < 3:
         return None, None
@@ -51,6 +56,8 @@ def classify_c01_sequence(seq):
     return tag, label
 
 # find opposites like: -54, 0, +54. !! As of 7.17.25, this does not find the correct results !!
+
+# ❗❗❗❌  As of 7.17.25, C.02.p1.[L0] has 1 verified miss @ output 22,476.583 using origin report 25-06-25_08-00.  ❌❗❗❗
 def classify_c02_sequence(seq):
     if seq.shape[0] != 3:
         return None, None
