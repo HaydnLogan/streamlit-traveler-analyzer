@@ -125,18 +125,33 @@ if small_feed_file and big_feed_file and measurement_file:
 
         # 🧮 Get input value from 'open' column in small_df
         input_value = None
+        input_row = None
+
         if "open" in small_df.columns:
+            small_df = small_df.sort_values("time")  # Ensure it's time-ordered
+        
             if report_mode == "Most Current":
-                input_value = small_df["open"].dropna().iloc[-1]
+                # Use the latest non-null 'open' value
+                valid_open = small_df[["time", "open"]].dropna(subset=["open"])
+                if not valid_open.empty:
+                    input_value = valid_open["open"].iloc[-1]
+                    input_row = valid_open.iloc[-1]
             else:
-                valid = small_df[small_df["time"] <= report_time]
+                # Filter up to report time
+                valid = small_df[(small_df["time"] <= report_time) & (small_df["open"].notnull())]
                 if not valid.empty:
                     input_value = valid["open"].iloc[-1]
-
+                    input_row = valid.iloc[-1]
+        
+        # Final check and print
         if report_time is None or input_value is None:
             st.error("⚠️ Could not determine Report Time or Input Value.")
         else:
             st.success(f"✅ Input value: {input_value:.3f}")
+            if input_row is not None:
+                st.caption(f"ℹ️ From row at {input_row['time']}: Open = {input_row['open']:.3f}")        
+
+
 
             # Finalize feed parsing
             results = []
