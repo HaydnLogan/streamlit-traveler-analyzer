@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 from collections import defaultdict
 
-# ***  Tester A, Mod B   ***
+# ***  Tester B, Mod B   ***
+# ❗❗❗❌  As of 7.17.25, B02a[0] has 1 verified miss @ output 22,583.667 using origin report 25-06-25_08-00.  ❌❗❗❗
 
 # CavAir. Broad descending-sequence scanning; Inclusive classifier logic; Flexible polarity and feed checks; Visual expanders grouped by label and day
 # Just added Cluster Table for all 'Today' instances above the final results.  
@@ -89,7 +90,7 @@ def classify_b_sequence(seq):
         else:
             return build_tag("01", "b", "0" if ends_today else "≠0"), "Same or mixed polarities, *Origin to |40| " + ("today" if ends_today else "≠[0]")
 
-    # --- Classify B02 ---
+    # --- Classify B02 ---  # ❗❗❗❌  As of 7.17.25, B02a[0] has 1 verified miss @ output 22,583.667 using origin report 25-06-25_08-00.  ❌❗❗❗
     if not has_origin and abs(final_m) == 40:
         if polarity_same and feed_same:
             return build_tag("02", "a", "0" if ends_today else "≠0"), "Same Polarity, no *Origin to |40| " + ("today" if ends_today else "≠[0]")
