@@ -4,8 +4,8 @@ import datetime as dt
 
 from shared.shared import clean_timestamp, process_feed
 from models.models_a import run_a_model_detection
-from models.mod_b_04p3 import run_b_model_detection
-from models.mod_c_02gp import run_c_model_detection
+from models.TestB_Mod_B_01 import run_b_model_detection
+from models.TestB_Mod_C_01 import run_c_model_detection
 
 # *** This is Tester B  ***
 
