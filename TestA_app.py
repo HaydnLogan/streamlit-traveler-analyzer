@@ -7,7 +7,7 @@ from models.models_a import run_a_model_detection
 from models.TestA_Mod_B_01 import run_b_model_detection
 from models.TestA_Mod_C_01 import run_c_model_detection
 
-# *** This is Tester A  ***
+# *** This is Tester A  🔍 ***
 
 # 🔌 Streamlit UI
 st.set_page_config(layout="wide")
