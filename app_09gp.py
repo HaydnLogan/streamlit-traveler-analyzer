@@ -123,25 +123,26 @@ if small_feed_file and big_feed_file and measurement_file:
         # Display report time
         st.success(f"✅ Using report time: {report_time.strftime('%d-%b-%y %H:%M')}")
 
-        # 🧮 Get input value from 'open' column in small_df
+        # 🧮 Determine Input Value (same logic as older app)
         input_value = None
         input_row = None
-
-        if "open" in small_df.columns:
-            small_df = small_df.sort_values("time")  # Ensure it's time-ordered
         
-            if report_mode == "Most Current":
-                # Use the latest non-null 'open' value
-                valid_open = small_df[["time", "open"]].dropna(subset=["open"])
-                if not valid_open.empty:
-                    input_value = valid_open["open"].iloc[-1]
-                    input_row = valid_open.iloc[-1]
-            else:
-                # Filter up to report time
-                valid = small_df[(small_df["time"] <= report_time) & (small_df["open"].notnull())]
-                if not valid.empty:
-                    input_value = valid["open"].iloc[-1]
-                    input_row = valid.iloc[-1]
+        if "open" in small_df.columns and pd.api.types.is_numeric_dtype(small_df["open"]):
+            valid_rows = small_df[small_df["time"] <= report_time].dropna(subset=["open"])
+            if not valid_rows.empty:
+                input_row = valid_rows.iloc[-1]
+                input_value = input_row["open"]
+        
+        # 🧾 Display results
+        if report_time is None or input_value is None:
+            st.error("⚠️ Could not determine Report Time or Input Value.")
+        else:
+            st.success(f"📌 Input value: {input_value:.3f}")
+            if input_row is not None:
+                st.caption(f"ℹ️ Open = {input_value:.3f} (from row at {input_row['time']})")
+
+
+
         
         # Final check and print
         if report_time is None or input_value is None:
