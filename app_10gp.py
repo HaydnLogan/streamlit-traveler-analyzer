@@ -131,7 +131,7 @@ if small_feed_file and big_feed_file and measurement_file:
             input_value = get_input_value(big_df, report_time)
             
         # input_value = None
-        # input_row = None
+        input_row = None
 
         # if "open" in small_df.columns:
         #     small_df = small_df.sort_values("time")  # Ensure it's time-ordered
