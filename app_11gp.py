@@ -11,9 +11,10 @@ from models.mod_c_02gp import run_c_model_detection
 # 🔌 Streamlit interface (UI + orchestration)
 
 st.set_page_config(layout="wide")
-st.header("🧬 Data Feed Processor + Model A/B/C Detector. v10gp")
+st.header("🧬 Data Feed Processor + Model A/B/C Detector. v11gp")
 # CavAir_Mod B_04p3 and mod C_2gp
-# Table format for Custom Traveler Report
+# Highlights added to Anchor Origins.  Now the app is SUPER SLOW.  ❗❌** Remove highlights. **❌❗
+# Table format for Custom Traveler Report.  *** ✅ keep this ✅ ***
 
 # 📤 Upload feeds
 small_feed_file = st.file_uploader("Upload small feed", type="csv")
@@ -205,6 +206,7 @@ if small_feed_file and big_feed_file and measurement_file:
 
           
             # FINAL Traveler Report Area
+            # ❗❌ remove this cropped rendering and bring back the full data frame "st.dataframe(final_df)" ❌❗
             st.subheader("📊 Final Traveler Report")
 
             # Increase limit for Pandas Styler
