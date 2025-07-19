@@ -2,12 +2,14 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 
-from shared.shared import clean_timestamp, process_feed
+from shared.shared import clean_timestamp, process_feed, get_input_value
 from models.models_a import run_a_model_detection
 from models.mod_b_04p3 import run_b_model_detection
 from models.mod_c_02gp import run_c_model_detection
 # to facilitate CavAir, Mod B.v04p3
-# 🔌 Streamlit UI
+
+# 🔌 Streamlit interface (UI + orchestration)
+
 st.set_page_config(layout="wide")
 st.header("🧬 Data Feed Processor + Model A/B/C Detector. v10gp")
 # CavAir_Mod B_04p3 and mod C_2gp
@@ -121,27 +123,31 @@ if small_feed_file and big_feed_file and measurement_file:
             st.warning("⚠️ Future data is included.")
 
         # Display report time
-        st.success(f"✅ Using report time: {report_time.strftime('%d-%b-%y %H:%M')}")
+        st.success(f"📅 Using report time: {report_time.strftime('%d-%b-%y %H:%M')}")
 
         # 🧮 Get input value from 'open' column in small_df
-        input_value = None
-        input_row = None
+        input_value = get_input_value(small_df, report_time)
+        if input_value is None:
+            input_value = get_input_value(big_df, report_time)
+            
+        # input_value = None
+        # input_row = None
 
-        if "open" in small_df.columns:
-            small_df = small_df.sort_values("time")  # Ensure it's time-ordered
+        # if "open" in small_df.columns:
+        #     small_df = small_df.sort_values("time")  # Ensure it's time-ordered
         
-            if report_mode == "Most Current":
-                # Use the latest non-null 'open' value
-                valid_open = small_df[["time", "open"]].dropna(subset=["open"])
-                if not valid_open.empty:
-                    input_value = valid_open["open"].iloc[-1]
-                    input_row = valid_open.iloc[-1]
-            else:
-                # Filter up to report time
-                valid = small_df[(small_df["time"] <= report_time) & (small_df["open"].notnull())]
-                if not valid.empty:
-                    input_value = valid["open"].iloc[-1]
-                    input_row = valid.iloc[-1]
+        #     if report_mode == "Most Current":
+        #         # Use the latest non-null 'open' value
+        #         valid_open = small_df[["time", "open"]].dropna(subset=["open"])
+        #         if not valid_open.empty:
+        #             input_value = valid_open["open"].iloc[-1]
+        #             input_row = valid_open.iloc[-1]
+        #     else:
+        #         # Filter up to report time
+        #         valid = small_df[(small_df["time"] <= report_time) & (small_df["open"].notnull())]
+        #         if not valid.empty:
+        #             input_value = valid["open"].iloc[-1]
+        #             input_row = valid.iloc[-1]
         
         # Final check and print
         if report_time is None or input_value is None:
