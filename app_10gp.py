@@ -153,9 +153,9 @@ if small_feed_file and big_feed_file and measurement_file:
         if report_time is None or input_value is None:
             st.error("⚠️ Could not determine Report Time or Input Value.")
         else:
-            st.success(f"✅ Input value: {input_value:.3f}")
-            if input_row is not None:
-                st.caption(f"ℹ️ From row at {input_row['time']}: Open = {input_row['open']:.3f}")        
+            st.success(f"📌 Input value: {input_value:.3f}")
+            # if input_row is not None:
+            #     st.caption(f"ℹ️ From row at {input_row['time']}: Open = {input_row['open']:.3f}")        
 
 
 
