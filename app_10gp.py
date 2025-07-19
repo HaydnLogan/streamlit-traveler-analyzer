@@ -149,6 +149,45 @@ if small_feed_file and big_feed_file and measurement_file:
             final_df["Arrival"] = pd.to_datetime(final_df["Arrival"], errors="coerce")  # keeps as datetime for models
             final_df["Arrival Display"] = final_df["Arrival"].dt.strftime("%#d-%b-%y %H:%M")  # human-readable version
 
+            # 📐 Custom Traveler Report
+            st.markdown("### 🎯 Optional: Run Custom Traveler Report")
+            run_custom = st.checkbox("Enable Custom Traveler Report")
+            
+            custom_results = []
+            if run_custom:
+                st.markdown("Select up to 4 output ranges:")
+            
+                custom_ranges = []
+                for i in range(1, 5):
+                    enabled = st.checkbox(f"Enable Range {i}", key=f"range_{i}")
+                    if enabled:
+                        largest = st.number_input(f"Range {i}: Largest Output", value=25000.0, key=f"max_{i}")
+                        smallest = st.number_input(f"Range {i}: Smallest Output", value=20000.0, key=f"min_{i}")
+                        custom_ranges.append((i, smallest, largest))
+            
+                if st.button("▶️ Run Custom Traveler Report"):
+                    if not custom_ranges:
+                        st.warning("Please enable and define at least one range.")
+                    else:
+                        st.markdown("---")
+                        for idx, min_out, max_out in custom_ranges:
+                            filtered = final_df[(final_df["Output"] >= min_out) & (final_df["Output"] <= max_out)]
+                            st.subheader(f"📈 Range {idx}: {min_out:.3f} to {max_out:.3f}")
+                            st.dataframe(filtered[["Feed", "Arrival Display", "Origin", "M Name", "M #", "Output"]])
+                            filtered["Custom Range"] = f"Range {idx}"
+                            custom_results.append(filtered)
+            
+                        # 📥 Download all ranges
+                        if custom_results:
+                            combined = pd.concat(custom_results)
+                            st.download_button(
+                                label="📥 Download Custom Traveler Report CSV",
+                                data=combined.to_csv(index=False).encode(),
+                                file_name="custom_traveler_report.csv",
+                                mime="text/csv"
+                            )
+
+            
             st.subheader("📊 Final Traveler Report")
             st.dataframe(final_df[["Feed", "Arrival Display", "Origin", "M Name", "M #", "Output"]])
 
