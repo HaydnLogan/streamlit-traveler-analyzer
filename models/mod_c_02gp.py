@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 from collections import defaultdict
 
+# ***  Tester A, Model Cs   ***
+# ❗❗❗❌  As of 7.17.25, C.01.t[aft0] has 1 verified miss @ output 22,476.667 using origin report 25-06-25_08-00.  ❌❗❗❗
+# ❗❗❗❌  As of 7.17.25, C.02.p1.[L0] has 1 verified miss @ output 22,476.583 using origin report 25-06-25_08-00.  ❌❗❗❗
+
 # --- Constants ---
 STRENGTH_TRAVELERS = {0, 40, -40, 54, -54}
 ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
@@ -12,6 +16,7 @@ def feed_icon(feed):
     return "👶" if "sm" in feed.lower() else "🧔"
 
 # --- Classifiers ---
+# ❗❗❗❌  As of 7.17.25, C.01.t[aft0] has 1 verified miss @ output 22,476.667 using origin report 25-06-25_08-00.  ❌❗❗❗
 def classify_c01_sequence(seq):
     if seq.shape[0] < 3:
         return None, None
@@ -50,37 +55,42 @@ def classify_c01_sequence(seq):
     label = label_map.get(tag)
     return tag, label
 
-# find opposites like: -54, 0, +54
+# find opposites like: -54, 0, +54. !! As of 7.17.25, this does not find the correct results !!
+
+# ❗❗❗❌  As of 7.17.25, C.02.p1.[L0] has 1 verified miss @ output 22,476.583 using origin report 25-06-25_08-00.  ❌❗❗❗
 def classify_c02_sequence(seq):
     if seq.shape[0] != 3:
         return None, None
 
     m_vals = seq["M #"].tolist()
-    if abs(m_vals[0]) != abs(m_vals[2]):  # Opposite polarity, equal strength
-        return None, None
-    if not ((m_vals[0] > 0 and m_vals[2] < 0) or (m_vals[0] < 0 and m_vals[2] > 0)):
+    first, mid, last = m_vals
+
+    # ✅ Check if first and last M # are true opposites (e.g., -54 and +54)
+    if first + last != 0:
         return None, None
 
-    mid_m = m_vals[1]
-    mid_type = "p" if mid_m == 0 else "n"
-
-    final = seq.iloc[-1]
-    final_day = str(final["Day"]).strip()
+    # ✅ Only check Day == [0]
+    final_day = str(seq.iloc[-1]["Day"]).strip()
     if final_day != "[0]":
         return None, None
 
-    h, m = pd.to_datetime(final["Arrival"]).hour, pd.to_datetime(final["Arrival"]).minute
-    t_min = h * 60 + m
+    # ✅ Time classification (based on last arrival)
+    arrival_time = pd.to_datetime(seq.iloc[-1]["Arrival"]).time()
+    t_min = arrival_time.hour * 60 + arrival_time.minute
 
-    if t_min in {1020, 1080}:
+    if t_min in {1020, 1080}:      # 17:00 or 18:00
         suffix = "[O0]"; num = "3"
-    elif t_min < 120:
+    elif t_min < 120:              # Before 02:00
         suffix = "[E0]"; num = "2"
-    elif t_min >= 120:
+    elif t_min >= 120:             # After 02:00
         suffix = "[L0]"; num = "1"
     else:
         return None, None
 
+    # ✅ Determine mid-type: "p" if 0, otherwise "n"
+    mid_type = "p" if mid == 0 else "n"
+
+    # ✅ Format tag and label
     tag = f"C.02.{mid_type}{num}.{suffix}"
     label_map = {
         "C.02.p1.[L0]": "Late Opposites, 0 Mid today",
@@ -94,7 +104,8 @@ def classify_c02_sequence(seq):
     return tag, label
 
 
-# find ascending: 0, |40|, |54|
+
+# find ascending: 0, |40|, |54|.  !! As of 7.17.25, this does not find the correct results !!
 def classify_c04_sequence(seq):
     if seq.shape[0] != 3:
         return None, None
