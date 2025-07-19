@@ -196,6 +196,8 @@ if small_feed_file and big_feed_file and measurement_file:
                     for r in custom_outputs:
                         label = r["Range Label"].iloc[0]
                         st.subheader(f"📌 {label}")
+                        # Increase limit for Pandas Styler
+                        pd.set_option("styler.render.max_elements", 1_000_000)
                         styled = highlight_anchor_origins(r.drop(columns=["Range Label"]))
                         st.dataframe(styled)
                                     
@@ -203,9 +205,12 @@ if small_feed_file and big_feed_file and measurement_file:
                     st.download_button("📥 Download Custom Traveler Report CSV", data=csv_data, file_name="custom_traveler_report.csv", mime="text/csv")
 
           
-  
-            
+            # FINAL Traveler Report Area
             st.subheader("📊 Final Traveler Report")
+
+            # Increase limit for Pandas Styler
+            pd.set_option("styler.render.max_elements", 1_000_000)
+
             styled_final = highlight_anchor_origins(final_df[["Feed", "Arrival Display", "Origin", "M Name", "M #", "Output"]])
             st.dataframe(styled_final)
             
