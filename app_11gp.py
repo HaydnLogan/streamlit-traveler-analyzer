@@ -180,27 +180,26 @@ if small_feed_file and big_feed_file and measurement_file:
             
             st.markdown("---")
             if st.button("▶️ Run Custom Traveler Report"):
-                custom_outputs = []
+                custom_outputs = {}
                 for r in custom_range_results:
                     if r["enabled"] and r["largest"] > r["smallest"]:
                         filtered = final_df[
                             (final_df["Output"] <= r["largest"]) & (final_df["Output"] >= r["smallest"])
                         ].copy()
                         filtered["Range Label"] = r["label"]
-                        custom_outputs.append(filtered)
-            
+                        custom_outputs[r["label"]] = filtered
+
                 if not custom_outputs:
                     st.warning("No custom ranges matched.")
                 else:
-                    all_custom_df = pd.concat(custom_outputs, ignore_index=True)
-                    for r in custom_outputs:
-                        label = r["Range Label"].iloc[0]
+                    all_custom_df = pd.concat(custom_outputs.values(), ignore_index=True)
+                    for label, df in custom_outputs.items():
                         st.subheader(f"📌 {label}")
                         # Increase limit for Pandas Styler
                         pd.set_option("styler.render.max_elements", 1_000_000)
-                        styled = highlight_anchor_origins(r.drop(columns=["Range Label"]))
+                        styled = highlight_anchor_origins(df.drop(columns=["Range Label"]))
                         st.dataframe(styled)
-                                    
+                                
                     csv_data = all_custom_df.to_csv(index=False).encode()
                     st.download_button("📥 Download Custom Traveler Report CSV", data=csv_data, file_name="custom_traveler_report.csv", mime="text/csv")
 
