@@ -1,5 +1,6 @@
 import pandas as pd
 import datetime as dt
+from dateutil import parser
 
 def clean_timestamp(value):
     try:
