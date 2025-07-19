@@ -24,6 +24,11 @@ def extract_origins(columns):
             origins.setdefault(core, []).append(col)
     return {origin: cols for origin, cols in origins.items() if len(cols) == 3}
 
+# ✅ Get input value for a given report_time
+def get_input_value(df, report_time):
+    match = df[df["time"] == report_time]
+    return match.iloc[-1]["open"] if not match.empty and "open" in match.columns else None
+
 # ✅ Calculate pivot output
 def calculate_pivot(H, L, C, M_value):
     return ((H + L + C) / 3) + M_value * (H - L)
