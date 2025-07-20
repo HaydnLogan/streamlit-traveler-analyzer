@@ -95,14 +95,16 @@ def classify_vip_01(seq):
     arrival_dt = pd.to_datetime(seq.iloc[-1]["Arrival"])
     day_tag = str(seq.iloc[-1]["Day"]).strip()
 
+    final_m = int(abs(m_vals[-1]))  # Ensures 40.0 becomes 40
+    
     if day_tag == "[0]":
         if arrival_dt.hour in [17, 18]:
-            tag = f"VIP.01.{feed_code}o.[O0].|{abs(m_vals[-1])}|"
+            tag = f"VIP.01.{feed_code}o.[O0].|{final_m}|"
             label = f"{'Same' if feed_code == 'a' else 'Mixed'} Feed descends to *Origin |{abs(m_vals[-1])}| at Open today"
         else:
             return None, None
     else:
-        tag = f"VIP.01.{feed_code}o.[∀≠0].|{abs(m_vals[-1])}|"
+        tag = f"VIP.01.{feed_code}o.[∀≠0].|{final_m}|"
         label = f"{'Same' if feed_code == 'a' else 'Mixed'} Feed descends to *Origin |{abs(m_vals[-1])}| any time other days"
 
     return tag, label
