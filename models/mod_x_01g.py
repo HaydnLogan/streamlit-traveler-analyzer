@@ -1,11 +1,11 @@
-# mod_x_01.py — Experimental Model X Detector with formatting like B/C. GroundTech 7.20.25 0740
+# mod_x_01.py — Experimental Model X Detector with formatting like B/C. GroundTech 7.20.25 0740, 0820
 
 import streamlit as st
 from collections import defaultdict
 import pandas as pd
 
-# --- Classifier for X.00.at.[fwd0]40 ---
-def classify_x00_fwd0_40(seq):
+# --- Classifier for C.00.at.[fwd0]40 and C.00.at.[aft0]40 ---
+def classify_x00_at_40(seq):
     if seq.shape[0] < 3:
         return None, None
 
@@ -29,10 +29,10 @@ def classify_x00_fwd0_40(seq):
         return None, None
 
     arrival_time = pd.to_datetime(seq.iloc[-1]["Arrival"]).time()
-    if arrival_time.hour >= 0:
-        arrival_tag = "[fwd0]"
+    if arrival_time.hour >= 2:
+        arrival_tag = "[aft0]"
     else:
-        return None, None
+        arrival_tag = "[fwd0]"
 
     origins = set(seq["Origin"].str.lower())
     has_origin = origins & {"spain", "saturn", "jupiter", "kepler-62", "kepler-44", "trinidad", "tobago", "wasp-12b", "macedonia"}
@@ -42,7 +42,7 @@ def classify_x00_fwd0_40(seq):
     feed_code = "a" if feeds == 1 else "b"
 
     tag = f"C.00.{feed_code}{origin_code}.{arrival_tag}40"
-    label = "Before Midnight Influence Shift, same feed, No *Origin to |40|, Today"
+    label = "Before or After Midnight Influence Shift to |40|"
     return tag, label
 
 
@@ -74,7 +74,7 @@ def detect_X_models(df):
 
     model_outputs = defaultdict(list)
     for output, seq in sequences:
-        tag, label = classify_x00_fwd0_40(seq)
+        tag, label = classify_x00_at_40(seq)
         if tag:
             model_outputs[tag].append({
                 "output": output,
@@ -121,7 +121,7 @@ def run_x_model_detection(df):
     rows.sort(key=lambda x: x["Output"], reverse=True)
     st.table(rows)
 
-    # Display Results
+    # Display Results by Tag and Output
     for tag, results in model_outputs.items():
         header = f"{tag}. {results[0]['label']} – {len(results)} output{'s' if len(results) != 1 else ''}"
         with st.expander(header):
@@ -133,11 +133,10 @@ def run_x_model_detection(df):
                 latest = max(items, key=lambda r: r["timestamp"])
                 hrs = int((report_time - latest["timestamp"]).total_seconds() / 3600)
                 ts = latest["timestamp"].strftime('%-m/%-d/%y %H:%M')
-                st.markdown(f"🔹 Output {out_val:,.3f} – {len(items)} sequence(s) {hrs} hours ago at {ts}")
-
-                for res in items:
-                    seq = res["sequence"]
-                    m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
-                    icons = "".join(["👶" if "sm" in row["Feed"].lower() else "🧔" for _, row in seq.iterrows()])
-                    st.markdown(f"{m_path} Cross [{icons}]")
-                    st.table(seq.reset_index(drop=True))
+                with st.expander(f"🔹 Output {out_val:,.3f} – {len(items)} sequence(s) {hrs} hours ago at {ts}"):
+                    for res in items:
+                        seq = res["sequence"]
+                        m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
+                        icons = "".join(["👶" if "sm" in row["Feed"].lower() else "🧔" for _, row in seq.iterrows()])
+                        st.markdown(f"{m_path} Cross [{icons}]")
+                        st.table(seq.reset_index(drop=True))
