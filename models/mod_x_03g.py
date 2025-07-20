@@ -5,16 +5,16 @@ import streamlit as st
 from collections import defaultdict
 import pandas as pd
 
-VIP_GROUPS = {
-    "VIP.01.ao.[O0].|40|": "Same Feed descends to *Origin |40| at Open today",
-    "VIP.01.ao.[O0].|54|": "Same Feed descends to *Origin |54| at Open today",
-    "VIP.01.ao.[∀≠0].|40|": "Same Feed descends to *Origin |40| any time other days",
-    "VIP.01.ao.[∀≠0].|54|": "Same Feed descends to *Origin |54| any time other days",
-    "VIP.01.bo.[O0].|40|": "Mixed Feed descends to *Origin |40| at Open today",
-    "VIP.01.bo.[O0].|54|": "Mixed Feed descends to *Origin |54| at Open today",
-    "VIP.01.bo.[∀≠0].|40|": "Mixed Feed descends to *Origin |40| any time other days",
-    "VIP.01.bo.[∀≠0].|54|": "Mixed Feed descends to *Origin |54| any time other days"
-}
+# VIP_GROUPS = {
+#     "VIP.01.ao.[O0].|40|": "Same Feed descends to *Origin |40| at Open today",
+#     "VIP.01.ao.[O0].|54|": "Same Feed descends to *Origin |54| at Open today",
+#     "VIP.01.ao.[∀≠0].|40|": "Same Feed descends to *Origin |40| any time other days",
+#     "VIP.01.ao.[∀≠0].|54|": "Same Feed descends to *Origin |54| any time other days",
+#     "VIP.01.bo.[O0].|40|": "Mixed Feed descends to *Origin |40| at Open today",
+#     "VIP.01.bo.[O0].|54|": "Mixed Feed descends to *Origin |54| at Open today",
+#     "VIP.01.bo.[∀≠0].|40|": "Mixed Feed descends to *Origin |40| any time other days",
+#     "VIP.01.bo.[∀≠0].|54|": "Mixed Feed descends to *Origin |54| any time other days"
+# }
 
 
 # --- Classifier for multiple C.00 variants ---
