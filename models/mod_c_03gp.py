@@ -14,13 +14,13 @@ ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
 
 C_GROUPS = {
-    "C.01": {
+    "C.01: ": {
         "C.01.o.[aft0]": "After Midnight Influence Shift *Origin Today",
         "C.01.o.[fwd0]": "Before Midnight Influence Shift *Origin Today",
         "C.01.t.[aft0]": "After Midnight Influence Shift No *Origin Today",
         "C.01.t.[fwd0]": "Before Midnight Influence Shift No *Origin Today",
     },
-    "C.02": {
+    "C.02: Opposites TODAY with M # in the middle": {
         "C.02.p1.[L0]": "Late Opposites, 0 Mid today",
         "C.02.p2.[E0]": "Early Opposites, 0 Mid today",
         "C.02.p3.[O0]": "Open Opposites, 0 Mid today",
@@ -28,7 +28,7 @@ C_GROUPS = {
         "C.02.n2.[E0]": "Early Opposites, ≠0 Mid today",
         "C.02.n3.[O0]": "Open Opposites, ≠0 Mid today",
     },
-    "C.04": {
+    "C.04: Ascending 0, 40, 54": {
         "C.04.∀1.[0]": "Trio up to |54| today",
         "C.04.∀2.[±1]": "Trio up to |54| other days",
     }
@@ -79,8 +79,7 @@ def classify_c01_sequence(seq):
     label = label_map.get(tag)
     return tag, label
 
-# find opposites like: -54, 0, +54. !! As of 7.17.25, this does not find the correct results !!
-
+# C.02:  find opposites like: -54, 0, +54. !! As of 7.17.25, this does not find the correct results !!
 # ❗❗❗❌  As of 7.17.25, C.02.p1.[L0] has 1 verified miss @ output 22,476.583 using origin report 25-06-25_08-00.  ❌❗❗❗
 def classify_c02_sequence(seq):
     if seq.shape[0] != 3:
@@ -129,7 +128,7 @@ def classify_c02_sequence(seq):
 
 
 
-# # find ascending: 0, |40|, |54|.  !! As of 7.17.25, this does not find the correct results !!
+# find ascending: 0, |40|, |54|.  ❗❗❗❌ As of 7.17.25, this does not find the correct results ❌❗❗❗
 def classify_c04_sequence(seq):
     if seq.shape[0] != 3:
         return None, None
@@ -146,7 +145,7 @@ def classify_c04_sequence(seq):
 
 
 
-# # --- Detection ---
+# --- Detection ---
 def find_descending_sequences(df):
     sequences = []
     seen_signatures = set()
