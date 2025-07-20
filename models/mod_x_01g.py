@@ -28,11 +28,9 @@ def classify_x00_at_40(seq):
     if day != "[0]":
         return None, None
 
-    arrival_time = pd.to_datetime(seq.iloc[-1]["Arrival"]).time()
-    if arrival_time.hour >= 2:
-        arrival_tag = "[aft0]"
-    else:
-        arrival_tag = "[fwd0]"
+    arrival_dt = pd.to_datetime(seq.iloc[-1]["Arrival"])
+    t_min = arrival_dt.hour * 60 + arrival_dt.minute
+    arrival_tag = "[aft0]" if t_min >= 120 else "[fwd0]"
 
     origins = set(seq["Origin"].str.lower())
     has_origin = origins & {"spain", "saturn", "jupiter", "kepler-62", "kepler-44", "trinidad", "tobago", "wasp-12b", "macedonia"}
@@ -121,7 +119,7 @@ def run_x_model_detection(df):
     rows.sort(key=lambda x: x["Output"], reverse=True)
     st.table(rows)
 
-    # Display Results by Tag and Output
+    # Display Results grouped by tag and by output
     for tag, results in model_outputs.items():
         header = f"{tag}. {results[0]['label']} – {len(results)} output{'s' if len(results) != 1 else ''}"
         with st.expander(header):
