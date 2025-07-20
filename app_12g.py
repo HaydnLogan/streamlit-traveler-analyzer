@@ -88,7 +88,10 @@ if final_report_file:
         if run_c_models:
             st.markdown("---")
             run_c_model_detection(final_df, run_c01=run_c01, run_c02=run_c02, run_c04=run_c04)
-
+        if run_x_models:
+            st.markdown("---")
+            run_x_model_detection(final_df)
+            
     except Exception as e:
         st.error(f"❌ Error processing Final Traveler Report: {e}")
 
