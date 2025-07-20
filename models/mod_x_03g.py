@@ -134,7 +134,7 @@ def detect_X_models(df):
                     "timestamp": pd.to_datetime(seq.iloc[-1]["Arrival"]),
                     "sequence": seq
                 })
-                break
+                break  # Stops after the first matching tag
     return model_outputs
 
 
@@ -182,6 +182,7 @@ def run_x_model_detection(df):
 
     for prefix, title in family_groups.items():
         subset = {k: v for k, v in model_outputs.items() if k.startswith(prefix)}
+        subset = dict(sorted(subset.items()))  # Ensure consistent ordering
         if not subset:
             continue
         with st.expander(f"📂 {title} ({len(subset)} tags)", expanded=False):
