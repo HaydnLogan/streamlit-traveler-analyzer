@@ -9,7 +9,7 @@ from pandas import ExcelWriter
 
 from shared.shared import clean_timestamp, process_feed, get_input_value, highlight_anchor_origins
 from models.models_a import run_a_model_detection
-from models.mod_b_05pg1.py import run_b_model_detection
+from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_02gp import run_c_model_detection
 
 # 🔌 Streamlit interface (UI + orchestration)
