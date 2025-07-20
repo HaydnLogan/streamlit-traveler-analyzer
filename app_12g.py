@@ -1,4 +1,4 @@
-# v12 - Data Feed Processor with Excel download + Anchor Highlighting in Export Only
+# v12 - Data Feed Processor with Excel download + Anchor Highlighting in Export Only. GroundTech 7.19.25
 # Table format for Custom Traveler Report.
 
 import streamlit as st
@@ -11,6 +11,7 @@ from shared.shared import clean_timestamp, process_feed, get_input_value, highli
 from models.models_a import run_a_model_detection
 from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_03gp import run_c_model_detection
+from models.mod_x_01g import run_x_model_detection
 
 # 🔌 Streamlit interface (UI + orchestration)
 
@@ -38,6 +39,7 @@ run_c_models = st.sidebar.checkbox("Run Model C Detection")
 run_c01 = st.sidebar.checkbox("C Flips", value=True)
 run_c02 = st.sidebar.checkbox("C Opposites", value=True)
 run_c04 = st.sidebar.checkbox("C Ascending", value=True)
+run_x_models = st.sidebar.checkbox("Run Model X Detection")
 
 filter_future_data = st.checkbox("Restrict analysis to Report Time or earlier only", value=True)
 
@@ -187,6 +189,10 @@ if small_feed_file and big_feed_file and measurement_file:
             if run_c_models:
                 st.markdown("---")
                 run_c_model_detection(final_df, run_c01=run_c01, run_c02=run_c02, run_c04=run_c04)
+        
+            if run_x_models:
+                st.markdown("---")
+                run_x_model_detection(final_df)
 
     except Exception as e:
         st.error(f"❌ Error processing feeds: {e}")
