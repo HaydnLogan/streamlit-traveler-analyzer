@@ -1,10 +1,12 @@
-# mod_x_01.py — Experimental Model X Detector with formatting like B/C. GroundTech 7.20.25 0740, 0820
+# mod_x_01.py — Experimental Model X Detector with formatting like B/C. GroundTech 7.20.25 0740, 0820, 0915
+
+
 
 import streamlit as st
 from collections import defaultdict
 import pandas as pd
 
-# --- Classifier for C.00.at.[fwd0]40 and C.00.at.[aft0]40 ---
+# --- Classifier for multiple C.00 variants ---
 def classify_x00_at_40(seq):
     if seq.shape[0] < 3:
         return None, None
@@ -25,12 +27,13 @@ def classify_x00_at_40(seq):
         return None, None
 
     day = str(seq.iloc[-1]["Day"]).strip()
-    if day != "[0]":
-        return None, None
+    is_today = (day == "[0]")
 
     arrival_dt = pd.to_datetime(seq.iloc[-1]["Arrival"])
     t_min = arrival_dt.hour * 60 + arrival_dt.minute
     arrival_tag = "[aft0]" if t_min >= 120 else "[fwd0]"
+    if not is_today:
+        arrival_tag = arrival_tag.replace("0", "≠[0]")
 
     origins = set(seq["Origin"].str.lower())
     has_origin = origins & {"spain", "saturn", "jupiter", "kepler-62", "kepler-44", "trinidad", "tobago", "wasp-12b", "macedonia"}
@@ -39,8 +42,20 @@ def classify_x00_at_40(seq):
     feeds = seq["Feed"].nunique()
     feed_code = "a" if feeds == 1 else "b"
 
-    tag = f"C.00.{feed_code}{origin_code}.{arrival_tag}40"
-    label = "Before or After Midnight Influence Shift to |40|"
+    tag = f"C.00.{feed_code}{origin_code}.[{arrival_tag}]40"
+
+    label_map = {
+        "C.00.at.[fwd0]40": "Before 02:00 Influence Shift, same feed, No *Origin to |54|, |40|, Today",
+        "C.00.at.[aft0]40": "After 02:00 Influence Shift, same feed, No *Origin to |54|, |40|, Today",
+        "C.00.at.[fwd≠[0]]40": "Before 02:00 Influence Shift, same feed, No *Origin to |54|, |40|, Other days",
+        "C.00.at.[aft≠[0]]40": "After 02:00 Influence Shift, same feed, No *Origin to |54|, |40|, Other days",
+        "C.00.bt.[fwd0]40": "Before 02:00 Influence Shift, mixed feed, No *Origin to |54|, |40|, Today",
+        "C.00.bt.[aft0]40": "After 02:00 Influence Shift, mixed feed, No *Origin to |54|, |40|, Today",
+        "C.00.bt.[fwd≠[0]]40": "Before 02:00 Influence Shift, mixed feed, No *Origin to |54|, |40|, Other days",
+        "C.00.bt.[aft≠[0]]40": "After 02:00 Influence Shift, mixed feed, No *Origin to |54|, |40|, Other days"
+    }
+
+    label = label_map.get(tag, "Model X Influence Shift")
     return tag, label
 
 
@@ -119,22 +134,39 @@ def run_x_model_detection(df):
     rows.sort(key=lambda x: x["Output"], reverse=True)
     st.table(rows)
 
-    # Display Results grouped by tag and by output
-    for tag, results in model_outputs.items():
-        header = f"{tag}. {results[0]['label']} – {len(results)} output{'s' if len(results) != 1 else ''}"
-        with st.expander(header):
-            grouped = defaultdict(list)
-            for r in results:
-                grouped[r["output"]].append(r)
+    # Display Results grouped by feed type
+    for feed_prefix in ["C.00.at", "C.00.bt"]:
+        subset = {k: v for k, v in model_outputs.items() if k.startswith(feed_prefix)}
+        if not subset:
+            continue
+        title = "Same Feed Sequences" if feed_prefix == "C.00.at" else "Mixed Feed Sequences"
+        with st.expander(f"📂 {title} ({len(subset)} tags)", expanded=False):
+            for tag, results in sorted(subset.items()):
+                header = f"{tag}. {results[0]['label']} – {len(results)} output{'s' if len(results) != 1 else ''}"
+                with st.expander(header):
+                    grouped = defaultdict(list)
+                    for r in results:
+                        grouped[r["output"]].append(r)
+                    for out_val, items in grouped.items():
+                        latest = max(items, key=lambda r: r["timestamp"])
+                        hrs = int((report_time - latest["timestamp"]).total_seconds() / 3600)
+                        ts = latest["timestamp"].strftime('%-m/%-d/%y %H:%M')
+                        with st.expander(f"🔹 Output {out_val:,.3f} – {len(items)} sequence(s) {hrs} hours ago at {ts}"):
+                            for res in items:
+                                seq = res["sequence"]
+                                m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
+                                icons = "".join(["👶" if "sm" in row["Feed"].lower() else "🧔" for _, row in seq.iterrows()])
+                                st.markdown(f"{m_path} Cross [{icons}]")
+                                st.table(seq.reset_index(drop=True))
 
-            for out_val, items in grouped.items():
-                latest = max(items, key=lambda r: r["timestamp"])
-                hrs = int((report_time - latest["timestamp"]).total_seconds() / 3600)
-                ts = latest["timestamp"].strftime('%-m/%-d/%y %H:%M')
-                with st.expander(f"🔹 Output {out_val:,.3f} – {len(items)} sequence(s) {hrs} hours ago at {ts}"):
-                    for res in items:
-                        seq = res["sequence"]
-                        m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
-                        icons = "".join(["👶" if "sm" in row["Feed"].lower() else "🧔" for _, row in seq.iterrows()])
-                        st.markdown(f"{m_path} Cross [{icons}]")
-                        st.table(seq.reset_index(drop=True))
+    # Largest sequence report
+    st.subheader("🏆 Largest Sequence Found")
+    all_sequences = [seq for tag_results in model_outputs.values() for seq in tag_results]
+    if all_sequences:
+        largest = max(all_sequences, key=lambda x: x["sequence"].shape[0])
+        seq = largest["sequence"]
+        st.markdown(f"**Output:** {largest['output']:,.3f}")
+        st.markdown(f"**Model:** {largest['tag']} → {largest['label']}")
+        st.markdown(f"**Sequence length:** {seq.shape[0]}")
+        st.markdown(f"**Path:** {' → '.join([f'|{row["M #"]}|' for _, row in seq.iterrows()])}")
+        st.table(seq.reset_index(drop=True))
