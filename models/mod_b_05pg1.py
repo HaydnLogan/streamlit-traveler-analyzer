@@ -1,4 +1,4 @@
-# mod_b_05.py — Full B Model Detection with All 12 Models Grouped into B01/B02/B03 Sections, via GroundTech
+# mod_b_05.py — Full B Model Detection with All 12 Models Grouped into B01/B02/B03 Sections (with totals), via GroundTech
 # CavAir. Broad descending-sequence scanning; Inclusive classifier logic; Flexible polarity and feed checks; Visual expanders grouped by label and day
 # Cluster Table above. 
 
@@ -129,8 +129,10 @@ def show_b_model_results(model_outputs, report_time):
     st.subheader("🔍 B Model Results")
 
     for group_prefix in ["B01", "B02", "B03"]:
-        with st.expander(GROUP_MAP[group_prefix]):
-            for code in [c for c in ALL_B_MODEL_CODES if c.startswith(group_prefix)]:
+        group_codes = [c for c in ALL_B_MODEL_CODES if c.startswith(group_prefix)]
+        group_total = sum(len(model_outputs.get(c, [])) for c in group_codes)
+        with st.expander(f"{GROUP_MAP[group_prefix]} – {group_total} match{'es' if group_total != 1 else ''}"):
+            for code in group_codes:
                 results = model_outputs.get(code, [])
                 label_text = results[0]["label"] if results else ""
                 output_count = len(set(r["output"] for r in results)) if results else 0
