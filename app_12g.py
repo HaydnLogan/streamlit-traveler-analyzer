@@ -74,7 +74,6 @@ if final_report_file:
         with ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
             styled_excel = highlight_anchor_origins(final_df)
             styled_excel.to_excel(writer, index=False, sheet_name="Traveler Report")
-            writer.save()
 
         st.download_button("📥 Download Report Excel", data=excel_buffer.getvalue(), file_name=filename, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -141,8 +140,7 @@ if small_feed_file and big_feed_file and measurement_file:
             with ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
                 styled_excel = highlight_anchor_origins(final_df)
                 styled_excel.to_excel(writer, index=False, sheet_name="Traveler Report")
-                writer.save()
-
+       
             st.download_button("📥 Download Report Excel", data=excel_buffer.getvalue(), file_name=filename, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
             # Custom Traveler Report
@@ -177,8 +175,7 @@ if small_feed_file and big_feed_file and measurement_file:
                     with ExcelWriter(excel_buffer_custom, engine="xlsxwriter") as writer:
                         styled_custom = highlight_anchor_origins(all_custom_df)
                         styled_custom.to_excel(writer, index=False, sheet_name="Custom Report")
-                        writer.save()
-
+                        
                     st.download_button("📥 Download Custom Traveler Report Excel", data=excel_buffer_custom.getvalue(), file_name="custom_traveler_report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
             if run_a_models:
