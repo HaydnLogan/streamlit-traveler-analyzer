@@ -275,7 +275,7 @@ def show_c_model_results(model_outputs, report_time):
                     render_group("📦 Other Days", other_results)
 
 
-def run_c_model_detection(df, detect_C_models, run_c01=True, run_c02=True, run_c04=True):
+def run_c_model_detection(df, run_c01=True, run_c02=True, run_c04=True):
     report_time = df["Arrival"].max()
     model_outputs = detect_C_models(df, run_c01, run_c02, run_c04)
     st.write("🧬 Detected C Model outputs:", sum(len(v) for v in model_outputs.values()))
