@@ -9,9 +9,9 @@ from collections import defaultdict
 # ❗❗❗❌  As of 7.17.25, C.02.p1.[L0] has 1 verified miss @ output 22,476.583 using origin report 25-06-25_08-00.  ❌❗❗❗
 
 # # --- Constants ---
-# STRENGTH_TRAVELERS = {0, 40, -40, 54, -54}
-# ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
-# EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
+STRENGTH_TRAVELERS = {0, 40, -40, 54, -54}
+ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
+EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
 
 C_GROUPS = {
     "C.01": {
@@ -274,7 +274,7 @@ def show_c_model_results(model_outputs, report_time):
                     render_group("📅 Today", today_results)
                     render_group("📦 Other Days", other_results)
 
-
+# --- Entry Point ---
 def run_c_model_detection(df, run_c01=True, run_c02=True, run_c04=True):
     report_time = df["Arrival"].max()
     model_outputs = detect_C_models(df, run_c01, run_c02, run_c04)
