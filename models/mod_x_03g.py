@@ -146,9 +146,8 @@ def detect_X_models(df):
                     "timestamp": pd.to_datetime(seq.iloc[-1]["Arrival"]),
                     "sequence": seq
                 })
-                break  # Stops after the first matching tag
+                break
     return model_outputs
-
 
 # --- Display ---
 def run_x_model_detection(df):
@@ -185,7 +184,17 @@ def run_x_model_detection(df):
     rows.sort(key=lambda x: x["Output"], reverse=True)
     st.table(rows)
 
-    # Display Results grouped by model family
+    VIP_GROUPS = {
+        "VIP.01.ao.[O0].|40|": "Same Feed descends to *Origin |40| at Open today",
+        "VIP.01.ao.[O0].|54|": "Same Feed descends to *Origin |54| at Open today",
+        "VIP.01.ao.[∀≠0].|40|": "Same Feed descends to *Origin |40| any time other days",
+        "VIP.01.ao.[∀≠0].|54|": "Same Feed descends to *Origin |54| any time other days",
+        "VIP.01.bo.[O0].|40|": "Mixed Feed descends to *Origin |40| at Open today",
+        "VIP.01.bo.[O0].|54|": "Mixed Feed descends to *Origin |54| at Open today",
+        "VIP.01.bo.[∀≠0].|40|": "Mixed Feed descends to *Origin |40| any time other days",
+        "VIP.01.bo.[∀≠0].|54|": "Mixed Feed descends to *Origin |54| any time other days"
+    }
+
     family_groups = {
         "C.00.a": "Same Feed Sequences",
         "C.00.b": "Mixed Feed Sequences",
@@ -193,14 +202,26 @@ def run_x_model_detection(df):
     }
 
     for prefix, title in family_groups.items():
-        subset = {k: v for k, v in model_outputs.items() if k.startswith(prefix)}
-        subset = dict(sorted(subset.items()))  # Ensure consistent ordering
+        if prefix == "VIP.01.":
+            subset = {}
+            for vip_tag, vip_label in VIP_GROUPS.items():
+                results = model_outputs.get(vip_tag, [])
+                subset[vip_tag] = results
+        else:
+            subset = {k: v for k, v in model_outputs.items() if k.startswith(prefix)}
+            subset = dict(sorted(subset.items()))
+
         if not subset:
             continue
+
         with st.expander(f"📂 {title} ({len(subset)} tags)", expanded=False):
-            for tag, results in sorted(subset.items()):
-                header = f"{tag}. {results[0]['label']} – {len(results)} output{'s' if len(results) != 1 else ''}"
+            for tag, results in subset.items():
+                label = VIP_GROUPS.get(tag, results[0]['label'] if results else "No label")
+                header = f"{tag}. {label} – {len(results)} output{'s' if len(results) != 1 else ''}"
                 with st.expander(header):
+                    if not results:
+                        st.markdown("No sequences found.")
+                        continue
                     grouped = defaultdict(list)
                     for r in results:
                         grouped[r["output"]].append(r)
@@ -216,7 +237,6 @@ def run_x_model_detection(df):
                                 st.markdown(f"{m_path} Cross [{icons}]")
                                 st.table(seq.reset_index(drop=True))
 
-    # Largest sequence per query tag
     st.subheader("🏆 Largest Sequence Per Tag")
     tag_largest = []
     for tag, items in model_outputs.items():
