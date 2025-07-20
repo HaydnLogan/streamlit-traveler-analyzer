@@ -12,7 +12,7 @@ from shared.shared import clean_timestamp, process_feed, get_input_value, highli
 from models.models_a import run_a_model_detection
 from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_03gp import run_c_model_detection
-from models.mod_x_02g import run_x_model_detection
+from models.mod_x_03g import run_x_model_detection
 
 # 🔌 Streamlit interface (UI + orchestration)
 
