@@ -1,4 +1,5 @@
 # v12 - Data Feed Processor with Excel download + Anchor Highlighting in Export Only
+# Table format for Custom Traveler Report.
 
 import streamlit as st
 import pandas as pd
@@ -11,15 +12,17 @@ from models.models_a import run_a_model_detection
 from models.mod_b_04p3 import run_b_model_detection
 from models.mod_c_02gp import run_c_model_detection
 
+# 🔌 Streamlit interface (UI + orchestration)
+
 st.set_page_config(layout="wide")
 st.header("🧬 Data Feed Processor + Model A/B/C Detector. v12")
 
-# Uploads
+# 📤 Uploads
 small_feed_file = st.file_uploader("Upload small feed", type="csv")
 big_feed_file = st.file_uploader("Upload big feed", type="csv")
 measurement_file = st.file_uploader("Upload measurement file", type=["xlsx", "xls"])
 
-# Report Time UI
+# 📅 Report Time UI
 report_mode = st.radio("Select Report Time & Date", ["Most Current", "Choose a time"])
 if report_mode == "Choose a time":
     selected_date = st.date_input("Select Report Date", value=dt.date.today())
@@ -28,7 +31,7 @@ if report_mode == "Choose a time":
 else:
     report_time = None
 
-# Toggles
+# 🚥 Toggles
 run_a_models = st.sidebar.checkbox("Run Model A Detection")
 run_b_models = st.sidebar.checkbox("Run Model B Detection")
 run_c_models = st.sidebar.checkbox("Run Model C Detection")
@@ -37,12 +40,14 @@ run_c02 = st.sidebar.checkbox("C Opposites", value=True)
 run_c04 = st.sidebar.checkbox("C Ascending", value=True)
 
 filter_future_data = st.checkbox("Restrict analysis to Report Time or earlier only", value=True)
+
+# ⚙️ Analysis parameters
 day_start_choice = st.radio("Select Day Start Time", ["17:00", "18:00"])
-day_start_hour = int(day_start_choice.split(":"))[0]
+day_start_hour = int(day_start_choice.split(":")[0])
 scope_type = st.radio("Scope by", ["Rows", "Days"])
 scope_value = st.number_input(f"Enter number of {scope_type.lower()}", min_value=1, value=10)
 
-# Optional Bypass
+# 📥 Optional bypass: Upload a Final Traveler Report
 st.markdown("### 📥 Optional: Upload Final Traveler Report (bypass feed upload)")
 final_report_file = st.file_uploader("Upload Final Traveler Report", type="csv", key="final_report_bypass")
 
