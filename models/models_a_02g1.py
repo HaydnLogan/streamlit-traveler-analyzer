@@ -44,7 +44,7 @@ def classify_A_model(row_0, prior_rows):
     is_epic = o0 in EPIC_ORIGINS
     is_anchor = o0 in ANCHOR_ORIGINS
     prior = set(prior_rows["Origin"].str.lower())
-    strong = bool(prior & epic or prior & anchor)
+    strong = bool(prior & EPIC_ORIGINS or prior & ANCHOR_ORIGINS)
 
     # 🗃️ Classifier logic with new naming  📚
     if is_epic and time == "open":
