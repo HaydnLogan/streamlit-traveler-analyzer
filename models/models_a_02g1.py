@@ -13,45 +13,54 @@ def sequence_signature(seq):
 
 def classify_A_model(row_0, prior_rows):
     epic = {"trinidad", "tobago", "wasp-12b", "macedonia"}
-    anchor = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
+    anchor = {"Spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 
+    m_val = abs(row_0["M #"])
+    if m_val not in {0, 40, 54}:
+        return None, None  # Only classify if final M # is 0, 40, or 54
+
+    m_tag = f"|{m_val}|" if m_val != 0 else "0"
+    
     t0 = row_0["Arrival"]
     o0 = row_0["Origin"].lower()
-    m0 = row_0["M #"]
 
-    # Determine time category
-    time = "open" if t0.hour == 18 and t0.minute == 0 else \
-           "early" if (t0.hour < 2 or (t0.hour == 1 and t0.minute < 59)) else "late"
+    # ⌚ Time classification 🕓
+    if t0.hour == 17 or (t0.hour == 18 and t0.minute == 0):
+        time = "open"
+    elif 17 < t0.hour < 24 or t0.hour == 0 or (t0.hour == 1 and t0.minute < 59):
+        time = "early"
+    else:
+        time = "late"
 
-    # Determine origin category
+    # Determine time category  (old, being replaced)
+    # time = "open" if t0.hour == 18 and t0.minute == 0 else \
+    #        "early" if (t0.hour < 2 or (t0.hour == 1 and t0.minute < 59)) else "late"
+
+    # 🌍 Determine origin category  🌌🪐💫☄️
     is_epic = o0 in epic
     is_anchor = o0 in anchor
     prior = set(prior_rows["Origin"].str.lower())
     strong = bool(prior & epic or prior & anchor)
 
-    # Only apply model logic to sequences ending in 0, ±40, ±54
-    if abs(m0) not in {0, 40, 54}:
-        return None, None
-
-    # Classifier logic with new naming
+    # 🗃️ Classifier logic with new naming  📚
     if is_epic and time == "open":
-        return "A01", "Open Epic 0 or |40| or |54|"
+        return "A01", f"Open Epic to {m_tag}"
     if is_anchor and time == "open":
-        return "A02", "Open Anchor 0 or |40| or |54|"
+        return "A02", f"Open Anchor to {m_tag}"
     if not is_anchor and time == "open" and strong:
-        return "A03", "Open non-Anchor 0 or |40| or |54|"
+        return "A03", f"Open non-Anchor to {m_tag}"
     if not is_anchor and time == "early" and strong:
-        return "A04", "Early non-Anchor 0 or |40| or |54|"
+        return "A04", f"Early non-Anchor to {m_tag}"
     if is_anchor and time == "late":
-        return "A05", "Late Anchor 0 or |40| or |54|"
+        return "A05", f"Late Anchor to {m_tag}"
     if not is_anchor and time == "late" and strong:
-        return "A06", "Late non-Anchor 0 or |40| or |54|"
+        return "A06", f"Late non-Anchor to {m_tag}"
     if not is_anchor and time == "open" and not strong:
-        return "A07", "Open general 0 or |40| or |54|"
+        return "A07", f"Open general to {m_tag}"
     if not is_anchor and time == "early" and not strong:
-        return "A08", "Early general 0 or |40| or |54|"
+        return "A08", f"Early general to {m_tag}"
     if not is_anchor and time == "late" and not strong:
-        return "A09", "Late general 0 or |40| or |54|"
+        return "A09", f"Late general to {m_tag}"
 
     return None, None
 
@@ -116,7 +125,15 @@ def detect_A_models(df):
                 continue
             all_signatures.add(sig)
             prior = seq.iloc[:-1]
-            last = seq.iloc[-1]
+            valid_endings = seq[seq["M #"].abs().isin([0, 40, 54])]
+            valid_endings = valid_endings[valid_endings["Origin"].str.lower().isin(anchor | epic)]
+            valid_endings = valid_endings[valid_endings["Arrival"].dt.hour.isin([17, 18])]  # Open hours
+            
+            if valid_endings.empty:
+                continue  # Skip if no valid final traveler
+            
+            last = valid_endings.iloc[-1]
+            prior = seq[seq.index < last.name]
             model, label = classify_A_model(last, prior)
             if model:
                 model_outputs[model].append({
