@@ -7,8 +7,6 @@ from collections import defaultdict
 EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
 ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 
-
-
 # -----------------------
 # Helper functions
 # -----------------------
@@ -112,6 +110,7 @@ def find_pairs(rows, seen_signatures):
             pairs.append(pair)
     return pairs
 
+# 🕵️ ⛳
 def detect_A_models(df):
     report_time = df["Arrival"].max()
     model_outputs = defaultdict(list)
@@ -122,26 +121,31 @@ def detect_A_models(df):
         full_matches = find_flexible_descents(subset)
 
         for seq in full_matches:
-            if seq.shape[0] < 3 or abs(seq.iloc[-1]["M #"]) not in {0, 40, 54}:
+            if seq.shape[0] < 3:
                 continue
-            sig = sequence_signature(seq)
-            if sig in all_signatures:
-                continue
-            all_signatures.add(sig)
-            prior = seq.iloc[:-1]
-            valid_endings = seq[seq["M #"].abs().isin([0, 40, 54])]
+
+            # Find valid endings based on M #, origin, and arrival time
+            valid_endings = seq[seq["M #"].abs().isin({0, 40, 54})]
             valid_endings = valid_endings[
                 valid_endings["Origin"].str.lower().isin(ANCHOR_ORIGINS | EPIC_ORIGINS)
             ]
-            valid_endings = valid_endings[valid_endings["Arrival"].dt.hour.isin([17, 18])]  # Open hours
-            
+            valid_endings = valid_endings[
+                (valid_endings["Arrival"].dt.hour == 17) |
+                ((valid_endings["Arrival"].dt.hour == 18) & (valid_endings["Arrival"].dt.minute == 0))
+            ]
+
             if valid_endings.empty:
-                continue  # Skip if no valid final traveler
-            
+                continue
+
             last = valid_endings.iloc[-1]
+            sig = sequence_signature(seq)
+            if sig in all_signatures:
+                continue
+
             prior = seq[seq.index < last.name]
             model, label = classify_A_model(last, prior)
             if model:
+                all_signatures.add(sig)
                 model_outputs[model].append({
                     "label": label,
                     "output": output,
@@ -150,19 +154,20 @@ def detect_A_models(df):
                     "feeds": seq["Feed"].nunique()
                 })
 
-        # Now find 2-member pairs not already used
+        # Find 2-member pairs not already seen
         pairs = find_pairs(subset, all_signatures)
         for seq in pairs:
-            sig = sequence_signature(seq)
-            if sig in all_signatures:
-                continue
-            all_signatures.add(sig)
             last = seq.iloc[-1]
             if abs(last["M #"]) not in {0, 40, 54}:
                 continue
+            sig = sequence_signature(seq)
+            if sig in all_signatures:
+                continue
+
             prior = seq.iloc[:-1]
             model, label = classify_A_model(last, prior)
             if model:
+                all_signatures.add(sig)
                 pr_model = model + "pr"
                 model_outputs[pr_model].append({
                     "label": f"Pair to {label}",
@@ -177,9 +182,15 @@ def detect_A_models(df):
 
 def show_a_model_results(model_outputs, report_time):
     base_labels = {
-        "A01": "Open Epic 0", "A02": "Open Anchor 0", "A03": "Open non-Anchor 0",
-        "A04": "Early non-Anchor 0", "A05": "Late Anchor 0", "A06": "Late non-Anchor 0",
-        "A07": "Open general 0", "A08": "Early general 0", "A09": "Late general 0"
+        "A01": "Open Epic",
+        "A02": "Open Anchor",
+        "A03": "Open non-Anchor",
+        "A04": "Early non-Anchor",
+        "A05": "Late Anchor",
+        "A06": "Late non-Anchor",
+        "A07": "Open general",
+        "A08": "Early general",
+        "A09": "Late general"
     }
 
     st.subheader("🔍 A Model Results")
@@ -188,7 +199,14 @@ def show_a_model_results(model_outputs, report_time):
             key = code + suffix
             results = model_outputs.get(key, [])
             output_count = len(set(r["output"] for r in results))
-            header = f"{key}. {title} – {output_count} output{'s' if output_count != 1 else ''}"
+            if results:
+                # Use ending M # from the first sequence to display dynamically
+                end_m_val = abs(results[0]["sequence"].iloc[-1]["M #"])
+                m_tag = f"|{end_m_val}|" if end_m_val != 0 else "0"
+            else:
+                m_tag = "?"
+            
+            header = f"{key}. {title} to {m_tag} – {output_count} output{'s' if output_count != 1 else ''}"
 
             with st.expander(header):
                 if results:
