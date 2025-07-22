@@ -130,7 +130,9 @@ def detect_A_models(df):
             all_signatures.add(sig)
             prior = seq.iloc[:-1]
             valid_endings = seq[seq["M #"].abs().isin([0, 40, 54])]
-            valid_endings = valid_endings[valid_endings["Origin"].str.lower().isin(anchor | epic)]
+            valid_endings = valid_endings[
+                valid_endings["Origin"].str.lower().isin(ANCHOR_ORIGINS | EPIC_ORIGINS)
+            ]
             valid_endings = valid_endings[valid_endings["Arrival"].dt.hour.isin([17, 18])]  # Open hours
             
             if valid_endings.empty:
