@@ -138,56 +138,81 @@ def detect_A_models(df):
     return model_outputs, report_time
 
 def show_a_model_results(model_outputs, report_time):
+    # --- Label Map ---
     raw_labels = {
         "A01": "Open Epic", "A02": "Open Anchor", "A03": "Open non-Anchor",
         "A04": "Early non-Anchor", "A05": "Late Anchor", "A06": "Late non-Anchor",
         "A07": "Open general", "A08": "Early general", "A09": "Late general"
     }
 
-    def label_with_terminals(base): return f"{base} 0 or |40| or |54|"
+    def label_with_terminals(base):
+        return f"{base} 0 or |40| or |54|"
+
     base_labels = {k: label_with_terminals(v) for k, v in raw_labels.items()}
 
+    # --- Display Block ---
     st.subheader("🔍 A Model Results")
-    for code, label in base_labels.items():
-        for suffix, title in [("", f"2+ to {label}"), ("pr", f"Pair to {label}")]:
+
+    for code, base_label in base_labels.items():
+        for suffix, sublabel in [("", f"2+ to {base_label}"), ("pr", f"Pair to {base_label}")]:
             key = code + suffix
             results = model_outputs.get(key, [])
             output_count = len(set(r["output"] for r in results))
-            header = f"{key}. {title} – {output_count} output{'s' if output_count != 1 else ''}"
+            header = f"{key}. {sublabel} – {output_count} output{'s' if output_count != 1 else ''}"
 
             with st.expander(header):
-                if results:
-                    today_results = [r for r in results if "[0]" in str(r["sequence"].iloc[-1]["Day"]).lower()]
-                    other_results = [r for r in results if "[0]" not in str(r["sequence"].iloc[-1]["Day"]).lower()]
-
-                    def render_group(name, group):
-                        st.markdown(f"#### {name}")
-                        output_groups = defaultdict(list)
-                        for r in group:
-                            output_groups[r["output"]].append(r)
-
-                        for out_val, items in output_groups.items():
-                            latest = max(items, key=lambda r: r["timestamp"])
-                            hrs = int((report_time - latest["timestamp"]).total_seconds() / 3600)
-                            ts = latest["timestamp"].strftime('%-m/%-d/%y %H:%M')
-                            subhead = f"🔹 Output {out_val:,.3f} – {len(items)} descending {hrs} hours ago at {ts}"
-
-                            with st.expander(subhead):
-                                for res in items:
-                                    seq = res["sequence"]
-                                    m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
-                                    icons = "".join([feed_icon(row["Feed"]) for _, row in seq.iterrows()])
-                                    st.markdown(f"{m_path} Cross [{icons}]")
-                                    st.table(seq.reset_index(drop=True))
-
-                    if today_results:
-                        render_group("📅 Today", today_results)
-                    if other_results:
-                        render_group("📦 Other Days", other_results)
-                    if not today_results and not other_results:
-                        st.markdown("No matching outputs.")
-                else:
+                if not results:
                     st.markdown("No matching outputs.")
+                    continue
+
+                # --- Grouping ---
+                today_results = [r for r in results if "[0]" in str(r["sequence"].iloc[-1]["Day"]).lower()]
+                other_results = [r for r in results if "[0]" not in str(r["sequence"].iloc[-1]["Day"]).lower()]
+
+                def render_group(name, group):
+                    st.markdown(f"#### {name}")
+                    output_groups = defaultdict(list)
+                    for r in group:
+                        output_groups[r["output"]].append(r)
+
+                    for out_val, items in output_groups.items():
+                        latest = max(items, key=lambda r: r["timestamp"])
+                        hrs = int((report_time - latest["timestamp"]).total_seconds() / 3600)
+                        ts = latest["timestamp"].strftime('%-m/%-d/%y %H:%M')
+                        subhead = f"🔹 Output {out_val:,.3f} – {len(items)} descending {hrs} hours ago at {ts}"
+
+                        with st.expander(subhead):
+                            for res in items:
+                                seq = res["sequence"]
+                                m_path = " → ".join([f"|{row['M #']}|" for _, row in seq.iterrows()])
+                                icons = "".join([feed_icon(row["Feed"]) for _, row in seq.iterrows()])
+                                terminal = res.get("terminal", "‽")
+                                st.markdown(f"{m_path} Cross [{icons}] → Terminal: |{terminal}|")
+                                st.table(seq.reset_index(drop=True))
+
+                # --- Render Results ---
+                if today_results:
+                    render_group("📅 Today", today_results)
+                if other_results:
+                    render_group("📦 Other Days", other_results)
+                if not today_results and not other_results:
+                    st.markdown("No matching outputs.")
+
+    # --- A02 Diagnostic Tester ---
+    try:
+        if st.checkbox("Run A02 sequence test"):
+            test_data = pd.DataFrame([
+                {"Feed": "Bg", "Arrival": "7/14/2025 9:00", "Origin": "hawaii", "M #": 92, "Output": 23305.33, "Day": "[0]"},
+                {"Feed": "Bg", "Arrival": "7/17/2025 7:00", "Origin": "mercury", "M #": 80, "Output": 23305.33, "Day": "[0]"},
+                {"Feed": "Bg", "Arrival": "7/17/2025 18:00", "Origin": "spain", "M #": 40, "Output": 23305.33, "Day": "[0]"}
+            ])
+            test_data["Arrival"] = pd.to_datetime(test_data["Arrival"])
+            validate_expected_A_model("A02", test_data)
+            st.info("🧪 Test Sequence: |92| → |80| → |40| ➡️ Origin: [spain], Time: Open (18:00)")
+
+    except Exception as e:
+        st.error(f"A02 test failed: {e}")
+
 
 def run_a_model_detection(df):
     model_outputs, report_time = detect_A_models(df)
