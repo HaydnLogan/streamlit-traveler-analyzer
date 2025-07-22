@@ -13,7 +13,7 @@ def sequence_signature(seq):
 
 def classify_A_model(row_0, prior_rows):
     epic = {"trinidad", "tobago", "wasp-12b", "macedonia"}
-    anchor = {"Spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
+    anchor = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 
     m_val = abs(row_0["M #"])
     if m_val not in {0, 40, 54}:
@@ -25,9 +25,9 @@ def classify_A_model(row_0, prior_rows):
     o0 = row_0["Origin"].lower()
 
     # ⌚ Time classification 🕓
-    if t0.hour == 17 or (t0.hour == 18 and t0.minute == 0):
+    if (t0.hour == 17 or (t0.hour == 18 and t0.minute == 0)):
         time = "open"
-    elif 17 < t0.hour < 24 or t0.hour == 0 or (t0.hour == 1 and t0.minute < 59):
+    elif 17 < t0.hour <= 23 or t0.hour in {0, 1}:
         time = "early"
     else:
         time = "late"
