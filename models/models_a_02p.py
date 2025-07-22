@@ -193,3 +193,22 @@ def run_a_model_detection(df):
     model_outputs, report_time = detect_A_models(df)
     show_a_model_results(model_outputs, report_time)
     return model_outputs
+
+
+# --- Unit Test Harness ---
+def validate_expected_A_model(tag_expected, df_input):
+    result, _ = detect_A_models(df_input)
+    if tag_expected in result:
+        st.success(f"✅ Found {tag_expected}: {result[tag_expected][0]['label']}")
+    else:
+        st.error(f"❌ {tag_expected} not found.")
+
+test_data = pd.DataFrame([
+    {"Feed": "Bg", "Arrival": "7/14/2025 9:00", "Origin": "hawaii", "M #": 92},
+    {"Feed": "Bg", "Arrival": "7/17/2025 7:00", "Origin": "mercury", "M #": 80},
+    {"Feed": "Bg", "Arrival": "7/17/2025 18:00", "Origin": "spain", "M #": 40}
+])
+
+test_data["Arrival"] = pd.to_datetime(test_data["Arrival"])
+test_data["Output"] = 23305.333333  # Simulated output ID
+test_data["Day"] = "[0]"  # Indicates today for classification logic
