@@ -274,20 +274,38 @@ def show_a_cluster_table(model_outputs, input_reference=None):
         return
 
     st.subheader("📊 A Model Cluster Report (Descending Output)")
-    
+
+
     # Build rows
     rows = []
     for out_val, c in cluster.items():
         tags_str = ", ".join(sorted(c["tags"]))
+        
+        # Grab one of the representative model results to pull Input value from
+        example_result = None
+        for tag in c["tags"]:
+            items = model_outputs.get(tag, [])
+            match = next((r for r in items if r["output"] == out_val), None)
+            if match:
+                example_result = match
+                break
+        
+        if example_result:
+            input_val = example_result["sequence"].iloc[0].get("Input", out_val)
+        else:
+            input_val = out_val  # Fallback
+    
         rows.append({
             "Output": round(out_val, 3),
-            "Input": r.get("Input", out_val),  # fallback if Input is missing
+            "Input": round(input_val, 3),
             "Sequences": c["count"],
             "Model Count": len(c["tags"]),
             "Tags Found": tags_str,
             "Latest Arrival": c["latest"].strftime('%-m/%-d/%y %H:%M')
         })
+    
     df_cluster = pd.DataFrame(rows).sort_values("Output", ascending=False)
+
 
     # --- Optional filter ---
     show_only_a02_a03 = st.checkbox("🧽 Show only rows with A02 or A03 tags")
