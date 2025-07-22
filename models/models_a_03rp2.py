@@ -4,6 +4,7 @@
 import streamlit as st
 import pandas as pd
 from collections import defaultdict
+from io import BytesIO
 
 # Constants: Origin Classifications   🌌🪐💫☄️🌍
 EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
@@ -338,7 +339,7 @@ def show_a_cluster_table(model_outputs):
     df_all = pd.DataFrame(rows).sort_values("Output", ascending=False)
     df_subset = df_all[df_all["Tags Found"].str.contains("A02|A03", na=False)]
 
-    from io import BytesIO
+
     def export_cluster_reports(df1, df2):
         buffer = BytesIO()
         with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
