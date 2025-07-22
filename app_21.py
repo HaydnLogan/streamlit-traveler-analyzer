@@ -11,7 +11,7 @@ import io
 from pandas import ExcelWriter
 
 from shared.shared import clean_timestamp, process_feed, get_input_value, highlight_anchor_origins
-from models.models_a_03rp2 import run_a_model_detection
+from models.models_a_03rp1 import run_a_model_detection
 from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_04gpr3 import run_c_model_detection
 from models.mod_x_03g import run_x_model_detection
