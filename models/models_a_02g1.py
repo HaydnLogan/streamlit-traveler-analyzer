@@ -2,6 +2,13 @@ import streamlit as st
 import pandas as pd
 from collections import defaultdict
 
+
+# Constants: Origin Classifications   🌌🪐💫☄️🌍
+EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
+ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
+
+
+
 # -----------------------
 # Helper functions
 # -----------------------
@@ -12,9 +19,6 @@ def sequence_signature(seq):
     return tuple(seq["M #"].tolist())
 
 def classify_A_model(row_0, prior_rows):
-    epic = {"trinidad", "tobago", "wasp-12b", "macedonia"}
-    anchor = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
-
     m_val = abs(row_0["M #"])
     if m_val not in {0, 40, 54}:
         return None, None  # Only classify if final M # is 0, 40, or 54
@@ -37,8 +41,8 @@ def classify_A_model(row_0, prior_rows):
     #        "early" if (t0.hour < 2 or (t0.hour == 1 and t0.minute < 59)) else "late"
 
     # 🌍 Determine origin category  🌌🪐💫☄️
-    is_epic = o0 in epic
-    is_anchor = o0 in anchor
+    is_epic = o0 in EPIC_ORIGINS
+    is_anchor = o0 in ANCHOR_ORIGINS
     prior = set(prior_rows["Origin"].str.lower())
     strong = bool(prior & epic or prior & anchor)
 
