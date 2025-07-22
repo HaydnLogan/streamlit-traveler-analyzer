@@ -199,17 +199,30 @@ def show_a_model_results(model_outputs, report_time):
                     st.markdown("No matching outputs.")
 
     # --- A02 Diagnostic Tester ---
+    # try:
+    #     if st.checkbox("Run A02 sequence test"):
+    #         test_data = pd.DataFrame([
+    #             {"Feed": "Bg", "Arrival": "7/14/2025 9:00", "Origin": "hawaii", "M #": 92, "Output": 23305.33, "Day": "[0]"},
+    #             {"Feed": "Bg", "Arrival": "7/17/2025 7:00", "Origin": "mercury", "M #": 80, "Output": 23305.33, "Day": "[0]"},
+    #             {"Feed": "Bg", "Arrival": "7/17/2025 18:00", "Origin": "spain", "M #": 40, "Output": 23305.33, "Day": "[0]"}
+    #         ])
+    #         test_data["Arrival"] = pd.to_datetime(test_data["Arrival"])
+    #         validate_expected_A_model("A02", test_data)
+    #         st.info("🧪 Test Sequence: |92| → |80| → |40| ➡️ Origin: [spain], Time: Open (18:00)")
+
+
     try:
         if st.checkbox("Run A02 sequence test"):
             test_data = pd.DataFrame([
                 {"Feed": "Bg", "Arrival": "7/14/2025 9:00", "Origin": "hawaii", "M #": 92, "Output": 23305.33, "Day": "[0]"},
-                {"Feed": "Bg", "Arrival": "7/17/2025 7:00", "Origin": "mercury", "M #": 80, "Output": 23305.33, "Day": "[0]"},
+                {"Feed": "Bg", "Arrival": "7/16/2025 7:00", "Origin": "mercury", "M #": 80, "Output": 23305.33, "Day": "[0]"},
                 {"Feed": "Bg", "Arrival": "7/17/2025 18:00", "Origin": "spain", "M #": 40, "Output": 23305.33, "Day": "[0]"}
             ])
             test_data["Arrival"] = pd.to_datetime(test_data["Arrival"])
             validate_expected_A_model("A02", test_data)
             st.info("🧪 Test Sequence: |92| → |80| → |40| ➡️ Origin: [spain], Time: Open (18:00)")
 
+    
     except Exception as e:
         st.error(f"A02 test failed: {e}")
 
