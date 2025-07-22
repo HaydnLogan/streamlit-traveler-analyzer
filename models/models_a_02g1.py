@@ -14,24 +14,45 @@ def sequence_signature(seq):
 def classify_A_model(row_0, prior_rows):
     epic = {"trinidad", "tobago", "wasp-12b", "macedonia"}
     anchor = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
+
     t0 = row_0["Arrival"]
     o0 = row_0["Origin"].lower()
+    m0 = row_0["M #"]
+
+    # Determine time category
     time = "open" if t0.hour == 18 and t0.minute == 0 else \
-           "early" if (18 < t0.hour < 2 or (t0.hour == 1 and t0.minute < 59)) else "late"
+           "early" if (t0.hour < 2 or (t0.hour == 1 and t0.minute < 59)) else "late"
+
+    # Determine origin category
     is_epic = o0 in epic
     is_anchor = o0 in anchor
     prior = set(prior_rows["Origin"].str.lower())
-    strong = bool(prior & epic) or bool(prior & anchor)
+    strong = bool(prior & epic or prior & anchor)
 
-    if is_epic and time == "open": return "A01", "Open Epic 0 or |40| or |54|"
-    if is_anchor and time == "open": return "A02", "Open Anchor 0 or |40| or |54|"
-    if not is_anchor and time == "open" and strong: return "A03", "Open non-Anchor 0 or |40| or |54|"
-    if not is_anchor and time == "early" and strong: return "A04", "Early non-Anchor 0 or |40| or |54|"
-    if is_anchor and time == "late": return "A05", "Late Anchor 0 or |40| or |54|"
-    if not is_anchor and time == "late" and strong: return "A06", "Late non-Anchor 0 or |40| or |54|"
-    if not is_anchor and time == "open" and not strong: return "A07", "Open general 0 or |40| or |54|"
-    if not is_anchor and time == "early" and not strong: return "A08", "Early general 0 or |40| or |54|"
-    if not is_anchor and time == "late" and not strong: return "A09", "Late general 0 or |40| or |54|"
+    # Only apply model logic to sequences ending in 0, ±40, ±54
+    if abs(m0) not in {0, 40, 54}:
+        return None, None
+
+    # Classifier logic with new naming
+    if is_epic and time == "open":
+        return "A01", "Open Epic 0 or |40| or |54|"
+    if is_anchor and time == "open":
+        return "A02", "Open Anchor 0 or |40| or |54|"
+    if not is_anchor and time == "open" and strong:
+        return "A03", "Open non-Anchor 0 or |40| or |54|"
+    if not is_anchor and time == "early" and strong:
+        return "A04", "Early non-Anchor 0 or |40| or |54|"
+    if is_anchor and time == "late":
+        return "A05", "Late Anchor 0 or |40| or |54|"
+    if not is_anchor and time == "late" and strong:
+        return "A06", "Late non-Anchor 0 or |40| or |54|"
+    if not is_anchor and time == "open" and not strong:
+        return "A07", "Open general 0 or |40| or |54|"
+    if not is_anchor and time == "early" and not strong:
+        return "A08", "Early general 0 or |40| or |54|"
+    if not is_anchor and time == "late" and not strong:
+        return "A09", "Late general 0 or |40| or |54|"
+
     return None, None
 
 def find_flexible_descents(rows):
@@ -88,7 +109,7 @@ def detect_A_models(df):
         full_matches = find_flexible_descents(subset)
 
         for seq in full_matches:
-            if seq.shape[0] < 3 or seq.iloc[-1]["M #"] != 0:
+            if seq.shape[0] < 3 or abs(seq.iloc[-1]["M #"]) not in {0, 40, 54}:
                 continue
             sig = sequence_signature(seq)
             if sig in all_signatures:
@@ -113,8 +134,10 @@ def detect_A_models(df):
             if sig in all_signatures:
                 continue
             all_signatures.add(sig)
-            prior = seq.iloc[:-1]
             last = seq.iloc[-1]
+            if abs(last["M #"]) not in {0, 40, 54}:
+                continue
+            prior = seq.iloc[:-1]
             model, label = classify_A_model(last, prior)
             if model:
                 pr_model = model + "pr"
@@ -127,6 +150,7 @@ def detect_A_models(df):
                 })
 
     return model_outputs, report_time
+
 
 def show_a_model_results(model_outputs, report_time):
     base_labels = {
