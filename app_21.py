@@ -103,7 +103,7 @@ if final_report_file:
 
         if run_a_models:
             st.markdown("---")
-            run_a_model_detection(final_df)
+            run_a_model_detection_today(final_df)
         if run_b_models:
             st.markdown("---")
             run_b_model_detection(final_df)
@@ -218,7 +218,7 @@ if small_feed_file and big_feed_file and measurement_file:
 
             if run_a_models:
                 st.markdown("---")
-                run_a_model_detection(final_df)
+                run_a_model_detection_today(final_df)
             if run_b_models:
                 st.markdown("---")
                 run_b_model_detection(final_df)
