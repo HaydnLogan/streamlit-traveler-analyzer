@@ -49,6 +49,21 @@ def get_day_index(arrival, report_time, start_hour):
     days_diff = (arrival - report_day_start) // dt.timedelta(days=1)
     return f"[{int(days_diff)}]"
 
+# ✅ Highlight Anchor Origins ( old method)
+def highlight_anchor_origins(df):
+    def highlight(cell):
+        origin = str(cell).lower()
+        if origin in ["spain", "saturn"]:
+            return "background-color: #d4edda;"  # light green
+        elif origin == "jupiter":
+            return "background-color: #d1ecf1;"  # light blue
+        elif origin in ["kepler-62", "kepler-44"]:
+            return "background-color: #fff3cd;"  # light orange
+        return ""
+    
+    return df.style.applymap(highlight, subset=["Origin"])
+
+
 # 🎨🖌️ Highlight Traveler Report
 def highlight_traveler_report(df):
     """🧾 Apply full highlighting to Origin, Day '[0]', and M # / M Name rows in traveler report."""
