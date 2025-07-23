@@ -61,26 +61,45 @@ if final_report_file:
         final_df = pd.read_csv(final_report_file)
         final_df.columns = final_df.columns.str.strip()
         final_df["Arrival"] = pd.to_datetime(final_df["Arrival"], errors="coerce")
-        final_df["Arrival Display"] = final_df["Arrival"].dt.strftime("%#d-%b-%y %H:%M")
 
+        # 🔧 Create formatted display version
+        display_df = final_df.copy()
+        display_df["Arrival Display"] = display_df["Arrival"].dt.strftime("%-d-%b-%y %H:%M")
+
+        # 🧽 Replace 'Arrival' with 'Arrival Display' in output only
+        cols = list(display_df.columns)
+        if "Arrival" in cols and "Arrival Display" in cols:
+            idx = cols.index("Arrival")
+            cols.remove("Arrival")
+            cols.remove("Arrival Display")
+            cols.insert(idx, "Arrival Display")
+            display_df = display_df[cols]
+
+        # ✅ Set report_time using raw Arrival
         if report_mode == "Most Current":
             report_time = final_df["Arrival"].max()
 
         st.success(f"✅ Using Final Traveler Report with {len(final_df)} rows. Report time set to: {report_time.strftime('%d-%b-%y %H:%M')}")
 
+        # 📊 Display with Arrival hidden
         st.subheader("📊 Final Traveler Report (Bypass Mode)")
-        st.dataframe(final_df)
+        st.dataframe(display_df)
 
-        # Excel download with highlighting
+        # 📥 Excel download with highlighting
         timestamp_str = report_time.strftime("%y-%m-%d_%H-%M")
         filename = f"origin_report_{timestamp_str}.xlsx"
 
         excel_buffer = io.BytesIO()
         with ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-            styled_excel = highlight_traveler_report(final_df)
+            styled_excel = highlight_traveler_report(display_df)
             styled_excel.to_excel(writer, index=False, sheet_name="Traveler Report")
 
-        st.download_button("📥 Download Report Excel", data=excel_buffer.getvalue(), file_name=filename, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        st.download_button(
+            "📥 Download Final Traveler Report (Excel)",
+            data=excel_buffer.getvalue(),
+            file_name=filename,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
         if run_a_models:
             st.markdown("---")
@@ -137,19 +156,30 @@ if small_feed_file and big_feed_file and measurement_file:
             final_df.sort_values(by=["Output", "Arrival"], ascending=[False, True], inplace=True)
             final_df["Arrival"] = pd.to_datetime(final_df["Arrival"], errors="coerce")
             final_df["Arrival Display"] = final_df["Arrival"].dt.strftime("%#d-%b-%y %H:%M")
-
+            
+            # 🧽 Display without raw 'Arrival' column
+            display_df = final_df.drop(columns=["Arrival"])
+            
             st.subheader("📊 Final Traveler Report")
-            st.dataframe(final_df)
-
+            st.dataframe(display_df)
+            
+            # 🧾 Excel export setup
             timestamp_str = report_time.strftime("%y-%m-%d_%H-%M")
             filename = f"origin_report_{timestamp_str}.xlsx"
-
+            
             excel_buffer = io.BytesIO()
             with ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
                 styled_excel = highlight_traveler_report(final_df)
                 styled_excel.to_excel(writer, index=False, sheet_name="Traveler Report")
-       
-            st.download_button("📥 Download Report Excel", data=excel_buffer.getvalue(), file_name=filename, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            
+            # 📥 Download button
+            st.download_button(
+                "📥 Download Final Traveler Report (Excel)",
+                data=excel_buffer.getvalue(),
+                file_name=filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
 
             # Custom Traveler Report
             st.markdown("### 🎯 Run Custom Traveler Report")
