@@ -255,6 +255,46 @@ def detect_A_models(df):
 
     return model_outputs, report_time
 
+
+# --- Excel Export Helpers ---
+from io import BytesIO
+
+def export_cluster_reports(df1, df2):
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+        df1.to_excel(writer, sheet_name="All Clusters", index=False)
+        df2.to_excel(writer, sheet_name="A02 & A03 Only", index=False)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+def export_a_model_results(model_outputs):
+    rows = []
+    for tag, items in model_outputs.items():
+        for r in items:
+            seq = r["sequence"]
+            for _, row in seq.iterrows():
+                rows.append({
+                    "Tag": tag,
+                    "Label": r["label"],
+                    "Output": r["output"],
+                    "Timestamp": r["timestamp"],
+                    "Feed": row["Feed"],
+                    "Arrival": row["Arrival"],
+                    "Origin": row["Origin"],
+                    "M #": row["M #"],
+                    "Day": row["Day"],
+                    "Input": row.get("Input", r["output"])
+                })
+    return pd.DataFrame(rows)
+
+def export_a_models_excel(df):
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+        df.to_excel(writer, sheet_name="All A Models", index=False)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def show_a_cluster_table(model_outputs):
     """📊 Display A Model cluster report with highlights, filters, and downloadable exports."""
     
@@ -288,7 +328,7 @@ def show_a_cluster_table(model_outputs):
     rows = []
     for out_val, c in cluster.items():
         example = c["samples"][0]
-        input_val = example["sequence"].iloc[0].get("Input", out_val)
+        input_val = example["sequence"].iloc[0]["Input"] if "Input" in example["sequence"].columns else out_val
         tags_str = ", ".join(sorted(c["tags"]))
 
         row = {
@@ -297,7 +337,7 @@ def show_a_cluster_table(model_outputs):
             "Sequences": c["count"],
             "Model Count": len(c["tags"]),
             "Tags Found": tags_str,
-            "Latest Arrival": c["latest"].strftime('%-m/%-d/%y %H:%M")
+            "Latest Arrival": c["latest"].strftime('%-m/%-d/%y %H:%M')
         }
 
         if show_only_a02_a03:
@@ -339,41 +379,6 @@ def show_a_cluster_table(model_outputs):
     df_all = pd.DataFrame(rows).sort_values("Output", ascending=False)
     df_subset = df_all[df_all["Tags Found"].str.contains("A02|A03", na=False)]
 
-
-    def export_cluster_reports(df1, df2):
-        buffer = BytesIO()
-        with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-            df1.to_excel(writer, sheet_name="All Clusters", index=False)
-            df2.to_excel(writer, sheet_name="A02 & A03 Only", index=False)
-        return buffer.getvalue()
-
-    def export_a_model_results(model_outputs):
-        rows = []
-        for tag, items in model_outputs.items():
-            for r in items:
-                seq = r["sequence"]
-                for _, row in seq.iterrows():
-                    rows.append({
-                        "Tag": tag,
-                        "Label": r["label"],
-                        "Output": r["output"],
-                        "Timestamp": r["timestamp"],
-                        "Feed": row["Feed"],
-                        "Arrival": row["Arrival"],
-                        "Origin": row["Origin"],
-                        "M #": row["M #"],
-                        "Day": row["Day"],
-                        "Input": row.get("Input", r["output"])
-                    })
-        return pd.DataFrame(rows)
-
-    def export_a_models_excel(df):
-        buffer = BytesIO()
-        with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-            df.to_excel(writer, sheet_name="All A Models", index=False)
-        return buffer.getvalue()
-
-    # 📎 Trigger downloads
     cluster_bytes = export_cluster_reports(df_all, df_subset)
     st.download_button("📥 Download A Model Cluster Reports",
                        data=cluster_bytes,
@@ -386,6 +391,7 @@ def show_a_cluster_table(model_outputs):
                        data=model_bytes,
                        file_name="a_model_results.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
 
 
 
