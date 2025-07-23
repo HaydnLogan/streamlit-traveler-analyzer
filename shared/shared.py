@@ -2,7 +2,7 @@ import pandas as pd
 import datetime as dt
 from dateutil import parser
 
-# Constants: Origin Classifications   🌌🪐💫☄️🌍🏝️🍹⛱️🌞 🌊
+# Constants: Origin Classifications   🌌 🪐 💫 ☄️ 🌍 🏝️ 🍹 ⛱️ 🌞 🌊
 EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
 ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 
