@@ -77,7 +77,7 @@ if final_report_file:
 
         excel_buffer = io.BytesIO()
         with ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-            styled_excel = highlight_anchor_origins(final_df)
+            styled_excel = highlight_traveler_report(final_df)
             styled_excel.to_excel(writer, index=False, sheet_name="Traveler Report")
 
         st.download_button("📥 Download Report Excel", data=excel_buffer.getvalue(), file_name=filename, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
