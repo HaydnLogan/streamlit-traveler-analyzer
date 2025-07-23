@@ -68,43 +68,48 @@ def highlight_anchor_origins(df):
 def highlight_traveler_report(df):
     """🧾 Apply full highlighting to Origin, Day '[0]', and M # / M Name rows in traveler report."""
 
-    styles = pd.DataFrame("", index=df.index, columns=df.columns)
+    def apply_styles(row):
+        style = [""] * len(row)
+        col_map = {col: i for i, col in enumerate(df.columns)}
 
-    for i, row in df.iterrows():
         # 🌍 Origin-based highlight
         origin = str(row.get("Origin", "")).lower()
         if origin in ["spain", "saturn"]:
-            styles.at[i, "Origin"] = "background-color: #d4edda;"  # light green
+            style[col_map["Origin"]] = "background-color: #d4edda;"  # 🌿 light green
         elif origin == "jupiter":
-            styles.at[i, "Origin"] = "background-color: #d1ecf1;"  # light blue
+            style[col_map["Origin"]] = "background-color: #d1ecf1;"  # 🌌 light blue
         elif origin in ["kepler-62", "kepler-44"]:
-            styles.at[i, "Origin"] = "background-color: #fff3cd;"  # light orange
+            style[col_map["Origin"]] = "background-color: #fff3cd;"  # 🟠 light orange
 
         # 🟨 Highlight Day == '[0]' across other columns
         day_val = str(row.get("Day", "")).strip().lower()
         if day_val == "[0]":
             for col in df.columns:
                 if col not in ["Origin", "M Name", "M #"]:
-                    styles.at[i, col] = "background-color: yellow;"
-            # Make '[0]' cell bold
-            if "Day" in df.columns:
-                styles.at[i, "Day"] += "font-weight: bold;"
+                    style[col_map[col]] = "background-color: yellow;"
+            style[col_map["Day"]] += " font-weight: bold;"
 
         # 🔢 Highlight M # and M Name
-        m_val = int(row.get("M #", -1))
-        m_style = ""
-        if m_val == 0:
-            m_style = "background-color: lavender; font-weight: bold;"  # 💜 M # 0
-        elif m_val == 40:
-            m_style = "background-color: lightgray; font-weight: bold;"  # 🩶 M # 40
-        elif m_val == 54:
-            m_style = "background-color: lightblue; font-weight: bold;"  # 🔵 M # 54
+        try:
+            m_val = int(row.get("M #", -999))
+            m_style = ""
+            if m_val == 0:
+                m_style = "background-color: lavender; font-weight: bold;"  # 💜 M # 0
+            elif abs(m_val) == 40:
+                m_style = "background-color: lightgray; font-weight: bold;"  # 🩶 M # ±40
+            elif abs(m_val) == 54:
+                m_style = "background-color: lightblue; font-weight: bold;"  # 🔵 M # ±54
 
-        for col in ["M #", "M Name"]:
-            if col in df.columns:
-                styles.at[i, col] = m_style
+            for col in ["M #", "M Name"]:
+                if col in col_map:
+                    style[col_map[col]] = m_style
+        except Exception:
+            pass
 
-    return df.style.apply(lambda _: styles, axis=None)
+        return style
+
+    return df.style.apply(apply_styles, axis=1)
+
 
 
 
