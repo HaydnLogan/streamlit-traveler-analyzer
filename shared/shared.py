@@ -177,6 +177,7 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                 new_data_rows.append({
                     "Feed": feed_type,
                     "Arrival": arrival_time,
+                    "Day": day,
                     "Origin": origin,
                     "M Name": row["m name"],
                     "M #": row["m #"],
@@ -185,8 +186,7 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     "Family": row["family"],
                     "Input": input_value,
                     "Output": output,
-                    "Diff": output - input_value,
-                    "Day": day
+                    "Diff": output - input_value
                 })
             continue
 
@@ -203,6 +203,7 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     new_data_rows.append({
                         "Feed": feed_type,
                         "Arrival": arrival_time,
+                        "Day": day,
                         "Origin": origin,
                         "M Name": row["m name"],
                         "M #": row["m #"],
@@ -211,8 +212,7 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                         "Family": row["family"],
                         "Input": input_value,
                         "Output": output,
-                        "Diff": output - input_value,
-                        "Day": day
+                        "Diff": output - input_value
                     })
 
     return new_data_rows
