@@ -35,6 +35,14 @@ def get_input_value(df, report_time):
     match = df[df["time"] == report_time]
     return match.iloc[-1]["open"] if not match.empty and "open" in match.columns else None
 
+# ✅ Get input value at specific time from small feed
+def get_input_at_time(small_df, target_time):
+    """Get input value from small feed at specific time"""
+    if small_df is None or target_time is None:
+        return None
+    match = small_df[small_df["time"] == target_time]
+    return match.iloc[-1]["open"] if not match.empty and "open" in match.columns else None
+
 # ✅ Calculate pivot output
 def calculate_pivot(H, L, C, M_value):
     return ((H + L + C) / 3) + M_value * (H - L)
@@ -128,8 +136,8 @@ def get_monthly_anchor(report_time, months_back, start_hour):
         year -= 1
     return dt.datetime(year, month, 1, hour=start_hour, minute=0, second=0, microsecond=0)
 
-# ✅ Main feed processor
-def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value):
+# ✅ Main feed processor - UPDATED with new columns
+def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value_18, small_df):
     df.columns = df.columns.str.strip().str.lower()
     df["time"] = df["time"].apply(clean_timestamp)
     df = df.iloc[::-1]  # reverse chronological
@@ -171,6 +179,11 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
             else:
                 arrival_time = report_time
             H, L, C = current[cols[0]], current[cols[1]], current[cols[2]]
+            
+            # Calculate additional input values
+            input_at_arrival = get_input_at_time(small_df, arrival_time)
+            input_at_report = get_input_at_time(small_df, report_time)
+            
             for _, row in measurements.iterrows():
                 output = calculate_pivot(H, L, C, row["m value"])
                 day = get_day_index(arrival_time, report_time, start_hour)
@@ -184,9 +197,13 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     "R #": row["r #"],
                     "Tag": row["tag"],
                     "Family": row["family"],
-                    "Input": input_value,
-                    "Output": output,
-                    "Diff": output - input_value
+                    "Input @ 18:00": input_value_18,
+                    "Diff @ 18:00": output - input_value_18,
+                    "Input @ Arrival": input_at_arrival,
+                    "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
+                    "Input @ Report": input_at_report,
+                    "Diff @ Report": output - input_at_report if input_at_report is not None else None,
+                    "Output": output
                 })
             continue
 
@@ -197,6 +214,11 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
             if changed:
                 arrival_time = current["time"]
                 H, L, C = current[cols[0]], current[cols[1]], current[cols[2]]
+                
+                # Calculate additional input values
+                input_at_arrival = get_input_at_time(small_df, arrival_time)
+                input_at_report = get_input_at_time(small_df, report_time)
+                
                 for _, row in measurements.iterrows():
                     output = calculate_pivot(H, L, C, row["m value"])
                     day = get_day_index(arrival_time, report_time, start_hour)
@@ -210,9 +232,13 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                         "R #": row["r #"],
                         "Tag": row["tag"],
                         "Family": row["family"],
-                        "Input": input_value,
-                        "Output": output,
-                        "Diff": output - input_value
+                        "Input @ 18:00": input_value_18,
+                        "Diff @ 18:00": output - input_value_18,
+                        "Input @ Arrival": input_at_arrival,
+                        "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
+                        "Input @ Report": input_at_report,
+                        "Diff @ Report": output - input_at_report if input_at_report is not None else None,
+                        "Output": output
                     })
 
     return new_data_rows
