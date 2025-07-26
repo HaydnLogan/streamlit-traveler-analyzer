@@ -9,9 +9,15 @@ ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 
 def clean_timestamp(value):
     try:
-        return pd.to_datetime(value)
+        # Handle ISO format with timezone (e.g., 2025-07-24T15:30:00-04:00)
+        parsed = pd.to_datetime(value, utc=True)
+        return parsed.tz_localize(None)  # Remove timezone info for consistency
     except Exception:
-        return pd.NaT
+        try:
+            # Fallback to standard parsing
+            return pd.to_datetime(value)
+        except Exception:
+            return pd.NaT
 
 # ✅ Extract origin column groups
 def extract_origins(columns):
