@@ -11,7 +11,7 @@ import datetime as dt
 import io
 from pandas import ExcelWriter
 
-from shared_updated import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time
+from shared.shared import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time
 from models.models_a_today import run_a_model_detection_today
 from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_04gpr3 import run_c_model_detection
