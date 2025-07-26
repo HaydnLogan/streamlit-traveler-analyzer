@@ -3,6 +3,7 @@
 # Model X sandbox added 7.20.25
 # Model A modified to show terminals 0, |40, and |54|. CavAir 7.22.25 1020
 # adding download buttons to Mod A
+# Modified Traveler Report columns.  7.26.25 Replit Agent.
 
 import streamlit as st
 import pandas as pd
@@ -10,7 +11,7 @@ import datetime as dt
 import io
 from pandas import ExcelWriter
 
-from shared.shared import clean_timestamp, process_feed, get_input_value, highlight_traveler_report
+from shared_updated import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time
 from models.models_a_today import run_a_model_detection_today
 from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_04gpr3 import run_c_model_detection
@@ -62,26 +63,30 @@ if final_report_file:
         final_df.columns = final_df.columns.str.strip()
         final_df["Arrival"] = pd.to_datetime(final_df["Arrival"], errors="coerce")
 
-        # 🔧 Create formatted display version
-        display_df = final_df.copy()
-        display_df["Arrival Display"] = display_df["Arrival"].dt.strftime("%-d-%b-%y %H:%M")
-
-        # 🧽 Replace 'Arrival' with 'Arrival Display' in output only
-        cols = list(display_df.columns)
-        if "Arrival" in cols and "Arrival Display" in cols:
-            idx = cols.index("Arrival")
-            cols.remove("Arrival")
-            cols.remove("Arrival Display")
-            cols.insert(idx, "Arrival Display")
-            display_df = display_df[cols]
-
         # ✅ Set report_time using raw Arrival
         if report_mode == "Most Current":
             report_time = final_df["Arrival"].max()
 
+        # 🔧 Create properly formatted display version with new column structure
+        display_df = final_df.copy()
+        
+        # Format Arrival column: ddd yy-mm-dd hh:mm
+        display_df["Arrival"] = display_df["Arrival"].dt.strftime("%a %y-%m-%d %H:%M")
+        
+        # Ensure column order: Feed, Arrival, Day, Origin, M Name, M #, R #, Tag, Family, Input @ 18:00, Diff @ 18:00, Input @ Arrival, Diff @ Arrival, Input @ Report, Diff @ Report, Output
+        ordered_columns = [
+            "Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family",
+            "Input @ 18:00", "Diff @ 18:00", "Input @ Arrival", "Diff @ Arrival", 
+            "Input @ Report", "Diff @ Report", "Output"
+        ]
+        
+        # Only include columns that exist in the dataframe
+        display_columns = [col for col in ordered_columns if col in display_df.columns]
+        display_df = display_df[display_columns]
+
         st.success(f"✅ Using Final Traveler Report with {len(final_df)} rows. Report time set to: {report_time.strftime('%d-%b-%y %H:%M')}")
 
-        # 📊 Display with Arrival hidden
+        # 📊 Display with properly formatted Arrival column
         st.subheader("📊 Final Traveler Report (Bypass Mode)")
         st.dataframe(display_df)
 
@@ -142,23 +147,37 @@ if small_feed_file and big_feed_file and measurement_file:
 
         st.success(f"📅 Using report time: {report_time.strftime('%d-%b-%y %H:%M')}")
 
-        input_value = get_input_value(small_df, report_time) or get_input_value(big_df, report_time)
-        if input_value is None:
+        input_value_18 = get_input_value(small_df, report_time) or get_input_value(big_df, report_time)
+        if input_value_18 is None:
             st.error("⚠️ Could not determine Report Time or Input Value.")
         else:
-            st.success(f"📌 Input value: {input_value:.3f}")
+            st.success(f"📌 Input value @ 18:00: {input_value_18:.3f}")
 
             results = []
-            results += process_feed(small_df, "Sm", report_time, scope_type, scope_value, day_start_hour, measurements, input_value)
-            results += process_feed(big_df, "Bg", report_time, scope_type, scope_value, day_start_hour, measurements, input_value)
+            # Pass small_df for input calculations at different times
+            results += process_feed(small_df, "Sm", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
+            results += process_feed(big_df, "Bg", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
 
             final_df = pd.DataFrame(results)
             final_df.sort_values(by=["Output", "Arrival"], ascending=[False, True], inplace=True)
             final_df["Arrival"] = pd.to_datetime(final_df["Arrival"], errors="coerce")
-            final_df["Arrival Display"] = final_df["Arrival"].dt.strftime("%#d-%b-%y %H:%M")
             
-            # 🧽 Display without raw 'Arrival' column
-            display_df = final_df.drop(columns=["Arrival"])
+            # 🔧 Create properly formatted display version
+            display_df = final_df.copy()
+            
+            # Format Arrival column: ddd yy-mm-dd hh:mm (e.g., Sun 25-07-27 18:00)
+            display_df["Arrival"] = display_df["Arrival"].dt.strftime("%a %y-%m-%d %H:%M")
+            
+            # Ensure proper column order
+            ordered_columns = [
+                "Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family",
+                "Input @ 18:00", "Diff @ 18:00", "Input @ Arrival", "Diff @ Arrival", 
+                "Input @ Report", "Diff @ Report", "Output"
+            ]
+            
+            # Only include columns that exist in the dataframe
+            display_columns = [col for col in ordered_columns if col in display_df.columns]
+            display_df = display_df[display_columns]
             
             st.subheader("📊 Final Traveler Report")
             st.dataframe(display_df)
@@ -169,7 +188,7 @@ if small_feed_file and big_feed_file and measurement_file:
             
             excel_buffer = io.BytesIO()
             with ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-                styled_excel = highlight_traveler_report(final_df)
+                styled_excel = highlight_traveler_report(display_df)
                 styled_excel.to_excel(writer, index=False, sheet_name="Traveler Report")
             
             # 📥 Download button
@@ -179,7 +198,6 @@ if small_feed_file and big_feed_file and measurement_file:
                 file_name=filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
 
             # Custom Traveler Report
             st.markdown("### 🎯 Run Custom Traveler Report")
@@ -197,7 +215,7 @@ if small_feed_file and big_feed_file and measurement_file:
                 custom_outputs = {}
                 for r in custom_range_results:
                     if r["enabled"] and r["largest"] > r["smallest"]:
-                        filtered = final_df[(final_df["Output"] <= r["largest"]) & (final_df["Output"] >= r["smallest"])].copy()
+                        filtered = display_df[(display_df["Output"] <= r["largest"]) & (display_df["Output"] >= r["smallest"])].copy()
                         filtered["Range Label"] = r["label"]
                         custom_outputs[r["label"]] = filtered
 
