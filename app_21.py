@@ -130,7 +130,7 @@ if small_feed_file and big_feed_file and measurement_file:
 
         for df in [small_df, big_df]:
             df.columns = df.columns.str.strip().str.lower()
-            df["time"] = pd.to_datetime(df["time"].apply(clean_timestamp), errors="coerce").dt.tz_localize(None)
+            df["time"] = df["time"].apply(clean_timestamp)
 
         xls = pd.ExcelFile(measurement_file)
         sheet_choice = st.selectbox("Select measurement tab", xls.sheet_names)
@@ -155,8 +155,13 @@ if small_feed_file and big_feed_file and measurement_file:
 
             results = []
             # Pass small_df for input calculations at different times
-            results += process_feed(small_df, "Sm", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
-            results += process_feed(big_df, "Bg", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
+            sm_results = process_feed(small_df, "Sm", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
+            bg_results = process_feed(big_df, "Bg", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
+            
+            st.info(f"📊 Small feed generated {len(sm_results)} rows, Big feed generated {len(bg_results)} rows")
+            
+            results += sm_results
+            results += bg_results
 
             final_df = pd.DataFrame(results)
             final_df.sort_values(by=["Output", "Arrival"], ascending=[False, True], inplace=True)
