@@ -11,7 +11,7 @@ import datetime as dt
 import io
 from pandas import ExcelWriter
 
-from shared.shared import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time
+from shared.shared import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time, get_input_at_day_start
 from models.models_a_today import run_a_model_detection_today
 from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_04gpr3 import run_c_model_detection
@@ -147,11 +147,11 @@ if small_feed_file and big_feed_file and measurement_file:
 
         st.success(f"📅 Using report time: {report_time.strftime('%d-%b-%y %H:%M')}")
 
-        input_value_18 = get_input_value(small_df, report_time) or get_input_value(big_df, report_time)
+        input_value_18 = get_input_at_day_start(small_df, report_time, start_hour) or get_input_at_day_start(big_df, report_time, start_hour)
         if input_value_18 is None:
-            st.error("⚠️ Could not determine Report Time or Input Value.")
+            st.error(f"⚠️ Could not determine Report Time or Input Value @ {start_hour:02d}:00.")
         else:
-            st.success(f"📌 Input value @ 18:00: {input_value_18:.3f}")
+            st.success(f"📌 Input value @ {start_hour:02d}:00: {input_value_18:.3f}")
 
             results = []
             # Pass small_df for input calculations at different times
