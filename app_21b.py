@@ -155,8 +155,8 @@ if small_feed_file and big_feed_file and measurement_file:
 
             results = []
             # Pass small_df for input calculations at different times
-            sm_results = process_feed(small_df, "Sm", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
-            bg_results = process_feed(big_df, "Bg", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
+            sm_results = process_feed(small_df, "Sm", report_time, scope_type, scope_value, start_hour, measurements, input_value_18, small_df)
+            bg_results = process_feed(big_df, "Bg", report_time, scope_type, scope_value, start_hour, measurements, input_value_18, small_df)
             
             st.info(f"📊 Small feed generated {len(sm_results)} rows, Big feed generated {len(bg_results)} rows")
             
@@ -173,10 +173,10 @@ if small_feed_file and big_feed_file and measurement_file:
             # Format Arrival column: ddd yy-mm-dd hh:mm (e.g., Sun 25-07-27 18:00)
             display_df["Arrival"] = display_df["Arrival"].dt.strftime("%a %y-%m-%d %H:%M")
             
-            # Ensure proper column order
+            # Ensure proper column order with dynamic start hour
             ordered_columns = [
                 "Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family",
-                "Input @ 18:00", "Diff @ 18:00", "Input @ Arrival", "Diff @ Arrival", 
+                f"Input @ {start_hour:02d}:00", f"Diff @ {start_hour:02d}:00", "Input @ Arrival", "Diff @ Arrival", 
                 "Input @ Report", "Diff @ Report", "Output"
             ]
             
