@@ -21,6 +21,10 @@ def clean_timestamp(value):
                 if len(parts) == 2:
                     date_part = parts[0]
                     time_part = parts[1]
+                    if '-' in time_part:
+                        time_part = time_part.split('-')[0]
+                    value = f"{date_part}T{time_part}"
+        return pd.to_datetime(value)
     except Exception:
         try:
             # Fallback to standard parsing
