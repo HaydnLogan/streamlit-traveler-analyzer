@@ -16,47 +16,51 @@ def import_model_functions():
     
     # Import A model functions
     try:
-        spec = importlib.util.spec_from_file_location("models_a", "attached_assets/models_a_today_1753623650438.py")
-        models_a = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(models_a)
-        functions['detect_A_models'] = models_a.detect_A_models_today_only
-        functions['classify_A_model'] = models_a.classify_A_model
-        functions['find_flexible_descents'] = models_a.find_flexible_descents
+        spec = importlib.util.spec_from_file_location("models_a", "models_a_today.py")
+        if spec and spec.loader:
+            models_a = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(models_a)
+            functions['detect_A_models'] = models_a.detect_A_models_today_only
+            functions['classify_A_model'] = models_a.classify_A_model
+            functions['find_flexible_descents'] = models_a.find_flexible_descents
     except Exception as e:
         st.warning(f"Could not import A model functions: {e}")
     
     # Import B model functions  
     try:
-        spec = importlib.util.spec_from_file_location("mod_b", "attached_assets/mod_b_05pg1_1753623650437.py")
-        mod_b = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod_b)
-        functions['detect_B_models'] = mod_b.detect_B_models
-        functions['classify_b_sequence'] = mod_b.classify_b_sequence
-        functions['find_descending_sequences_b'] = mod_b.find_descending_sequences
+        spec = importlib.util.spec_from_file_location("mod_b", "mod_b_05.py")
+        if spec and spec.loader:
+            mod_b = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod_b)
+            functions['detect_B_models'] = mod_b.detect_B_models
+            functions['classify_b_sequence'] = mod_b.classify_b_sequence
+            functions['find_descending_sequences_b'] = mod_b.find_descending_sequences
     except Exception as e:
         st.warning(f"Could not import B model functions: {e}")
     
     # Import C model functions
     try:
         spec = importlib.util.spec_from_file_location("mod_c", "attached_assets/mod_c_04gpr3_1753623650438.py")
-        mod_c = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod_c)
-        functions['detect_C_models'] = mod_c.detect_C_models
-        functions['classify_c01_sequence'] = mod_c.classify_c01_sequence
-        functions['classify_c02_sequence'] = mod_c.classify_c02_sequence
-        functions['classify_c04_sequence'] = mod_c.classify_c04_sequence
-        functions['find_descending_sequences_c'] = mod_c.find_descending_sequences
+        if spec and spec.loader:
+            mod_c = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod_c)
+            functions['detect_C_models'] = mod_c.detect_C_models
+            functions['classify_c01_sequence'] = mod_c.classify_c01_sequence
+            functions['classify_c02_sequence'] = mod_c.classify_c02_sequence
+            functions['classify_c04_sequence'] = mod_c.classify_c04_sequence
+            functions['find_descending_sequences_c'] = mod_c.find_descending_sequences
     except Exception as e:
         st.warning(f"Could not import C model functions: {e}")
     
     # Import X model functions
     try:
         spec = importlib.util.spec_from_file_location("mod_x", "attached_assets/mod_x_03g_1753623650438.py")
-        mod_x = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod_x)
-        functions['detect_X_models'] = mod_x.detect_X_models
-        functions['classify_x00_at_40'] = mod_x.classify_x00_at_40
-        functions['classify_vip_01'] = mod_x.classify_vip_01
+        if spec and spec.loader:
+            mod_x = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod_x)
+            functions['detect_X_models'] = mod_x.detect_X_models
+            functions['classify_x00_at_40'] = mod_x.classify_x00_at_40
+            functions['classify_vip_01'] = mod_x.classify_vip_01
     except Exception as e:
         st.warning(f"Could not import X model functions: {e}")
         
@@ -94,10 +98,10 @@ def analyze_output_patterns(output_rows, model_functions):
     # Check B model patterns
     if 'classify_b_sequence' in model_functions and 'find_descending_sequences_b' in model_functions:
         try:
-            # Create a mini dataframe for this output to use existing B model logic
+            # Create a mini dataframe with this specific output's data
             mini_df = rows.copy()
-            mini_df['Output'] = output_rows['Output'].iloc[0]  # Ensure consistent output value
-            sequences = model_functions['find_descending_sequences_b'](pd.DataFrame({'Output': [mini_df['Output'].iloc[0]]}))
+            mini_df['Output'] = output_rows['Output'].iloc[0]
+            sequences = model_functions['find_descending_sequences_b'](mini_df)
             
             for output_val, seq in sequences:
                 if seq.shape[0] >= 3:
@@ -132,7 +136,7 @@ def analyze_output_patterns(output_rows, model_functions):
             if 'find_descending_sequences_c' in model_functions:
                 mini_df = rows.copy()
                 mini_df['Output'] = output_rows['Output'].iloc[0]
-                sequences = model_functions['find_descending_sequences_c'](pd.DataFrame({'Output': [mini_df['Output'].iloc[0]]}))
+                sequences = model_functions['find_descending_sequences_c'](mini_df)
                 
                 for output_val, seq in sequences:
                     for classifier_name in ['classify_c01_sequence', 'classify_c02_sequence', 'classify_c04_sequence']:
