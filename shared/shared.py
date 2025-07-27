@@ -54,13 +54,61 @@ def get_input_value(df, report_time):
     match = df[df["time"] == report_time]
     return match.iloc[-1]["open"] if not match.empty and "open" in match.columns else None
 
-# ✅ Get input value at specific time from small feed
+# ✅ Get input value at day start time (17:00 or 18:00) looking back from report time
+def get_input_at_day_start(df, report_time, start_hour):
+    """Get input value at the most recent day start time (17:00 or 18:00) before or at report time"""
+    if df is None or report_time is None:
+        return None
+    
+    # Start with the day start time on the same date as report_time
+    target_time = report_time.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    
+    # If the report time is before the day start time on the same day,
+    # we need to go back to the previous day's day start time
+    if report_time < target_time:
+        target_time = target_time - pd.Timedelta(days=1)
+    
+    # First try exact match at the target time
+    exact_match = df[df["time"] == target_time]
+    if not exact_match.empty and "open" in exact_match.columns:
+        return exact_match.iloc[-1]["open"]
+    
+    # If no exact match, find the closest time to the target time that's <= report_time
+    if "time" in df.columns and "open" in df.columns:
+        # Filter to times that are <= report_time
+        valid_times_df = df[df["time"] <= report_time]
+        if not valid_times_df.empty:
+            valid_times_df = valid_times_df.copy()
+            valid_times_df["time_diff"] = abs(valid_times_df["time"] - target_time)
+            closest_row = valid_times_df.loc[valid_times_df["time_diff"].idxmin()]
+            return closest_row["open"]
+    
+    return None
+
+# ✅ Backward compatibility wrapper for get_input_at_18
+def get_input_at_18(df, report_time):
+    """Backward compatibility wrapper - defaults to 18:00"""
+    return get_input_at_day_start(df, report_time, 18)
+
+# ✅ Get input value at specific time from small feed (with fallback to closest time)
 def get_input_at_time(small_df, target_time):
-    """Get input value from small feed at specific time"""
+    """Get input value from small feed at specific time, or closest available time"""
     if small_df is None or target_time is None:
         return None
-    match = small_df[small_df["time"] == target_time]
-    return match.iloc[-1]["open"] if not match.empty and "open" in match.columns else None
+    
+    # First try exact match
+    exact_match = small_df[small_df["time"] == target_time]
+    if not exact_match.empty and "open" in exact_match.columns:
+        return exact_match.iloc[-1]["open"]
+    
+    # If no exact match, find closest time
+    if "time" in small_df.columns and "open" in small_df.columns:
+        small_df_copy = small_df.copy()
+        small_df_copy["time_diff"] = abs(small_df_copy["time"] - target_time)
+        closest_row = small_df_copy.loc[small_df_copy["time_diff"].idxmin()]
+        return closest_row["open"]
+    
+    return None
 
 # ✅ Calculate pivot output
 def calculate_pivot(H, L, C, M_value):
