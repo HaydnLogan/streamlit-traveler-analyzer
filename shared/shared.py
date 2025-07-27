@@ -10,8 +10,17 @@ ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 def clean_timestamp(value):
     try:
         # Handle ISO format with timezone (e.g., 2025-07-24T15:30:00-04:00)
-        parsed = pd.to_datetime(value, utc=True)
-        return parsed.tz_localize(None)  # Remove timezone info for consistency
+        # Parse as naive datetime, ignoring timezone offset
+        if isinstance(value, str) and 'T' in value:
+            # Remove timezone offset (+/-XX:XX) to keep local time as-is
+            if '+' in value:
+                value = value.split('+')[0]
+            elif value.count('-') >= 3:  # Has timezone offset like -04:00
+                # Find last dash that's part of timezone (after 'T')
+                parts = value.split('T')
+                if len(parts) == 2:
+                    date_part = parts[0]
+                    time_part = parts[1]
     except Exception:
         try:
             # Fallback to standard parsing
