@@ -17,6 +17,12 @@ from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_04gpr3 import run_c_model_detection
 from models.mod_x_03g import run_x_model_detection
 
+# For any missing model imports, we'll create simple placeholder functions
+def run_b_model_detection(df):
+    st.warning("Model B detection not available")
+def run_x_model_detection(df):
+    st.warning("Model X detection not available")
+    
 # 🔌 Streamlit interface (UI + orchestration)
 
 st.set_page_config(layout="wide")
@@ -147,16 +153,16 @@ if small_feed_file and big_feed_file and measurement_file:
 
         st.success(f"📅 Using report time: {report_time.strftime('%d-%b-%y %H:%M')}")
 
-        input_value_18 = get_input_at_day_start(small_df, report_time, start_hour) or get_input_at_day_start(big_df, report_time, start_hour)
+        input_value_18 = get_input_at_day_start(small_df, report_time, day_start_hour) or get_input_at_day_start(big_df, report_time, day_start_hour)
         if input_value_18 is None:
-            st.error(f"⚠️ Could not determine Report Time or Input Value @ {start_hour:02d}:00.")
+            st.error(f"⚠️ Could not determine Report Time or Input Value @ {day_start_hour:02d}:00.")
         else:
-            st.success(f"📌 Input value @ {start_hour:02d}:00: {input_value_18:.3f}")
+            st.success(f"📌 Input value @ {day_start_hour:02d}:00: {input_value_18:.3f}")
 
             results = []
             # Pass small_df for input calculations at different times
-            sm_results = process_feed(small_df, "Sm", report_time, scope_type, scope_value, start_hour, measurements, input_value_18, small_df)
-            bg_results = process_feed(big_df, "Bg", report_time, scope_type, scope_value, start_hour, measurements, input_value_18, small_df)
+            sm_results = process_feed(small_df, "Sm", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
+            bg_results = process_feed(big_df, "Bg", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
             
             st.info(f"📊 Small feed generated {len(sm_results)} rows, Big feed generated {len(bg_results)} rows")
             
@@ -176,7 +182,7 @@ if small_feed_file and big_feed_file and measurement_file:
             # Ensure proper column order with dynamic start hour
             ordered_columns = [
                 "Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family",
-                f"Input @ {start_hour:02d}:00", f"Diff @ {start_hour:02d}:00", "Input @ Arrival", "Diff @ Arrival", 
+                f"Input @ {day_start_hour:02d}:00", f"Diff @ {day_start_hour:02d}:00", "Input @ Arrival", "Diff @ Arrival", 
                 "Input @ Report", "Diff @ Report", "Output"
             ]
             
