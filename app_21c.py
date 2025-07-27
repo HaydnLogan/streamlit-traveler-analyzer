@@ -16,7 +16,7 @@ from models.models_a_today import run_a_model_detection_today
 from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_04gpr3 import run_c_model_detection
 from models.mod_x_03g import run_x_model_detection
-from models.single_line_mega_report import run_single_line_analysis
+from models.simple_mega_report import run_simple_single_line_analysis
 
 # For any missing model imports, we'll create simple placeholder functions
 def run_b_model_detection(df):
@@ -117,7 +117,7 @@ if final_report_file:
 
         if run_single_line:
             st.markdown("---")
-            run_single_line_analysis(final_df)
+            run_simple_single_line_analysis(final_df)
         
         if run_a_models:
             st.markdown("---")
@@ -254,7 +254,7 @@ if small_feed_file and big_feed_file and measurement_file:
 
             if run_single_line:
                 st.markdown("---")
-                run_single_line_analysis(final_df)
+                run_simple_single_line_analysis(final_df)
             
             if run_a_models:
                 st.markdown("---")
