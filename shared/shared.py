@@ -156,7 +156,7 @@ def get_monthly_anchor(report_time, months_back, start_hour):
     return dt.datetime(year, month, 1, hour=start_hour, minute=0, second=0, microsecond=0)
 
 # ✅ Main feed processor - UPDATED with new columns
-def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value_18, small_df):
+def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value_at_start, small_df):
     df.columns = df.columns.str.strip().str.lower()
     df["time"] = df["time"].apply(clean_timestamp)
     df = df.iloc[::-1]  # reverse chronological
@@ -216,8 +216,8 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     "R #": row["r #"],
                     "Tag": row["tag"],
                     "Family": row["family"],
-                    "Input @ 18:00": input_value_18,
-                    "Diff @ 18:00": output - input_value_18,
+                    f"Input @ {start_hour:02d}:00": input_value_at_start,
+                    f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
                     "Input @ Arrival": input_at_arrival,
                     "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
                     "Input @ Report": input_at_report,
@@ -251,8 +251,8 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                         "R #": row["r #"],
                         "Tag": row["tag"],
                         "Family": row["family"],
-                        "Input @ 18:00": input_value_18,
-                        "Diff @ 18:00": output - input_value_18,
+                        f"Input @ {start_hour:02d}:00": input_value_at_start,
+                        f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
                         "Input @ Arrival": input_at_arrival,
                         "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
                         "Input @ Report": input_at_report,
