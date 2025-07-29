@@ -171,6 +171,201 @@ def analyze_output_patterns_comprehensive(output_rows, report_time):
         "sequences_found": sequences_found
     }
 
+def calculate_star_rating(patterns, largest_seq_length, models_found, strength_ids, top_2_largest, top_5_models, has_top_strength_criteria):
+    """
+    Calculate star rating based on complex rules
+    """
+    # 2-star models
+    two_star_models = {"A02", "B01a[0]", "C.01.o.[aft0]", "C.02.p1.[L0]", "C.02.p2.[E0]", "C.02.p3.[O0]", "C.04.∀1.[0]"}
+    
+    # 1-star models  
+    one_star_models = {"C.04.∀2.[±1]"}
+    
+    # Check what models we have
+    found_models = set()
+    for pattern in patterns:
+        # Extract model name from pattern like "A:A01(...)" or "C:C.02.p1.[L0](...)"
+        if ":" in pattern and "(" in pattern:
+            model_part = pattern.split("(")[0].split(":")[1]
+            found_models.add(model_part)
+    
+    # Count stars from models
+    has_two_star = bool(found_models & two_star_models)
+    has_one_star = bool(found_models & one_star_models)
+    
+    # Base stars
+    if has_two_star:
+        stars = 2
+    elif has_one_star:
+        stars = 1
+    else:
+        stars = 0
+    
+    # Upgrade to 3 stars conditions
+    if (has_one_star and has_two_star) or \
+       ((has_one_star or has_two_star) and (largest_seq_length in top_2_largest)) or \
+       ((has_one_star or has_two_star) and (models_found in top_5_models)):
+        stars = 3
+    
+    # 4 stars conditions
+    if (largest_seq_length in top_2_largest or models_found in top_5_models):
+        # Check if only 0 or 0.0 in strength travelers
+        strength_values = [s.strip() for s in str(strength_ids).split(",") if s.strip()]
+        only_zero = all(v in ["0", "0.0"] for v in strength_values if v)
+        
+        # Check if has two unique strength travelers
+        unique_strength = len(set([abs(float(v)) for v in strength_values if v and v not in ["0", "0.0"]])) >= 2
+        
+        if only_zero or unique_strength:
+            stars = 4
+    
+    # Strength tracker 4 stars (handled separately in highlighting)
+    if has_top_strength_criteria:
+        stars = 4
+        
+    return stars
+def calculate_highlighting_info(mega_df, input_report_ref):
+    """
+    Calculate all highlighting information for the dataframe
+    """
+    # Convert output strings back to float for comparison
+    outputs = []
+    for output_str in mega_df["Output"]:
+        try:
+            outputs.append(float(output_str.replace(",", "")))
+        except:
+            outputs.append(0)
+    
+    mega_df["_numeric_output"] = outputs
+    
+    # Get top values for highlighting
+    largest_seq_lengths = mega_df["Largest sequence length"].tolist()
+    models_found_counts = mega_df["Models found"].tolist()
+    
+    # Top 2 largest sequence lengths
+    top_2_largest = sorted(set(largest_seq_lengths), reverse=True)[:2]
+    
+    # Top 5 models found 
+    top_5_models = sorted(set(models_found_counts), reverse=True)[:5]
+    
+    highlighting_info = []
+    
+    for idx, row in mega_df.iterrows():
+        info = {
+            "output_color": "",
+            "largest_seq_color": "",
+            "models_found_color": "",
+            "strength_id_color": "",
+            "row_color": "",
+            "strength_tracker_color": ""
+        }
+        
+        output_val = row["_numeric_output"]
+        
+        # Output highlighting based on Input @ Report
+        if input_report_ref:
+            try:
+                report_ref = float(str(input_report_ref).replace(",", ""))
+                if output_val == report_ref:
+                    info["output_color"] = "lightgray"
+                elif output_val > report_ref:
+                    info["output_color"] = "lightcoral"
+                elif output_val < report_ref:
+                    info["output_color"] = "lightblue"
+            except:
+                pass
+        
+        # Largest sequence length highlighting
+        if row["Largest sequence length"] in top_2_largest:
+            info["largest_seq_color"] = "plum"
+        
+        # Models found highlighting  
+        if row["Models found"] in top_5_models:
+            info["models_found_color"] = "plum"
+        
+        # M# Strength Traveler ID highlighting
+        strength_ids = str(row["M # Strength Traveler ID"]).strip()
+        if strength_ids and strength_ids != "":
+            strength_values = [s.strip() for s in strength_ids.split(",") if s.strip()]
+            has_zero = any(v in ["0", "0.0"] for v in strength_values)
+            only_zero = all(v in ["0", "0.0"] for v in strength_values if v)
+            
+            if has_zero and not only_zero:
+                info["strength_id_color"] = "lightgray"
+            elif only_zero and len(strength_values) >= 1:
+                info["strength_id_color"] = "plum"
+        
+        # Row highlighting for special conditions
+        top_criteria = (row["Largest sequence length"] in top_2_largest or 
+                       row["Models found"] in top_5_models)
+        
+        if top_criteria:
+            strength_values = [s.strip() for s in str(row["M # Strength Traveler ID"]).split(",") if s.strip()]
+            only_zero = all(v in ["0", "0.0"] for v in strength_values if v)
+            unique_strength = len(set([abs(float(v)) for v in strength_values if v and v not in ["0", "0.0"]])) >= 2
+            
+            if only_zero:
+                info["row_color"] = "plum"  # Light fuchsia
+            elif unique_strength:
+                info["row_color"] = "lightgreen"
+        
+        highlighting_info.append(info)
+    
+    return highlighting_info, top_2_largest, top_5_models
+def apply_strength_tracker_highlighting(mega_df, highlighting_info, input_report_ref):
+    """
+    Apply strength tracker highlighting rules
+    """
+    if not input_report_ref:
+        return highlighting_info
+    
+    try:
+        report_ref = float(str(input_report_ref).replace(",", ""))
+    except:
+        return highlighting_info
+    
+    # Sort by output for strength tracker analysis
+    df_sorted = mega_df.sort_values("_numeric_output").reset_index()
+    
+    for i, (orig_idx, row) in enumerate(df_sorted.iterrows()):
+        strength_ids = str(row["M # Strength Traveler ID"]).strip()
+        if not strength_ids or strength_ids == "":
+            continue
+            
+        output_val = row["_numeric_output"]
+        
+        # Check if above report reference
+        if output_val > report_ref:
+            # Find next higher output with strength traveler
+            next_higher = None
+            for j in range(i + 1, len(df_sorted)):
+                next_row = df_sorted.iloc[j]
+                next_strength = str(next_row["M # Strength Traveler ID"]).strip()
+                if next_strength and next_strength != "":
+                    next_higher = next_row["_numeric_output"]
+                    break
+            
+            if next_higher and abs(next_higher - output_val) > 25:
+                highlighting_info[orig_idx]["strength_tracker_color"] = "yellow"
+                highlighting_info[orig_idx]["row_color"] = "yellow"
+        
+        # Check if below report reference  
+        elif output_val < report_ref:
+            # Find next lower output with strength traveler
+            next_lower = None
+            for j in range(i - 1, -1, -1):
+                next_row = df_sorted.iloc[j]
+                next_strength = str(next_row["M # Strength Traveler ID"]).strip()
+                if next_strength and next_strength != "":
+                    next_lower = next_row["_numeric_output"]
+                    break
+            
+            if next_lower and abs(output_val - next_lower) > 25:
+                highlighting_info[orig_idx]["strength_tracker_color"] = "lightblue"
+                highlighting_info[orig_idx]["row_color"] = "lightblue"
+    
+    return highlighting_info
+
 def generate_comprehensive_mega_report(df):
     """
     Generate comprehensive single-line report with all Excel template columns
@@ -181,9 +376,10 @@ def generate_comprehensive_mega_report(df):
         st.error("No model detection functions available")
         return
 
-    # Get report time
+    # Get report time and Input @ Report reference
     report_time = df["Arrival"].max()  
-  
+    input_report_ref = None
+    
     # Group by output and analyze patterns
     mega_report_data = []
     outputs = df["Output"].unique()
@@ -202,16 +398,19 @@ def generate_comprehensive_mega_report(df):
         if patterns:  # Only include outputs with found patterns
             # Calculate all metrics from Excel template
             metrics = calculate_comprehensive_metrics(output_rows, report_time)
-            
-            # Calculate star rating (placeholder - can be customized)
-            stars = len(patterns)  # Simple rating based on pattern count
-            
+                      
             # Calculate booster score (placeholder - can be customized)
             booster_score = sequence_metrics["largest_seq_length"] * 10
+
+            # Fix special characters for Excel compatibility
+            pattern_sequences_fixed = " | ".join(patterns).replace("→", ",").replace("⭐", "*")
+            m_start_end_fixed = metrics["m_start_end"].replace("→", ",")
+            arrival_order_fixed = metrics["arrival_order"].replace("→", ",")
+            seq_start_end_fixed = sequence_metrics["seq_start_end"].replace("→", ",")            
             
             mega_report_data.append({
                 "Output": f"{output:,.3f}",
-                "Stars": "⭐" * min(stars, 5),  # Max 5 stars
+                "Stars": "",  # Will be calculated later with complex rules
                 "Booster Score": booster_score,
                 "Input @ 18:00": metrics["input_18"],
                 "18:00 Diff": metrics["diff_18"],
@@ -224,22 +423,26 @@ def generate_comprehensive_mega_report(df):
                 "Hours ago": metrics["hours_ago"],
                 "Total M# Count": metrics["total_m_count"],
                 "Total M# ID": metrics["m_ids"],
-                "Total M#s Start/End": metrics["m_start_end"],
-                "M # Arrival Order": metrics["arrival_order"],
+                "Total M#s Start/End": m_start_end_fixed,
+                "M # Arrival Order": arrival_order_fixed,
                 "M # Strength Traveler Count": metrics["strength_count"],
                 "M # Strength Traveler ID": metrics["strength_ids"],
                 "Tag B Traveler Count": metrics["tag_b_count"],
                 "Tag B Traveler ID": metrics["tag_b_ids"],
-                "Pattern Sequences": " | ".join(patterns),
+                "Pattern Sequences": pattern_sequences_fixed,
                 "Unique Sequences": sequence_metrics["unique_sequences"],
                 "Largest sequence length": sequence_metrics["largest_seq_length"],
-                "Sequence Start/End": sequence_metrics["seq_start_end"],
+                "Sequence Start/End": seq_start_end_fixed,
                 "Sequence Same Origin": "Yes" if metrics["same_origin"] else "No",
                 "Sequence Same Family": "Yes" if metrics["same_family"] else "No",
                 "Sequence Same Feed": "Yes" if metrics["same_feed"] else "No",
                 "Sequence Indigo Families": "",  # Placeholder for future implementation
                 "Bucket indigo families": "",    # Placeholder for future implementation
-                "Models found": len(patterns)
+                "Models found": len(patterns),
+                # Store raw data for calculations
+                "_raw_output": output,
+                "_raw_patterns": patterns,
+                "_raw_sequences": sequence_metrics["sequences_found"]
             })
         
         progress_bar.progress((i + 1) / len(outputs))
@@ -256,11 +459,80 @@ def generate_comprehensive_mega_report(df):
         ascending=False
     )
     
-    st.write(f"Found patterns in {len(mega_df_sorted)} outputs with comprehensive metrics")
-    st.dataframe(mega_df_sorted, use_container_width=True)
+    # Get Input @ Report reference for highlighting
+    if len(mega_df_sorted) > 0:
+        # Try to find a consistent Input @ Report value
+        report_values = mega_df_sorted["Input @ Report"].dropna().unique()
+        input_report_ref = report_values[0] if len(report_values) > 0 else None
+    else:
+        input_report_ref = None
     
-    # Download button
-    csv_data = mega_df_sorted.to_csv(index=False)
+    # Calculate highlighting information
+    highlighting_info, top_2_largest, top_5_models = calculate_highlighting_info(mega_df_sorted, input_report_ref)
+    highlighting_info = apply_strength_tracker_highlighting(mega_df_sorted, highlighting_info, input_report_ref)
+    
+    # Calculate star ratings with complex rules
+    for idx, row in mega_df_sorted.iterrows():
+        patterns = row["_raw_patterns"]
+        largest_seq_length = row["Largest sequence length"]
+        models_found = row["Models found"] 
+        strength_ids = row["M # Strength Traveler ID"]
+        
+        # Check if has strength tracker criteria
+        has_strength_tracker = highlighting_info[idx]["strength_tracker_color"] != ""
+        
+        stars = calculate_star_rating(
+            patterns, largest_seq_length, models_found, strength_ids,
+            top_2_largest, top_5_models, has_strength_tracker
+        )
+        
+        mega_df_sorted.at[idx, "Stars"] = "*" * stars
+    
+    # Apply highlighting to display
+    def highlight_cells(row):
+        idx = row.name
+        if idx >= len(highlighting_info):
+            return [''] * len(row)
+        
+        info = highlighting_info[idx]
+        colors = [''] * len(row)
+        
+        # Find column indices
+        col_indices = {col: i for i, col in enumerate(row.index)}
+        
+        # Apply specific column highlighting
+        if "Output" in col_indices and info["output_color"]:
+            colors[col_indices["Output"]] = f'background-color: {info["output_color"]}'
+        
+        if "Largest sequence length" in col_indices and info["largest_seq_color"]:
+            colors[col_indices["Largest sequence length"]] = f'background-color: {info["largest_seq_color"]}'
+        
+        if "Models found" in col_indices and info["models_found_color"]:
+            colors[col_indices["Models found"]] = f'background-color: {info["models_found_color"]}'
+        
+        if "M # Strength Traveler ID" in col_indices and info["strength_id_color"]:
+            colors[col_indices["M # Strength Traveler ID"]] = f'background-color: {info["strength_id_color"]}'
+        
+        # Apply row highlighting (but don't override specific column highlights)
+        if info["row_color"]:
+            for i, col in enumerate(row.index):
+                if col not in ["Output", "Largest sequence length", "Models found", "M # Strength Traveler ID"] and colors[i] == '':
+                    colors[i] = f'background-color: {info["row_color"]}'
+        
+        return colors
+    
+    # Remove helper columns before display
+    display_df = mega_df_sorted.drop(columns=["_raw_output", "_raw_patterns", "_raw_sequences", "_numeric_output"], errors='ignore')
+    
+    st.write(f"Found patterns in {len(display_df)} outputs with comprehensive metrics and highlighting")
+    
+    # Display with highlighting
+    styled_df = display_df.style.apply(highlight_cells, axis=1)
+    st.dataframe(styled_df, use_container_width=True)
+    
+    # Download button with Excel-compatible data
+    download_df = display_df.copy()
+    csv_data = download_df.to_csv(index=False)
     st.download_button(
         "📥 Download Comprehensive Single Line Mega Report (CSV)",
         data=csv_data,
@@ -268,7 +540,7 @@ def generate_comprehensive_mega_report(df):
         mime="text/csv"
     )
     
-    return mega_df_sorted
+    return display_df
 
 def run_simple_single_line_analysis(df):
     """Main function to run comprehensive single line mega report analysis"""
