@@ -3,17 +3,19 @@
 
 import streamlit as st
 import pandas as pd
+import io
+from datetime import datetime
 from collections import defaultdict
 
 # Direct imports from existing files
 try:
-    from models.models_a_today import detect_A_models_today_only, classify_A_model, find_flexible_descents
+    from models_a_today import detect_A_models_today_only, classify_A_model, find_flexible_descents
     A_MODELS_AVAILABLE = True
 except ImportError:
     A_MODELS_AVAILABLE = False
 
 try:
-    from models.mod_c_04gpr3 import detect_C_models, classify_c01_sequence, classify_c02_sequence, classify_c04_sequence, find_descending_sequences
+    from fixed_model_c_complete import detect_C_models, classify_c01_sequence, classify_c02_sequence, classify_c04_sequence, find_descending_sequences
     C_MODELS_AVAILABLE = True
 except ImportError:
     C_MODELS_AVAILABLE = False
@@ -92,6 +94,7 @@ def calculate_comprehensive_metrics(output_rows, report_time):
         "families": families,
         "feeds": feeds
     }
+
 def analyze_output_patterns_comprehensive(output_rows, report_time):
     """
     Comprehensive pattern analysis with all Excel template metrics
@@ -123,7 +126,7 @@ def analyze_output_patterns_comprehensive(output_rows, report_time):
                                 "model": model,
                                 "sequence": seq,
                                 "length": len(seq)
-                            })                          
+                            })
         except Exception as e:
             st.warning(f"Error in A model detection: {e}")
     
@@ -147,7 +150,7 @@ def analyze_output_patterns_comprehensive(output_rows, report_time):
                         "model": tag,
                         "sequence": seq,
                         "length": len(seq)
-                    })                  
+                    })
                     
         except Exception as e:
             st.warning(f"Error in C model detection: {e}")
@@ -224,6 +227,7 @@ def calculate_star_rating(patterns, largest_seq_length, models_found, strength_i
         stars = 4
         
     return stars
+
 def calculate_highlighting_info(mega_df, input_report_ref):
     """
     Calculate all highlighting information for the dataframe
@@ -312,6 +316,7 @@ def calculate_highlighting_info(mega_df, input_report_ref):
         highlighting_info.append(info)
     
     return highlighting_info, top_2_largest, top_5_models
+
 def apply_strength_tracker_highlighting(mega_df, highlighting_info, input_report_ref):
     """
     Apply strength tracker highlighting rules
@@ -346,8 +351,8 @@ def apply_strength_tracker_highlighting(mega_df, highlighting_info, input_report
                     break
             
             if next_higher and abs(next_higher - output_val) > 25:
-                highlighting_info[orig_idx]["strength_tracker_color"] = "yellow"
-                highlighting_info[orig_idx]["row_color"] = "yellow"
+                highlighting_info[orig_idx]["strength_tracker_color"] = "lightcoral"  # Light red as specified
+                highlighting_info[orig_idx]["row_color"] = "lightcoral"
         
         # Check if below report reference  
         elif output_val < report_ref:
@@ -375,9 +380,10 @@ def generate_comprehensive_mega_report(df):
     if not A_MODELS_AVAILABLE and not C_MODELS_AVAILABLE:
         st.error("No model detection functions available")
         return
-
+    
     # Get report time and Input @ Report reference
-    report_time = df["Arrival"].max()  
+    report_time = df["Arrival"].max()
+    report_time_str = report_time.strftime("%Y%m%d_%H%M") if report_time else datetime.now().strftime("%Y%m%d_%H%M")
     input_report_ref = None
     
     # Group by output and analyze patterns
@@ -394,19 +400,19 @@ def generate_comprehensive_mega_report(df):
             
         # Get comprehensive analysis
         patterns, sequence_metrics = analyze_output_patterns_comprehensive(output_rows, report_time)
-      
+        
         if patterns:  # Only include outputs with found patterns
             # Calculate all metrics from Excel template
             metrics = calculate_comprehensive_metrics(output_rows, report_time)
-                      
+            
             # Calculate booster score (placeholder - can be customized)
             booster_score = sequence_metrics["largest_seq_length"] * 10
-
+            
             # Fix special characters for Excel compatibility
             pattern_sequences_fixed = " | ".join(patterns).replace("→", ",").replace("⭐", "*")
             m_start_end_fixed = metrics["m_start_end"].replace("→", ",")
             arrival_order_fixed = metrics["arrival_order"].replace("→", ",")
-            seq_start_end_fixed = sequence_metrics["seq_start_end"].replace("→", ",")            
+            seq_start_end_fixed = sequence_metrics["seq_start_end"].replace("→", ",")
             
             mega_report_data.append({
                 "Output": f"{output:,.3f}",
@@ -514,7 +520,13 @@ def generate_comprehensive_mega_report(df):
             colors[col_indices["M # Strength Traveler ID"]] = f'background-color: {info["strength_id_color"]}'
         
         # Apply row highlighting (but don't override specific column highlights)
-        if info["row_color"]:
+        # For strength tracker, exclude Output, Largest sequence length, Models found as specified in Mod 3
+        if info["row_color"] and info["strength_tracker_color"]:
+            for i, col in enumerate(row.index):
+                if col not in ["Output", "Largest sequence length", "Models found", "M # Strength Traveler ID"] and colors[i] == '':
+                    colors[i] = f'background-color: {info["row_color"]}'
+        elif info["row_color"]:
+            # For other row highlighting, exclude the already highlighted columns
             for i, col in enumerate(row.index):
                 if col not in ["Output", "Largest sequence length", "Models found", "M # Strength Traveler ID"] and colors[i] == '':
                     colors[i] = f'background-color: {info["row_color"]}'
@@ -530,15 +542,125 @@ def generate_comprehensive_mega_report(df):
     styled_df = display_df.style.apply(highlight_cells, axis=1)
     st.dataframe(styled_df, use_container_width=True)
     
-    # Download button with Excel-compatible data
+    # Download button with Excel-compatible data and highlighting
     download_df = display_df.copy()
+    
+    # Create highlighting for Excel export using conditional formatting markers
+    for idx, row in download_df.iterrows():
+        if idx < len(highlighting_info):
+            info = highlighting_info[idx]
+            
+            # Add highlighting markers to cells for Excel
+            if info["output_color"]:
+                download_df.at[idx, "Output"] = f"[{info['output_color']}]{download_df.at[idx, 'Output']}"
+            
+            if info["largest_seq_color"]:
+                download_df.at[idx, "Largest sequence length"] = f"[{info['largest_seq_color']}]{download_df.at[idx, 'Largest sequence length']}"
+            
+            if info["models_found_color"]:
+                download_df.at[idx, "Models found"] = f"[{info['models_found_color']}]{download_df.at[idx, 'Models found']}"
+            
+            if info["strength_id_color"]:
+                download_df.at[idx, "M # Strength Traveler ID"] = f"[{info['strength_id_color']}]{download_df.at[idx, 'M # Strength Traveler ID']}"
+            
+            # Add row highlighting markers to other columns
+            if info["row_color"]:
+                for col in download_df.columns:
+                    if col not in ["Output", "Largest sequence length", "Models found", "M # Strength Traveler ID"]:
+                        current_val = download_df.at[idx, col]
+                        if not str(current_val).startswith(f"[{info['row_color']}]"):
+                            download_df.at[idx, col] = f"[{info['row_color']}]{current_val}"
+    
+    # CSV download with highlighting markers
     csv_data = download_df.to_csv(index=False)
     st.download_button(
-        "📥 Download Comprehensive Single Line Mega Report (CSV)",
+        "Download CSV with Highlighting Markers",
         data=csv_data,
-        file_name="comprehensive_single_line_mega_report.csv",
+        file_name=f"comprehensive_single_line_mega_report_{report_time_str}.csv",
         mime="text/csv"
     )
+    
+    # Excel download with actual highlighting
+    try:
+        # Create Excel file with highlighting
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            display_df.to_excel(writer, sheet_name='Single Line Mega Report', index=False)
+            
+            # Get the workbook and worksheet
+            workbook = writer.book
+            worksheet = writer.sheets['Single Line Mega Report']
+            
+            # Define color styles
+            from openpyxl.styles import PatternFill
+            
+            lightgray_fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
+            lightcoral_fill = PatternFill(start_color='F08080', end_color='F08080', fill_type='solid')
+            lightblue_fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')
+            plum_fill = PatternFill(start_color='DDA0DD', end_color='DDA0DD', fill_type='solid')
+            lightgreen_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')
+            
+            color_map = {
+                'lightgray': lightgray_fill,
+                'lightcoral': lightcoral_fill,
+                'lightblue': lightblue_fill,
+                'plum': plum_fill,
+                'lightgreen': lightgreen_fill
+            }
+            
+            # Apply highlighting to cells
+            for row_idx, (_, row) in enumerate(display_df.iterrows(), start=2):  # Start at row 2 (1 is header)
+                if row_idx - 2 < len(highlighting_info):
+                    info = highlighting_info[row_idx - 2]
+                    
+                    # Column mapping
+                    col_map = {col: idx + 1 for idx, col in enumerate(display_df.columns)}
+                    
+                    # Apply specific column highlighting
+                    if info["output_color"] and "Output" in col_map:
+                        worksheet.cell(row=row_idx, column=col_map["Output"]).fill = color_map.get(info["output_color"], lightgray_fill)
+                    
+                    if info["largest_seq_color"] and "Largest sequence length" in col_map:
+                        worksheet.cell(row=row_idx, column=col_map["Largest sequence length"]).fill = color_map.get(info["largest_seq_color"], plum_fill)
+                    
+                    if info["models_found_color"] and "Models found" in col_map:
+                        worksheet.cell(row=row_idx, column=col_map["Models found"]).fill = color_map.get(info["models_found_color"], plum_fill)
+                    
+                    if info["strength_id_color"] and "M # Strength Traveler ID" in col_map:
+                        worksheet.cell(row=row_idx, column=col_map["M # Strength Traveler ID"]).fill = color_map.get(info["strength_id_color"], plum_fill)
+                    
+                    # Apply row highlighting (excluding already highlighted columns)
+                    if info["row_color"]:
+                        excluded_cols = []
+                        if info["strength_tracker_color"]:
+                            excluded_cols = ["Output", "Largest sequence length", "Models found", "M # Strength Traveler ID"]
+                        else:
+                            excluded_cols = ["Output", "Largest sequence length", "Models found", "M # Strength Traveler ID"]
+                        
+                        for col_name, col_idx in col_map.items():
+                            if col_name not in excluded_cols:
+                                current_fill = worksheet.cell(row=row_idx, column=col_idx).fill
+                                if current_fill.start_color.rgb == '00000000':  # No existing fill
+                                    worksheet.cell(row=row_idx, column=col_idx).fill = color_map.get(info["row_color"], lightgray_fill)
+        
+        excel_data = output.getvalue()
+        st.download_button(
+            "📥 Download Excel with Actual Highlighting",
+            data=excel_data,
+            file_name=f"comprehensive_single_line_mega_report_{report_time_str}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    except Exception as e:
+        st.warning(f"Excel export with highlighting not available: {e}")
+        # Fallback to simple Excel without highlighting
+        simple_excel = display_df.to_excel(index=False)
+        st.download_button(
+            "Download Excel (Simple)",
+            data=simple_excel,
+            file_name=f"comprehensive_single_line_mega_report_{report_time_str}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     
     return display_df
 
