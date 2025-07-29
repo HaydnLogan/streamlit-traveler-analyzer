@@ -15,10 +15,10 @@ from models.mod_x_03g import run_x_model_detection
 from models.simple_mega_report2 import run_simple_single_line_analysis
 
 # For any missing model imports, we'll create simple placeholder functions
-def run_b_model_detection(df):
-    st.warning("Model B detection not available")
-def run_x_model_detection(df):
-    st.warning("Model X detection not available")
+# def run_b_model_detection(df):
+#     st.warning("Model B detection not available")
+# def run_x_model_detection(df):
+#     st.warning("Model X detection not available")
     
 # 🔌 Streamlit interface (UI + orchestration)
 
