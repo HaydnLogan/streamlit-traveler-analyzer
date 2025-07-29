@@ -376,6 +376,10 @@ def generate_comprehensive_mega_report(df):
     Generate comprehensive single-line report with all Excel template columns
     """
     st.subheader("🎯 Single Line Mega Report - All Patterns Per Output")
+
+    # Debug info for troubleshooting
+    st.write(f"Debug: A_MODELS_AVAILABLE = {A_MODELS_AVAILABLE}")
+    st.write(f"Debug: C_MODELS_AVAILABLE = {C_MODELS_AVAILABLE}")
     
     if not A_MODELS_AVAILABLE and not C_MODELS_AVAILABLE:
         st.error("No model detection functions available")
