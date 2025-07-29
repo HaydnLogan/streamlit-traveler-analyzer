@@ -11,13 +11,17 @@ from collections import defaultdict
 try:
     from models_a_today import detect_A_models_today_only, classify_A_model, find_flexible_descents
     A_MODELS_AVAILABLE = True
-except ImportError:
+    print("A models imported successfully")
+except ImportError as e:
+    print(f"A models import error: {e}")
     A_MODELS_AVAILABLE = False
 
 try:
     from fixed_model_c_complete import detect_C_models, classify_c01_sequence, classify_c02_sequence, classify_c04_sequence, find_descending_sequences
     C_MODELS_AVAILABLE = True
-except ImportError:
+    print("C models imported successfully")
+except ImportError as e:
+    print(f"C models import error: {e}")
     C_MODELS_AVAILABLE = False
 
 def calculate_comprehensive_metrics(output_rows, report_time):
