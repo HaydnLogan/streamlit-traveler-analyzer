@@ -9,7 +9,7 @@ from collections import defaultdict
 
 # Direct imports from existing files
 try:
-    from models_a_today import detect_A_models_today_only, classify_A_model, find_flexible_descents
+    from models.models_a_today import detect_A_models_today_only, classify_A_model, find_flexible_descents
     A_MODELS_AVAILABLE = True
     print("A models imported successfully")
 except ImportError as e:
@@ -17,7 +17,7 @@ except ImportError as e:
     A_MODELS_AVAILABLE = False
 
 try:
-    from fixed_model_c_complete import detect_C_models, classify_c01_sequence, classify_c02_sequence, classify_c04_sequence, find_descending_sequences
+    from models.mod_c_04gpr3 import detect_C_models, classify_c01_sequence, classify_c02_sequence, classify_c04_sequence, find_descending_sequences
     C_MODELS_AVAILABLE = True
     print("C models imported successfully")
 except ImportError as e:
