@@ -333,10 +333,11 @@ def apply_strength_tracker_highlighting(mega_df, highlighting_info, input_report
     except:
         return highlighting_info
     
-    # Sort by output for strength tracker analysis
-    df_sorted = mega_df.sort_values("_numeric_output").reset_index()
+    # Sort by output for strength tracker analysis, preserving original index
+    df_sorted = mega_df.sort_values("_numeric_output").reset_index(drop=False)
     
-    for i, (orig_idx, row) in enumerate(df_sorted.iterrows()):
+    for i, row in df_sorted.iterrows():
+        orig_idx = row['index']  # Get original index from the 'index' column
         strength_ids = str(row["M # Strength Traveler ID"]).strip()
         if not strength_ids or strength_ids == "":
             continue
@@ -355,8 +356,9 @@ def apply_strength_tracker_highlighting(mega_df, highlighting_info, input_report
                     break
             
             if next_higher and abs(next_higher - output_val) > 25:
-                highlighting_info[orig_idx]["strength_tracker_color"] = "lightcoral"  # Light red as specified
-                highlighting_info[orig_idx]["row_color"] = "lightcoral"
+                if orig_idx < len(highlighting_info):
+                    highlighting_info[orig_idx]["strength_tracker_color"] = "lightcoral"  # Light red as specified
+                    highlighting_info[orig_idx]["row_color"] = "lightcoral"
         
         # Check if below report reference  
         elif output_val < report_ref:
@@ -370,8 +372,9 @@ def apply_strength_tracker_highlighting(mega_df, highlighting_info, input_report
                     break
             
             if next_lower and abs(output_val - next_lower) > 25:
-                highlighting_info[orig_idx]["strength_tracker_color"] = "lightblue"
-                highlighting_info[orig_idx]["row_color"] = "lightblue"
+                if orig_idx < len(highlighting_info):
+                    highlighting_info[orig_idx]["strength_tracker_color"] = "lightblue"
+                    highlighting_info[orig_idx]["row_color"] = "lightblue"
     
     return highlighting_info
 
