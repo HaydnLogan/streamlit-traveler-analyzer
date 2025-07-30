@@ -171,11 +171,11 @@ def highlight_traveler_report(df):
         # 🌍 Origin-based highlight
         origin = str(row.get("Origin", "")).lower()
         if origin in ["spain", "saturn"]:
-            style[col_map["Origin"]] = "background-color: #d4edda;"  # 🌿 light green
+            style[col_map["Origin"]] = "background-color: #39ff14;"  # 🌿 neon green
         elif origin == "jupiter":
             style[col_map["Origin"]] = "background-color: #d1ecf1;"  # 🌌 light blue
         elif origin in ["kepler-62", "kepler-44"]:
-            style[col_map["Origin"]] = "background-color: #fff3cd;"  # 🟠 light orange
+            style[col_map["Origin"]] = "background-color: #ff4d00;"  # 🟠 red orange
 
         # 🟨 Highlight Day == '[0]' across other columns
         day_val = str(row.get("Day", "")).strip().lower()
