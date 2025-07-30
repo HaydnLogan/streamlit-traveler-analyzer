@@ -9,22 +9,31 @@ ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 # Constants: M# Traveler Family Classifications 🧭 📊 🎯 ⚡ 🔢 🌈 📈 📉 🎨 🔍
 # Strength travelers (M# values of 0, 40, -40, 54, -54)
 STRENGTH_TRAVELERS = {0, 40, -40, 54, -54}
+
 # Tag B travelers (M# values of 78.01, -78.01, 90.5, -90.5, 95.5, -95.5)
 TAG_B_TRAVELERS = {78.01, -78.01, 90.5, -90.5, 95.5, -95.5}
+
 # Family Gry travelers (M# values of 62, -62, 78.01, -78.01, 83, -83, 90.5, -90.5, 95.5, -95.5)
 FAMILY_GRY_TRAVELERS = {62, -62, 78.01, -78.01, 83, -83, 90.5, -90.5, 95.5, -95.5}
+
 # Family Orn travelers (M# values of 12, -12, 24, -24, 47, -47, 57, -57, 71, -71, 85, -85, 93.5, -93.5)
 FAMILY_ORN_TRAVELERS = {12, -12, 24, -24, 47, -47, 57, -57, 71, -71, 85, -85, 93.5, -93.5}
+
 # Family Blu travelers (M# values of 15, -15, 27, -27, 33, -33, 38, -38, 45, -45, 54, -54, 67, -67, 74, -74, 80, -80, 85, -85, 89, -89, 92, -92, 95, -95)
 FAMILY_BLU_TRAVELERS = {15, -15, 27, -27, 33, -33, 38, -38, 45, -45, 54, -54, 67, -67, 74, -74, 80, -80, 85, -85, 89, -89, 92, -92, 95, -95}
+
 # Family Alpha travelers (M# values of 2, -2, 10, -10, 22, -22, 30, -30, 36, -36, 39, -39, 41, -41, 43, -43, 50, -50, 60, -60, 77, -77, 107, -107)
 FAMILY_ALPHA_TRAVELERS = {2, -2, 10, -10, 22, -22, 30, -30, 36, -36, 39, -39, 41, -41, 43, -43, 50, -50, 60, -60, 77, -77, 107, -107}
+
 # Family Bravo travelers (M# values of 5, -5, 14, -14, 55, -55, 68, -68, 96, -96)
 FAMILY_BRAVO_TRAVELERS = {5, -5, 14, -14, 55, -55, 68, -68, 96, -96}
+
 # Family Charlie travelers (M# values of 6, -6, 87, -87)
 FAMILY_CHARLIE_TRAVELERS = {6, -6, 87, -87}
+
 # Family Delta travelers (M# values of 3, -3, 103, -103)
 FAMILY_DELTA_TRAVELERS = {3, -3, 103, -103}
+
 # Family Echo travelers (M# values of 1, -1, 111, -111)
 FAMILY_ECHO_TRAVELERS = {1, -1, 111, -111}
 
@@ -144,67 +153,6 @@ def get_day_index(arrival, report_time, start_hour):
         report_day_start -= dt.timedelta(days=1)
     days_diff = (arrival - report_day_start) // dt.timedelta(days=1)
     return f"[{int(days_diff)}]"
-
-# ✅ Highlight Anchor Origins ( old method)
-def highlight_anchor_origins(df):
-    def highlight(cell):
-        origin = str(cell).lower()
-        if origin in ["spain", "saturn"]:
-            return "background-color: #d4edda;"  # light green
-        elif origin == "jupiter":
-            return "background-color: #d1ecf1;"  # light blue
-        elif origin in ["kepler-62", "kepler-44"]:
-            return "background-color: #fff3cd;"  # light orange
-        return ""
-    
-    return df.style.applymap(highlight, subset=["Origin"])
-
-
-# 🎨🖌️ Highlight Traveler Report
-def highlight_traveler_report(df):
-    """🧾 Apply full highlighting to Origin, Day '[0]', and M # / M Name rows in traveler report."""
-
-    def apply_styles(row):
-        style = [""] * len(row)
-        col_map = {col: i for i, col in enumerate(df.columns)}
-
-        # 🌍 Origin-based highlight
-        origin = str(row.get("Origin", "")).lower()
-        if origin in ["spain", "saturn"]:
-            style[col_map["Origin"]] = "background-color: #39ff14;"  # 🌿 neon green
-        elif origin == "jupiter":
-            style[col_map["Origin"]] = "background-color: #d1ecf1;"  # 🌌 light blue
-        elif origin in ["kepler-62", "kepler-44"]:
-            style[col_map["Origin"]] = "background-color: #ff4d00;"  # 🟠 red orange
-
-        # 🟨 Highlight Day == '[0]' across other columns
-        day_val = str(row.get("Day", "")).strip().lower()
-        if day_val == "[0]":
-            for col in df.columns:
-                if col not in ["Origin", "M Name", "M #"]:
-                    style[col_map[col]] = "background-color: yellow;"
-            style[col_map["Day"]] += " font-weight: bold;"
-
-        # 🔢 Highlight M # and M Name
-        try:
-            m_val = int(row.get("M #", -999))
-            m_style = ""
-            if m_val == 0:
-                m_style = "background-color: lavender; font-weight: bold;"  # 💜 M # 0
-            elif abs(m_val) == 40:
-                m_style = "background-color: lightgray; font-weight: bold;"  # 🩶 M # ±40
-            elif abs(m_val) == 54:
-                m_style = "background-color: lightblue; font-weight: bold;"  # 🔵 M # ±54
-
-            for col in ["M #", "M Name"]:
-                if col in col_map:
-                    style[col_map[col]] = m_style
-        except Exception:
-            pass
-
-        return style
-
-    return df.style.apply(apply_styles, axis=1)
 
 
 # ✅ Calculate weekly anchor time
@@ -329,24 +277,57 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
 
     return new_data_rows
 
-# ✅ Enhanced highlighting for traveler reports with updated colors
+# 🎨 🖌️ ✅ Enhanced highlighting for traveler reports with updated colors  
 def highlight_traveler_report(df):
-    """Apply highlighting to traveler report with updated origin colors and output duplicates"""
-    def highlight_origin(cell):
-        origin = str(cell).lower()
-        if origin in ["spain", "saturn"]:
-            return "background-color: #39FF14;"  # Neon Green
-        elif origin == "jupiter":
-            return "background-color: #d1ecf1;"  # light blue (unchanged)
-        elif origin in ["kepler-62", "kepler-44"]:
-            return "background-color: #ff4d00;"  # Red Orange
-        elif origin in ["trinidad", "tobago"]:
-            return "background-color: #f0cb59;"  # Gold for Trinidad/Tobago
-        elif "wasp" in origin:
-            return "background-color: lightgray;"  # Light Gray for Wasp
-        elif "macedonia" in origin:
-            return "background-color: #e022d7;"  # Magenta for Macedonia
-        return ""
+    """Apply highlighting to traveler report with updated origin colors, output duplicates, Day '[0]', and M# values"""
+    def apply_styles(row):
+        style = [""] * len(row)
+        col_map = {col: i for i, col in enumerate(df.columns)}
+
+        # Enhanced Origin-based highlighting with new colors
+        origin = str(row.get("Origin", "")).lower()
+        if "Origin" in col_map:
+            if origin in ["spain", "saturn"]:
+                style[col_map["Origin"]] = "background-color: #39FF14;"  # 🌿 Neon Green
+            elif origin == "jupiter":
+                style[col_map["Origin"]] = "background-color: #d1ecf1;"  # 🌌 light blue (unchanged)
+            elif origin in ["kepler-62", "kepler-44"]:
+                style[col_map["Origin"]] = "background-color: #ff4d00;"  # 🟠 Red Orange
+            elif origin in ["trinidad", "tobago"]:
+                style[col_map["Origin"]] = "background-color: #f0cb59;"  # Gold for Trinidad/Tobago
+            elif "wasp" in origin:
+                style[col_map["Origin"]] = "background-color: lightgray;"  # Light Gray for Wasp
+            elif "macedonia" in origin:
+                style[col_map["Origin"]] = "background-color: #e022d7;"  # Magenta for Macedonia
+
+        # Restored: Highlight Day == '[0]' across other columns (excluding Origin, M Name, M #)
+        day_val = str(row.get("Day", "")).strip().lower()
+        if day_val == "[0]":
+            for col in df.columns:
+                if col not in ["Origin", "M Name", "M #"] and col in col_map:
+                    style[col_map[col]] = "background-color: yellow;"
+            if "Day" in col_map:
+                style[col_map["Day"]] += " font-weight: bold;"
+
+        # Restored: Highlight M # and M Name based on M# values
+        try:
+            m_val = int(row.get("M #", -999))
+            m_style = ""
+            if m_val == 0:
+                m_style = "background-color: lavender; font-weight: bold;"  # M # 0
+            elif abs(m_val) == 40:
+                m_style = "background-color: lightgray; font-weight: bold;"  # M # ±40
+            elif abs(m_val) == 54:
+                m_style = "background-color: lightblue; font-weight: bold;"  # M # ±54
+
+            if m_style:
+                for col in ["M #", "M Name"]:
+                    if col in col_map:
+                        style[col_map[col]] = m_style
+        except Exception:
+            pass
+
+        return style
     
     def highlight_output_duplicates(series):
         """Highlight outputs that appear more than once with yellow"""
@@ -354,33 +335,69 @@ def highlight_traveler_report(df):
         duplicates = value_counts[value_counts > 1].index
         return ['background-color: yellow' if val in duplicates else '' for val in series]
     
-    # Apply styling
-    styled = df.style.applymap(highlight_origin, subset=["Origin"])
+    # Apply row-based styling first
+    styled = df.style.apply(apply_styles, axis=1)
+    
+    # Then apply output duplicates highlighting
     if "Output" in df.columns:
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+    
 # ✅ Custom traveler report highlighting with zone colors and enhanced origin highlighting
 def highlight_custom_traveler_report(df, show_highlighting=True):
     """Apply highlighting for custom traveler report with zone colors and updated origin colors"""
     if not show_highlighting:
         return df.style
     
-    def highlight_origin(cell):
-        origin = str(cell).lower()
-        if origin in ["spain", "saturn"]:
-            return "background-color: #39FF14;"  # Neon Green
-        elif origin == "jupiter":
-            return "background-color: #d1ecf1;"  # light blue (unchanged)
-        elif origin in ["kepler-62", "kepler-44"]:
-            return "background-color: #ff4d00;"  # Red Orange
-        elif origin in ["trinidad", "tobago"]:
-            return "background-color: #f0cb59;"  # Gold for Trinidad/Tobago
-        elif "wasp" in origin:
-            return "background-color: lightgray;"  # Light Gray for Wasp
-        elif "macedonia" in origin:
-            return "background-color: #e022d7;"  # Magenta for Macedonia
-        return ""
+    def apply_styles(row):
+        style = [""] * len(row)
+        col_map = {col: i for i, col in enumerate(df.columns)}
+
+        # Enhanced Origin-based highlighting with new colors
+        origin = str(row.get("Origin", "")).lower()
+        if "Origin" in col_map:
+            if origin in ["spain", "saturn"]:
+                style[col_map["Origin"]] = "background-color: #39FF14;"  # Neon Green
+            elif origin == "jupiter":
+                style[col_map["Origin"]] = "background-color: #d1ecf1;"  # light blue (unchanged)
+            elif origin in ["kepler-62", "kepler-44"]:
+                style[col_map["Origin"]] = "background-color: #ff4d00;"  # Red Orange
+            elif origin in ["trinidad", "tobago"]:
+                style[col_map["Origin"]] = "background-color: #f0cb59;"  # Gold for Trinidad/Tobago
+            elif "wasp" in origin:
+                style[col_map["Origin"]] = "background-color: lightgray;"  # Light Gray for Wasp
+            elif "macedonia" in origin:
+                style[col_map["Origin"]] = "background-color: #e022d7;"  # Magenta for Macedonia
+
+        # Restored: Highlight Day == '[0]' across other columns (excluding Origin, M Name, M #)
+        day_val = str(row.get("Day", "")).strip().lower()
+        if day_val == "[0]":
+            for col in df.columns:
+                if col not in ["Origin", "M Name", "M #"] and col in col_map:
+                    style[col_map[col]] = "background-color: yellow;"
+            if "Day" in col_map:
+                style[col_map["Day"]] += " font-weight: bold;"
+
+        # Restored: Highlight M # and M Name based on M# values
+        try:
+            m_val = int(row.get("M #", -999))
+            m_style = ""
+            if m_val == 0:
+                m_style = "background-color: lavender; font-weight: bold;"  # M # 0
+            elif abs(m_val) == 40:
+                m_style = "background-color: lightgray; font-weight: bold;"  # M # ±40
+            elif abs(m_val) == 54:
+                m_style = "background-color: lightblue; font-weight: bold;"  # M # ±54
+
+            if m_style:
+                for col in ["M #", "M Name"]:
+                    if col in col_map:
+                        style[col_map[col]] = m_style
+        except Exception:
+            pass
+
+        return style
     
     def highlight_zone(cell, range_name):
         """Apply zone highlighting based on range type and zone"""
@@ -419,9 +436,10 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
             return highlight_zone(row["Zone"], row["Range"])
         return ""
     
-    # Apply styling
-    styled = df.style.applymap(highlight_origin, subset=["Origin"])
+    # Apply row-based styling first
+    styled = df.style.apply(apply_styles, axis=1)
     
+    # Then apply output duplicates highlighting
     if "Output" in df.columns:
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
