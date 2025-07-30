@@ -57,6 +57,37 @@ day_start_hour = int(day_start_choice.split(":")[0])
 scope_type = st.radio("Scope by", ["Rows", "Days"])
 scope_value = st.number_input(f"Enter number of {scope_type.lower()}", min_value=1, value=10)
 
+
+# 🎯 Traveler Report Settings (Global Configuration)
+st.markdown("---")
+st.markdown("### 🎯 Traveler Report Settings")
+# Create side-by-side layout for Full Range and Custom Ranges
+col1, col2 = st.columns([1, 2])
+with col1:
+    st.markdown("**Full Range**")
+    use_full_range = st.checkbox("Full Range", value=True, key="global_full_range_check")
+    full_range_value = st.number_input("Range (+/-)", value=1100.0, format="%.1f", key="global_full_range_input")
+    
+with col2:
+    st.markdown("**Custom Ranges**")
+    use_custom_ranges = st.checkbox("Custom Ranges", value=False, key="global_custom_ranges_check")
+    
+    # Create 4-column layout for High1, High2, Low1, Low2
+    cols = st.columns(4)
+    with cols[0]:
+        st.markdown("**High 1**")
+        high1 = st.number_input("", value=500.0, format="%.1f", key="global_high1", label_visibility="collapsed")
+    with cols[1]:
+        st.markdown("**High 2**")
+        high2 = st.number_input("", value=480.0, format="%.1f", key="global_high2", label_visibility="collapsed")
+    with cols[2]:
+        st.markdown("**Low 1**")
+        low1 = st.number_input("", value=150.0, format="%.1f", key="global_low1", label_visibility="collapsed")
+    with cols[3]:
+        st.markdown("**Low 2**")
+        low2 = st.number_input("", value=250.0, format="%.1f", key="global_low2", label_visibility="collapsed")
+st.markdown("---")
+
 # 📥 Optional bypass: Upload a Final Traveler Report
 st.markdown("### 📥 Optional: Upload Final Traveler Report (bypass feed upload)")
 final_report_file = st.file_uploader("Upload Final Traveler Report", type="csv", key="final_report_bypass")
@@ -110,36 +141,10 @@ if final_report_file:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        # New Unified Traveler Report Settings
+        # Apply Traveler Report Settings configured above
         st.markdown("---")
-        st.markdown("### 🎯 Traveler Report Settings")
+        st.markdown("### 📊 Applying Traveler Report Settings")        
         
-        # Create side-by-side layout for Full Range and Custom Ranges
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            st.markdown("**Full Range**")
-            use_full_range = st.checkbox("Full Range", value=True, key="full_range_check")
-            full_range_value = st.number_input("Range (+/-)", value=1100.0, format="%.1f", key="full_range_input")
-            
-        with col2:
-            st.markdown("**Custom Ranges**")
-            use_custom_ranges = st.checkbox("Custom Ranges", value=False, key="custom_ranges_check")
-            
-            # Create 4-column layout for High1, High2, Low1, Low2
-            cols = st.columns(4)
-            with cols[0]:
-                st.markdown("**High 1**")
-                high1 = st.number_input("", value=500.0, format="%.1f", key="high1", label_visibility="collapsed")
-            with cols[1]:
-                st.markdown("**High 2**")
-                high2 = st.number_input("", value=480.0, format="%.1f", key="high2", label_visibility="collapsed")
-            with cols[2]:
-                st.markdown("**Low 1**")
-                low1 = st.number_input("", value=150.0, format="%.1f", key="low1", label_visibility="collapsed")
-            with cols[3]:
-                st.markdown("**Low 2**")
-                low2 = st.number_input("", value=250.0, format="%.1f", key="low2", label_visibility="collapsed")
         # Run Traveler Report based on selection
         if use_full_range and not use_custom_ranges:
             # Get Input @ 18:00 as reference
