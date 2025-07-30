@@ -6,6 +6,27 @@ from dateutil import parser
 EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
 ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 
+# Constants: M# Traveler Family Classifications 🧭 📊 🎯 ⚡ 🔢 🌈 📈 📉 🎨 🔍
+# Strength travelers (M# values of 0, 40, -40, 54, -54)
+STRENGTH_TRAVELERS = {0, 40, -40, 54, -54}
+# Tag B travelers (M# values of 78.01, -78.01, 90.5, -90.5, 95.5, -95.5)
+TAG_B_TRAVELERS = {78.01, -78.01, 90.5, -90.5, 95.5, -95.5}
+# Family Gry travelers (M# values of 62, -62, 78.01, -78.01, 83, -83, 90.5, -90.5, 95.5, -95.5)
+FAMILY_GRY_TRAVELERS = {62, -62, 78.01, -78.01, 83, -83, 90.5, -90.5, 95.5, -95.5}
+# Family Orn travelers (M# values of 12, -12, 24, -24, 47, -47, 57, -57, 71, -71, 85, -85, 93.5, -93.5)
+FAMILY_ORN_TRAVELERS = {12, -12, 24, -24, 47, -47, 57, -57, 71, -71, 85, -85, 93.5, -93.5}
+# Family Blu travelers (M# values of 15, -15, 27, -27, 33, -33, 38, -38, 45, -45, 54, -54, 67, -67, 74, -74, 80, -80, 85, -85, 89, -89, 92, -92, 95, -95)
+FAMILY_BLU_TRAVELERS = {15, -15, 27, -27, 33, -33, 38, -38, 45, -45, 54, -54, 67, -67, 74, -74, 80, -80, 85, -85, 89, -89, 92, -92, 95, -95}
+# Family Alpha travelers (M# values of 2, -2, 10, -10, 22, -22, 30, -30, 36, -36, 39, -39, 41, -41, 43, -43, 50, -50, 60, -60, 77, -77, 107, -107)
+FAMILY_ALPHA_TRAVELERS = {2, -2, 10, -10, 22, -22, 30, -30, 36, -36, 39, -39, 41, -41, 43, -43, 50, -50, 60, -60, 77, -77, 107, -107}
+# Family Bravo travelers (M# values of 5, -5, 14, -14, 55, -55, 68, -68, 96, -96)
+FAMILY_BRAVO_TRAVELERS = {5, -5, 14, -14, 55, -55, 68, -68, 96, -96}
+# Family Charlie travelers (M# values of 6, -6, 87, -87)
+FAMILY_CHARLIE_TRAVELERS = {6, -6, 87, -87}
+# Family Delta travelers (M# values of 3, -3, 103, -103)
+FAMILY_DELTA_TRAVELERS = {3, -3, 103, -103}
+# Family Echo travelers (M# values of 1, -1, 111, -111)
+FAMILY_ECHO_TRAVELERS = {1, -1, 111, -111}
 
 def clean_timestamp(value):
     try:
