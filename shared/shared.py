@@ -207,8 +207,6 @@ def highlight_traveler_report(df):
     return df.style.apply(apply_styles, axis=1)
 
 
-
-
 # ✅ Calculate weekly anchor time
 def get_weekly_anchor(report_time, weeks_back, start_hour):
     days_since_sunday = (report_time.weekday() + 1) % 7
@@ -330,3 +328,109 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     })
 
     return new_data_rows
+
+# ✅ Enhanced highlighting for traveler reports with updated colors
+def highlight_traveler_report(df):
+    """Apply highlighting to traveler report with updated origin colors and output duplicates"""
+    def highlight_origin(cell):
+        origin = str(cell).lower()
+        if origin in ["spain", "saturn"]:
+            return "background-color: #39FF14;"  # Neon Green
+        elif origin == "jupiter":
+            return "background-color: #d1ecf1;"  # light blue (unchanged)
+        elif origin in ["kepler-62", "kepler-44"]:
+            return "background-color: #ff4d00;"  # Red Orange
+        elif origin in ["trinidad", "tobago"]:
+            return "background-color: #f0cb59;"  # Gold for Trinidad/Tobago
+        elif "wasp" in origin:
+            return "background-color: lightgray;"  # Light Gray for Wasp
+        elif "macedonia" in origin:
+            return "background-color: #e022d7;"  # Magenta for Macedonia
+        return ""
+    
+    def highlight_output_duplicates(series):
+        """Highlight outputs that appear more than once with yellow"""
+        value_counts = series.value_counts()
+        duplicates = value_counts[value_counts > 1].index
+        return ['background-color: yellow' if val in duplicates else '' for val in series]
+    
+    # Apply styling
+    styled = df.style.applymap(highlight_origin, subset=["Origin"])
+    if "Output" in df.columns:
+        styled = styled.apply(highlight_output_duplicates, subset=["Output"])
+    
+    return styled
+# ✅ Custom traveler report highlighting with zone colors and enhanced origin highlighting
+def highlight_custom_traveler_report(df, show_highlighting=True):
+    """Apply highlighting for custom traveler report with zone colors and updated origin colors"""
+    if not show_highlighting:
+        return df.style
+    
+    def highlight_origin(cell):
+        origin = str(cell).lower()
+        if origin in ["spain", "saturn"]:
+            return "background-color: #39FF14;"  # Neon Green
+        elif origin == "jupiter":
+            return "background-color: #d1ecf1;"  # light blue (unchanged)
+        elif origin in ["kepler-62", "kepler-44"]:
+            return "background-color: #ff4d00;"  # Red Orange
+        elif origin in ["trinidad", "tobago"]:
+            return "background-color: #f0cb59;"  # Gold for Trinidad/Tobago
+        elif "wasp" in origin:
+            return "background-color: lightgray;"  # Light Gray for Wasp
+        elif "macedonia" in origin:
+            return "background-color: #e022d7;"  # Magenta for Macedonia
+        return ""
+    
+    def highlight_zone(cell, range_name):
+        """Apply zone highlighting based on range type and zone"""
+        zone = str(cell)
+        if "High" in range_name:
+            # High ranges: red gradient (bright red to orange)
+            if zone == "0 to 6":
+                return "background-color: #ff4444;"  # Bright red
+            elif zone == "6 to 12":
+                return "background-color: #ff7744;"  # Red-orange
+            elif zone == "12 to 18":
+                return "background-color: #ffaa44;"  # Orange
+            elif zone == "18 to 24":
+                return "background-color: #ffdd44;"  # Light orange
+        else:
+            # Low ranges: blue gradient (bright blue to gray)
+            if zone == "0 to 6":
+                return "background-color: #4488ff;"  # Bright blue
+            elif zone == "6 to 12":
+                return "background-color: #77aaff;"  # Medium blue
+            elif zone == "12 to 18":
+                return "background-color: #aaccff;"  # Light blue
+            elif zone == "18 to 24":
+                return "background-color: #cccccc;"  # Gray
+        return ""
+    
+    def highlight_output_duplicates(series):
+        """Highlight outputs that appear more than once with yellow"""
+        value_counts = series.value_counts()
+        duplicates = value_counts[value_counts > 1].index
+        return ['background-color: yellow' if val in duplicates else '' for val in series]
+    
+    def apply_zone_highlighting(row):
+        """Apply zone highlighting based on the range for this row"""
+        if "Zone" in row.index and "Range" in row.index:
+            return highlight_zone(row["Zone"], row["Range"])
+        return ""
+    
+    # Apply styling
+    styled = df.style.applymap(highlight_origin, subset=["Origin"])
+    
+    if "Output" in df.columns:
+        styled = styled.apply(highlight_output_duplicates, subset=["Output"])
+    
+    if "Zone" in df.columns:
+        # Apply zone highlighting row by row
+        for idx, row in df.iterrows():
+            if "Range" in df.columns:
+                zone_color = highlight_zone(row["Zone"], row["Range"])
+                if zone_color:
+                    styled = styled.set_properties(subset=(idx, "Zone"), **{"background-color": zone_color.split(":")[1].strip().rstrip(";")})
+    
+    return styled
