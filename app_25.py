@@ -583,6 +583,42 @@ if small_feed_file and big_feed_file and measurement_file:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
+            # Add the missing Single Line Mega Report section
+            if st.button("🚀 Run Single Line Mega Report"):
+                try:
+                    with st.spinner("Generating Single Line Mega Report..."):
+                        # Import single line mega report functionality
+                        from simple_mega_report import generate_single_line_mega_report
+                        
+                        # Generate the mega report
+                        mega_report_df = generate_single_line_mega_report(
+                            final_df, 
+                            report_time=report_time
+                        )
+                        
+                        if len(mega_report_df) > 0:
+                            st.subheader("📊 Single Line Mega Report")
+                            st.dataframe(mega_report_df)
+                            
+                            # Excel download for mega report
+                            timestamp_str = report_time.strftime("%y-%m-%d_%H-%M") if report_time else "unknown"
+                            excel_buffer_mega = io.BytesIO()
+                            with ExcelWriter(excel_buffer_mega, engine="xlsxwriter") as writer:
+                                mega_report_df.to_excel(writer, index=False, sheet_name="Single Line Mega Report")
+                            
+                            st.download_button(
+                                "📥 Download Single Line Mega Report (Excel)",
+                                data=excel_buffer_mega.getvalue(),
+                                file_name=f"single_line_mega_report_{timestamp_str}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                        else:
+                            st.warning("No data found for Single Line Mega Report.")
+                            
+                except Exception as e:
+                    st.error(f"Error generating Single Line Mega Report: {str(e)}")
+                    st.error("Please check that all model files are available.")
+                    
             if run_single_line:
                 st.markdown("---")
                 run_simple_single_line_analysis(final_df)
