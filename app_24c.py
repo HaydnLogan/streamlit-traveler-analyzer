@@ -141,12 +141,26 @@ if final_report_file:
         # Run Traveler Report based on selection
         if use_full_range:
             st.info(f"🎯 Applying Full Range filter: ±{full_range_value}")
-            # Get Input @ 18:00 as reference
+            # Get Input @ 18:00 as reference - try multiple column name patterns
             input_18_ref = None
             input_col_name = f"Input @ {day_start_hour:02d}:00"
-            if input_col_name in final_df.columns:
-                input_18_ref = final_df[input_col_name].iloc[0] if len(final_df) > 0 else None
-                st.info(f"📍 Reference point ({input_col_name}): {input_18_ref}")
+            
+            # Debug: Show available columns
+            st.info(f"🔍 Available columns: {list(final_df.columns)}")
+            
+            # Try different column name patterns
+            possible_cols = [
+                input_col_name,
+                f"Input @ {day_start_hour}:00", 
+                "Input @ 18:00",
+                "Input @ 17:00"
+            ]
+            
+            for col in possible_cols:
+                if col in final_df.columns:
+                    input_18_ref = final_df[col].iloc[0] if len(final_df) > 0 else None
+                    st.info(f"📍 Found reference column '{col}' with value: {input_18_ref}")
+                    break
             
             if input_18_ref is not None:
                 # Calculate full range boundaries
@@ -169,12 +183,16 @@ if final_report_file:
                     display_range_df = range_df.copy()
                     display_range_df["Arrival"] = display_range_df["Arrival"].dt.strftime("%a %y-%m-%d %H:%M")
                     
-                    # Reorder columns to include Range and Zone after Output
-                    ordered_columns = [
-                        "Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family",
-                        f"Input @ {day_start_hour:02d}:00", f"Diff @ {day_start_hour:02d}:00", "Input @ Arrival", "Diff @ Arrival", 
-                        "Input @ Report", "Diff @ Report", "Output", "Range", "Zone"
-                    ]
+                    # Reorder columns to include Range and Zone after Output  
+                    base_columns = ["Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family"]
+                    
+                    # Add input/diff columns that actually exist
+                    input_columns = []
+                    for col in display_range_df.columns:
+                        if "Input @" in col or "Diff @" in col:
+                            input_columns.append(col)
+                    
+                    ordered_columns = base_columns + input_columns + ["Output", "Range", "Zone"]
                     display_columns = [col for col in ordered_columns if col in display_range_df.columns]
                     display_range_df = display_range_df[display_columns]
                     
@@ -196,7 +214,10 @@ if final_report_file:
                 else:
                     st.warning("No data found within the specified full range.")
             else:
-                st.error("Could not determine Input @ 18:00 reference value.")
+                st.error(f"Could not find reference column. Tried: {possible_cols}")
+                st.info("Available columns with 'Input' in name:")
+                input_cols = [col for col in final_df.columns if 'Input' in col]
+                st.write(input_cols)
                 
         elif use_custom_ranges:
             # Custom Ranges logic - only include enabled ranges
