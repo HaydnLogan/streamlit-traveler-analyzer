@@ -133,32 +133,12 @@ if final_report_file:
 
         st.success(f"✅ Using Final Traveler Report with {len(final_df)} rows. Report time set to: {report_time.strftime('%d-%b-%y %H:%M')}")
 
-        # 📊 Display with properly formatted Arrival column
-        st.subheader("📊 Final Traveler Report (Bypass Mode)")
-        st.dataframe(display_df)
-
-        # 📥 Excel download with highlighting
-        timestamp_str = report_time.strftime("%y-%m-%d_%H-%M")
-        filename = f"origin_report_{timestamp_str}.xlsx"
-
-        excel_buffer = io.BytesIO()
-        with ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-            styled_excel = highlight_traveler_report(display_df)
-            styled_excel.to_excel(writer, index=False, sheet_name="Traveler Report")
-
-        st.download_button(
-            "📥 Download Final Traveler Report (Excel)",
-            data=excel_buffer.getvalue(),
-            file_name=filename,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
         # Apply Traveler Report Settings configured above
         st.markdown("---")
         st.markdown("### 📊 Applying Traveler Report Settings")        
         
         # Run Traveler Report based on selection
-        if use_full_range and not use_custom_ranges:
+        if use_full_range:
             # Get Input @ 18:00 as reference
             input_18_ref = None
             if f"Input @ {day_start_hour:02d}:00" in final_df.columns:
@@ -176,6 +156,10 @@ if final_report_file:
                     # Add Range and Zone columns for Full Range
                     range_df["Range"] = "Full Range"
                     range_df["Zone"] = ""  # No zone categorization for full range
+
+                    # Create display version with formatted Arrival column
+                    display_range_df = range_df.copy()
+                    display_range_df["Arrival"] = display_range_df["Arrival"].dt.strftime("%a %y-%m-%d %H:%M")
                     
                     # Reorder columns to include Range and Zone after Output
                     ordered_columns = [
@@ -183,16 +167,16 @@ if final_report_file:
                         f"Input @ {day_start_hour:02d}:00", f"Diff @ {day_start_hour:02d}:00", "Input @ Arrival", "Diff @ Arrival", 
                         "Input @ Report", "Diff @ Report", "Output", "Range", "Zone"
                     ]
-                    display_columns = [col for col in ordered_columns if col in range_df.columns]
-                    range_df = range_df[display_columns]
+                    display_columns = [col for col in ordered_columns if col in display_range_df.columns]
+                    display_range_df = display_range_df[display_columns]
                     
                     st.subheader("📊 Final Traveler Report")
-                    st.dataframe(range_df)
+                    st.dataframe(display_range_df)
                     
-                    # Excel download for Full Range
+                    # Excel download for Full Range (using display version with Range/Zone columns)
                     excel_buffer_full = io.BytesIO()
                     with ExcelWriter(excel_buffer_full, engine="xlsxwriter") as writer:
-                        styled_excel = highlight_traveler_report(range_df)
+                        styled_excel = highlight_traveler_report(display_range_df)
                         styled_excel.to_excel(writer, index=False, sheet_name="Final Traveler Report")
                     
                     st.download_button(
@@ -206,7 +190,7 @@ if final_report_file:
             else:
                 st.error("Could not determine Input @ 18:00 reference value.")
                 
-        elif use_custom_ranges and not use_full_range:
+        elif use_custom_ranges:
             # Custom Ranges logic - only include enabled ranges
             custom_ranges = []
             if use_high1:
@@ -256,25 +240,29 @@ if final_report_file:
                 # Combine all custom range data
                 combined_df = pd.concat(all_custom_data, ignore_index=True)
                 
+                # Create display version with formatted Arrival column
+                display_combined_df = combined_df.copy()
+                display_combined_df["Arrival"] = display_combined_df["Arrival"].dt.strftime("%a %y-%m-%d %H:%M")
+                
                 # Reorder columns
                 ordered_columns = [
                     "Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family",
                     f"Input @ {day_start_hour:02d}:00", f"Diff @ {day_start_hour:02d}:00", "Input @ Arrival", "Diff @ Arrival", 
                     "Input @ Report", "Diff @ Report", "Output", "Range", "Zone"
                 ]
-                display_columns = [col for col in ordered_columns if col in combined_df.columns]
-                combined_df = combined_df[display_columns]
+                display_columns = [col for col in ordered_columns if col in display_combined_df.columns]
+                display_combined_df = display_combined_df[display_columns]
                 
                 st.subheader("📊 Custom Traveler Report")
                 
                 # Apply zone highlighting for screen display
-                styled_df = highlight_custom_traveler_report(combined_df, show_highlighting=True)
+                styled_df = highlight_custom_traveler_report(display_combined_df, show_highlighting=True)
                 st.dataframe(styled_df)
                 
-                # Excel download for Custom Ranges with highlighting
+                # Excel download for Custom Ranges with highlighting (using display version)
                 excel_buffer_custom = io.BytesIO()
                 with ExcelWriter(excel_buffer_custom, engine="xlsxwriter") as writer:
-                    styled_excel = highlight_custom_traveler_report(combined_df, show_highlighting=True)
+                    styled_excel = highlight_custom_traveler_report(display_combined_df, show_highlighting=True)
                     styled_excel.to_excel(writer, index=False, sheet_name="Custom Traveler Report")
                 
                 st.download_button(
