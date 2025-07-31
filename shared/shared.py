@@ -170,8 +170,45 @@ def get_monthly_anchor(report_time, months_back, start_hour):
         year -= 1
     return dt.datetime(year, month, 1, hour=start_hour, minute=0, second=0, microsecond=0)
 
-# ✅ Main feed processor - UPDATED with new columns
-def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value_at_start, small_df):
+# ✅ Range filtering helper functions
+def _output_in_ranges(output, filter_ranges):
+    """Check if output falls within any of the specified ranges"""
+    if not filter_ranges:
+        return True
+    
+    for range_info in filter_ranges:
+        if range_info["lower"] <= output <= range_info["upper"]:
+            return True
+    return False
+
+def _get_range_info(output, filter_ranges):
+    """Get range name and zone for a given output value"""
+    for range_info in filter_ranges:
+        if range_info["lower"] <= output <= range_info["upper"]:
+            # Calculate zone based on distance from upper/lower limits
+            if range_info["type"] == "high":
+                # For highs, measure distance from upper limit
+                distance = range_info["upper"] - output
+            else:
+                # For lows, measure distance from lower limit  
+                distance = output - range_info["lower"]
+            
+            if distance <= 6:
+                zone = "0 to 6"
+            elif distance <= 12:
+                zone = "6 to 12"
+            elif distance <= 18:
+                zone = "12 to 18"
+            else:
+                zone = "18 to 24"
+                
+            return {"name": range_info["name"], "zone": zone}
+    
+    # Fallback for full range mode
+    return {"name": "Full Range", "zone": ""}
+
+# ✅ Main feed processor - UPDATED with new columns and range filtering
+def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value_at_start, small_df, filter_ranges=None):
     df.columns = df.columns.str.strip().str.lower()
     df["time"] = df["time"].apply(clean_timestamp)
     df = df.iloc[::-1]  # reverse chronological
@@ -220,8 +257,13 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
             
             for _, row in measurements.iterrows():
                 output = calculate_pivot(H, L, C, row["m value"])
+                
+                # Apply range filtering if specified
+                if filter_ranges and not _output_in_ranges(output, filter_ranges):
+                    continue
+                    
                 day = get_day_index(arrival_time, report_time, start_hour)
-                new_data_rows.append({
+                data_row = {
                     "Feed": feed_type,
                     "Arrival": arrival_time,
                     "Day": day,
@@ -238,7 +280,15 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     "Input @ Report": input_at_report,
                     "Diff @ Report": output - input_at_report if input_at_report is not None else None,
                     "Output": output
-                })
+                }
+                
+                # Add Range and Zone columns if filtering is applied
+                if filter_ranges:
+                    range_info = _get_range_info(output, filter_ranges)
+                    data_row["Range"] = range_info["name"]
+                    data_row["Zone"] = range_info["zone"]
+                
+                new_data_rows.append(data_row)
             continue
 
         for i in range(len(relevant_rows) - 1):
@@ -255,8 +305,13 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                 
                 for _, row in measurements.iterrows():
                     output = calculate_pivot(H, L, C, row["m value"])
+                    
+                    # Apply range filtering if specified
+                    if filter_ranges and not _output_in_ranges(output, filter_ranges):
+                        continue
+                        
                     day = get_day_index(arrival_time, report_time, start_hour)
-                    new_data_rows.append({
+                    data_row = {
                         "Feed": feed_type,
                         "Arrival": arrival_time,
                         "Day": day,
@@ -273,7 +328,15 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                         "Input @ Report": input_at_report,
                         "Diff @ Report": output - input_at_report if input_at_report is not None else None,
                         "Output": output
-                    })
+                    }
+                    
+                    # Add Range and Zone columns if filtering is applied
+                    if filter_ranges:
+                        range_info = _get_range_info(output, filter_ranges)
+                        data_row["Range"] = range_info["name"]
+                        data_row["Zone"] = range_info["zone"]
+                    
+                    new_data_rows.append(data_row)
 
     return new_data_rows
 
