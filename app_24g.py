@@ -431,9 +431,19 @@ if small_feed_file and big_feed_file and measurement_file:
             
             st.info(f"📊 Small feed generated {len(sm_results)} rows, Big feed generated {len(bg_results)} rows")
 
-            # Debug: Show filtering effectiveness
+            # Debug: Show filtering effectiveness and sample outputs
             if filter_ranges:
                 st.info(f"🔍 Filtering effectiveness: Small feed {len(sm_results)} rows, Big feed {len(bg_results)} rows")
+                
+                # Show sample outputs from small feed for debugging
+                if sm_results:
+                    sample_outputs = [row.get("Output", "N/A") for row in sm_results[:10]]
+                    st.info(f"📋 Sample outputs from small feed: {sample_outputs}")
+                    
+                    # Show filter range details
+                    for i, range_info in enumerate(filter_ranges):
+                        st.info(f"📏 Range {i+1} ({range_info['name']}): {range_info['lower']:.1f} to {range_info['upper']:.1f}")
+                        
                 if len(sm_results) > 10000:  # If still too many rows, filtering isn't working
                     st.warning("⚠️ Range filtering may not be working properly - generating too many rows")
             
