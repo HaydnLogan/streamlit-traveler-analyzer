@@ -30,6 +30,55 @@ small_feed_file = st.file_uploader("Upload small feed", type="csv")
 big_feed_file = st.file_uploader("Upload big feed", type="csv")
 measurement_file = st.file_uploader("Upload measurement file", type=["xlsx", "xls"])
 
+# 🎯 Traveler Report Settings (Global Configuration)
+st.markdown("---")
+st.markdown("### 🎯 Traveler Report Settings")
+
+with st.expander("📋 Traveler Report Settings", expanded=True):
+    st.markdown("Define up to four Output ranges:")
+    custom_ranges = []
+
+    for i in range(1, 5):
+        enabled = st.checkbox(f"Enable Range {i}", key=f"enable_{i}")
+        if enabled:
+            largest = st.number_input(f"Range {i} - Largest Output", key=f"largest_{i}")
+            smallest = st.number_input(f"Range {i} - Smallest Output", key=f"smallest_{i}")
+            custom_ranges.append((i, smallest, largest))
+
+    run_traveler_report = st.button("🚀 Run Custom Traveler Report")
+
+# Only run this if the user has clicked the button
+if run_traveler_report and custom_ranges:
+    full_df = combined_df.copy()
+    report_results = []
+    for i, smallest, largest in custom_ranges:
+        filtered = full_df[(full_df["Output"] >= smallest) & (full_df["Output"] <= largest)].copy()
+        filtered["Range"] = f"Range {i}"
+        filtered["Zone"] = f"{smallest} to {largest}"
+        report_results.append(filtered)
+
+    if report_results:
+        final_report_df = pd.concat(report_results, ignore_index=True)
+        st.markdown(f"### 🎯 Custom Traveler Report (Filtered)")
+        st.dataframe(final_report_df)
+
+        filename = f"Traveler_Report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
+            for (i, _, _), df in zip(custom_ranges, report_results):
+                df.to_excel(writer, sheet_name=f"Range {i}", index=False)
+        st.download_button(
+            "📥 Download Custom Traveler Report (Excel)",
+            data=excel_buffer.getvalue(),
+            file_name=filename,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.warning("No data found for selected ranges.")
+elif run_traveler_report:
+    st.warning("Please enable at least one range.")
+
+
 # 📅 Report Time UI
 report_mode = st.radio("Select Report Time & Date", ["Most Current", "Choose a time"])
 if report_mode == "Choose a time":
@@ -57,9 +106,7 @@ day_start_hour = int(day_start_choice.split(":")[0])
 scope_type = st.radio("Scope by", ["Days", "Rows"])
 scope_value = st.number_input(f"Enter number of {scope_type.lower()}", min_value=1, value=20)
 
-# 🎯 Traveler Report Settings (Global Configuration)
-st.markdown("---")
-st.markdown("### 🎯 Traveler Report Settings")
+
 
 # Mutually exclusive radio button selection
 report_type = st.radio("Select Report Type", ["Full Range", "Custom Ranges"], key="global_report_type")
