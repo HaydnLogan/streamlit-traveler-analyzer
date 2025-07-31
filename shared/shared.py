@@ -343,7 +343,7 @@ def highlight_traveler_report(df):
             if origin in ["spain", "saturn"]:
                 style[col_map["Origin"]] = "background-color: #39FF14;"  # 🌿 Neon Green
             elif origin == "jupiter":
-                style[col_map["Origin"]] = "background-color: #d1ecf1;"  # 🌌 light blue (unchanged)
+                style[col_map["Origin"]] = "background-color: #00e5ff;"  # 🌌 bright blue (changed from light blue #d1ecf1)
             elif origin in ["kepler-62", "kepler-44"]:
                 style[col_map["Origin"]] = "background-color: #ff4d00;"  # 🟠 Red Orange
             elif origin in ["trinidad", "tobago"]:
