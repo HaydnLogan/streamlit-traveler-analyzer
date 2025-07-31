@@ -170,6 +170,12 @@ if final_report_file:
                 
                 # Filter data within range
                 before_count = len(final_df)
+                st.info(f"🔍 Checking outputs in range {lower_bound:.1f} to {upper_bound:.1f}")
+                
+                # Debug: Show some sample outputs
+                sample_outputs = final_df["Output"].head(10).tolist()
+                st.info(f"📋 Sample outputs: {sample_outputs}")
+                
                 range_df = final_df[(final_df["Output"] >= lower_bound) & (final_df["Output"] <= upper_bound)].copy()
                 after_count = len(range_df)
                 st.success(f"✂️ Filtered from {before_count} rows to {after_count} rows")
@@ -201,6 +207,7 @@ if final_report_file:
                     st.dataframe(styled_df)
                     
                     # Excel download for Full Range (using display version with Range/Zone columns)
+                    timestamp_str = report_time.strftime("%y-%m-%d_%H-%M") if report_time else "unknown"
                     excel_buffer_full = io.BytesIO()
                     with ExcelWriter(excel_buffer_full, engine="xlsxwriter") as writer:
                         styled_excel = highlight_traveler_report(display_range_df)
@@ -305,6 +312,7 @@ if final_report_file:
                 st.dataframe(styled_df)
                 
                 # Excel download for Custom Ranges with highlighting (using display version)
+                timestamp_str = report_time.strftime("%y-%m-%d_%H-%M") if report_time else "unknown"
                 excel_buffer_custom = io.BytesIO()
                 with ExcelWriter(excel_buffer_custom, engine="xlsxwriter") as writer:
                     styled_excel = highlight_custom_traveler_report(display_combined_df, show_highlighting=True)
@@ -319,9 +327,11 @@ if final_report_file:
             else:
                 st.warning("No data found within any of the specified custom ranges.")
               
-        # Show current settings for confirmation
-        if use_full_range:
-            st.info(f"Applied: Full Range (±{full_range_value})")
+        # Show current settings for confirmation (only if no ranges were processed)
+        if not use_full_range and not use_custom_ranges:
+            st.warning("No traveler report settings applied. Please select Full Range or Custom Ranges above.")
+        elif use_full_range:
+            st.info(f"✅ Applied: Full Range (±{full_range_value})")
         elif use_custom_ranges:
             enabled_ranges = []
             if use_high1:
@@ -332,7 +342,7 @@ if final_report_file:
                 enabled_ranges.append(f"Low 1 ({low1})")
             if use_low2:
                 enabled_ranges.append(f"Low 2 ({low2})")
-            st.info(f"Applied: Custom Ranges - {', '.join(enabled_ranges) if enabled_ranges else 'None selected'}")    
+            st.info(f"✅ Applied: Custom Ranges - {', '.join(enabled_ranges) if enabled_ranges else 'None selected'}")
 
         if run_single_line:
             st.markdown("---")
