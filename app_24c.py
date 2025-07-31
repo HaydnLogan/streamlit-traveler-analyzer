@@ -131,10 +131,10 @@ if final_report_file:
         display_columns = [col for col in ordered_columns if col in display_df.columns]
         display_df = display_df[display_columns]
 
-        st.success(f"✅ Using Final Traveler Report with {len(final_df)} rows. Report time set to: {report_time.strftime('%d-%b-%y %H:%M')}")
+        st.success(f"✅ Loaded Final Traveler Report with {len(final_df)} rows. Report time set to: {report_time.strftime('%d-%b-%y %H:%M')}")
         st.info(f"📊 Raw data contains {len(final_df)} rows. Applying range filtering based on your traveler report settings...")
         
-        # Apply Traveler Report Settings configured above
+        # Apply Traveler Report Settings - NO DEFAULT DISPLAY
         st.markdown("---")
         st.markdown("### 📊 Applying Traveler Report Settings")        
         
@@ -196,8 +196,9 @@ if final_report_file:
                     display_columns = [col for col in ordered_columns if col in display_range_df.columns]
                     display_range_df = display_range_df[display_columns]
                     
-                    st.subheader("📊 Final Traveler Report")
-                    st.dataframe(display_range_df)
+                    st.subheader("📊 Final Traveler Report (Full Range Filtered)")
+                    styled_df = highlight_traveler_report(display_range_df)
+                    st.dataframe(styled_df)
                     
                     # Excel download for Full Range (using display version with Range/Zone columns)
                     excel_buffer_full = io.BytesIO()
@@ -278,21 +279,26 @@ if final_report_file:
             if all_custom_data:
                 # Combine all custom range data
                 combined_df = pd.concat(all_custom_data, ignore_index=True)
+                st.success(f"✂️ Custom ranges filtered to {len(combined_df)} total rows")
                 
                 # Create display version with formatted Arrival column
                 display_combined_df = combined_df.copy()
                 display_combined_df["Arrival"] = display_combined_df["Arrival"].dt.strftime("%a %y-%m-%d %H:%M")
                 
-                # Reorder columns
-                ordered_columns = [
-                    "Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family",
-                    f"Input @ {day_start_hour:02d}:00", f"Diff @ {day_start_hour:02d}:00", "Input @ Arrival", "Diff @ Arrival", 
-                    "Input @ Report", "Diff @ Report", "Output", "Range", "Zone"
-                ]
+                # Reorder columns dynamically
+                base_columns = ["Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family"]
+                
+                # Add input/diff columns that actually exist
+                input_columns = []
+                for col in display_combined_df.columns:
+                    if "Input @" in col or "Diff @" in col:
+                        input_columns.append(col)
+                
+                ordered_columns = base_columns + input_columns + ["Output", "Range", "Zone"]
                 display_columns = [col for col in ordered_columns if col in display_combined_df.columns]
                 display_combined_df = display_combined_df[display_columns]
                 
-                st.subheader("📊 Custom Traveler Report")
+                st.subheader("📊 Custom Traveler Report (Range Filtered)")
                 
                 # Apply zone highlighting for screen display
                 styled_df = highlight_custom_traveler_report(display_combined_df, show_highlighting=True)
@@ -411,7 +417,7 @@ if small_feed_file and big_feed_file and measurement_file:
             display_df = display_df[display_columns]
             
             st.subheader("📊 Final Traveler Report")
-            st.dataframe(display_df)
+            # Removed: Default display - only show filtered results based on traveler report settings
             
             # 🧾 Excel export setup
             timestamp_str = report_time.strftime("%y-%m-%d_%H-%M")
