@@ -7,6 +7,9 @@ import datetime as dt
 import io
 from pandas import ExcelWriter
 
+# Configure pandas to handle large datasets
+pd.set_option("styler.render.max_elements", 2000000)
+
 from shared.shared import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time, get_input_at_day_start, highlight_custom_traveler_report
 from models.models_a_today import run_a_model_detection_today
 from models.mod_b_05pg1 import run_b_model_detection
@@ -427,6 +430,12 @@ if small_feed_file and big_feed_file and measurement_file:
             bg_results = process_feed(big_df, "Bg", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
             
             st.info(f"📊 Small feed generated {len(sm_results)} rows, Big feed generated {len(bg_results)} rows")
+
+            # Debug: Show filtering effectiveness
+            if filter_ranges:
+                st.info(f"🔍 Filtering effectiveness: Small feed {len(sm_results)} rows, Big feed {len(bg_results)} rows")
+                if len(sm_results) > 10000:  # If still too many rows, filtering isn't working
+                    st.warning("⚠️ Range filtering may not be working properly - generating too many rows")
             
             results += sm_results
             results += bg_results
