@@ -52,10 +52,10 @@ run_x_models = st.sidebar.checkbox("Run Model X Detection")
 filter_future_data = st.checkbox("Restrict analysis to Report Time or earlier only", value=True)
 
 # ⚙️ Analysis parameters
-day_start_choice = st.radio("Select Day Start Time", ["17:00", "18:00"])
+day_start_choice = st.radio("Select Day Start Time", ["18:00", "17:00"])
 day_start_hour = int(day_start_choice.split(":")[0])
-scope_type = st.radio("Scope by", ["Rows", "Days"])
-scope_value = st.number_input(f"Enter number of {scope_type.lower()}", min_value=1, value=10)
+scope_type = st.radio("Scope by", ["Days", "Rows"])
+scope_value = st.number_input(f"Enter number of {scope_type.lower()}", min_value=1, value=20)
 
 # 🎯 Traveler Report Settings (Global Configuration)
 st.markdown("---")
