@@ -260,13 +260,8 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
             
             for _, row in measurements.iterrows():
                 output = calculate_pivot(H, L, C, row["m value"])
-                
-                # Apply range filtering if specified
-                if filter_ranges and not _output_in_ranges(output, filter_ranges):
-                    continue
-                    
                 day = get_day_index(arrival_time, report_time, start_hour)
-                data_row = {
+                new_data_rows.append({
                     "Feed": feed_type,
                     "Arrival": arrival_time,
                     "Day": day,
@@ -283,15 +278,7 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     "Input @ Report": input_at_report,
                     "Diff @ Report": output - input_at_report if input_at_report is not None else None,
                     "Output": output
-                }
-                
-                # Add Range and Zone columns if filtering is applied
-                if filter_ranges:
-                    range_info = _get_range_info(output, filter_ranges)
-                    data_row["Range"] = range_info["name"]
-                    data_row["Zone"] = range_info["zone"]
-                
-                new_data_rows.append(data_row)
+                })
             continue
 
         for i in range(len(relevant_rows) - 1):
