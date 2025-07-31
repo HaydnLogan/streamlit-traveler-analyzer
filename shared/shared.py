@@ -397,6 +397,33 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         except Exception:
             pass
 
+        # Zone highlighting based on range type and zone
+        if "Zone" in col_map and "Range" in col_map:
+            zone_val = str(row.get("Zone", ""))
+            range_val = str(row.get("Range", ""))
+            
+            if zone_val and range_val and zone_val != "":
+                if "High" in range_val:
+                    # High ranges: red gradient (bright red to orange)
+                    if zone_val == "0 to 6":
+                        style[col_map["Zone"]] = "background-color: #ff4444;"  # Bright red
+                    elif zone_val == "6 to 12":
+                        style[col_map["Zone"]] = "background-color: #ff7744;"  # Red-orange
+                    elif zone_val == "12 to 18":
+                        style[col_map["Zone"]] = "background-color: #ffaa44;"  # Orange
+                    elif zone_val == "18 to 24":
+                        style[col_map["Zone"]] = "background-color: #ffdd44;"  # Light orange
+                elif "Low" in range_val:
+                    # Low ranges: blue gradient (bright blue to gray)
+                    if zone_val == "0 to 6":
+                        style[col_map["Zone"]] = "background-color: #4488ff;"  # Bright blue
+                    elif zone_val == "6 to 12":
+                        style[col_map["Zone"]] = "background-color: #77aaff;"  # Medium blue
+                    elif zone_val == "12 to 18":
+                        style[col_map["Zone"]] = "background-color: #aaccff;"  # Light blue
+                    elif zone_val == "18 to 24":
+                        style[col_map["Zone"]] = "background-color: #cccccc;"  # Gray
+        
         return style
     
     def highlight_zone(cell, range_name):
