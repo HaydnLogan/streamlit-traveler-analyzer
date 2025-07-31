@@ -132,25 +132,33 @@ if final_report_file:
         display_df = display_df[display_columns]
 
         st.success(f"✅ Using Final Traveler Report with {len(final_df)} rows. Report time set to: {report_time.strftime('%d-%b-%y %H:%M')}")
-
+        st.info(f"📊 Raw data contains {len(final_df)} rows. Applying range filtering based on your traveler report settings...")
+        
         # Apply Traveler Report Settings configured above
         st.markdown("---")
         st.markdown("### 📊 Applying Traveler Report Settings")        
         
         # Run Traveler Report based on selection
         if use_full_range:
+            st.info(f"🎯 Applying Full Range filter: ±{full_range_value}")
             # Get Input @ 18:00 as reference
             input_18_ref = None
-            if f"Input @ {day_start_hour:02d}:00" in final_df.columns:
-                input_18_ref = final_df[f"Input @ {day_start_hour:02d}:00"].iloc[0] if len(final_df) > 0 else None
+            input_col_name = f"Input @ {day_start_hour:02d}:00"
+            if input_col_name in final_df.columns:
+                input_18_ref = final_df[input_col_name].iloc[0] if len(final_df) > 0 else None
+                st.info(f"📍 Reference point ({input_col_name}): {input_18_ref}")
             
             if input_18_ref is not None:
                 # Calculate full range boundaries
                 upper_bound = input_18_ref + full_range_value
                 lower_bound = input_18_ref - full_range_value
+                st.info(f"📏 Filter range: {lower_bound:.1f} to {upper_bound:.1f}")
                 
                 # Filter data within range
+                before_count = len(final_df)
                 range_df = final_df[(final_df["Output"] >= lower_bound) & (final_df["Output"] <= upper_bound)].copy()
+                after_count = len(range_df)
+                st.success(f"✂️ Filtered from {before_count} rows to {after_count} rows")
                 
                 if len(range_df) > 0:
                     # Add Range and Zone columns for Full Range
@@ -192,6 +200,16 @@ if final_report_file:
                 
         elif use_custom_ranges:
             # Custom Ranges logic - only include enabled ranges
+            enabled_ranges_info = []
+            if use_high1:
+                enabled_ranges_info.append(f"High 1 ({high1})")
+            if use_high2:
+                enabled_ranges_info.append(f"High 2 ({high2})")
+            if use_low1:
+                enabled_ranges_info.append(f"Low 1 ({low1})")
+            if use_low2:
+                enabled_ranges_info.append(f"Low 2 ({low2})")
+            st.info(f"🎯 Applying Custom Ranges: {', '.join(enabled_ranges_info) if enabled_ranges_info else 'None selected'}")
             custom_ranges = []
             if use_high1:
                 custom_ranges.append({"name": "High 1", "upper": high1, "lower": high1 - 24, "type": "high"})
