@@ -395,6 +395,32 @@ if small_feed_file and big_feed_file and measurement_file:
         else:
             st.success(f"📌 Input value @ {day_start_hour:02d}:00: {input_value_18:.3f}")
 
+            # Prepare filter ranges based on traveler report settings
+            filter_ranges = None
+            if use_full_range and input_value_18 is not None:
+                # Create single range for full range mode
+                filter_ranges = [{
+                    "name": "Full Range",
+                    "upper": input_value_18 + full_range_value,
+                    "lower": input_value_18 - full_range_value,
+                    "type": "full"
+                }]
+                st.info(f"🎯 Applying Full Range filter during data generation: ±{full_range_value} around {input_value_18}")
+            elif use_custom_ranges:
+                # Create custom ranges
+                filter_ranges = []
+                if use_high1:
+                    filter_ranges.append({"name": "High 1", "upper": high1, "lower": high1 - 24, "type": "high"})
+                if use_high2:
+                    filter_ranges.append({"name": "High 2", "upper": high2, "lower": high2 - 24, "type": "high"})
+                if use_low1:
+                    filter_ranges.append({"name": "Low 1", "upper": low1 + 24, "lower": low1, "type": "low"})
+                if use_low2:
+                    filter_ranges.append({"name": "Low 2", "upper": low2 + 24, "lower": low2, "type": "low"})
+                
+                range_names = [r["name"] for r in filter_ranges]
+                st.info(f"🎯 Applying Custom Range filters during data generation: {', '.join(range_names)}")
+
             results = []
             # Pass small_df for input calculations at different times
             sm_results = process_feed(small_df, "Sm", report_time, scope_type, scope_value, day_start_hour, measurements, input_value_18, small_df)
@@ -409,25 +435,43 @@ if small_feed_file and big_feed_file and measurement_file:
             final_df.sort_values(by=["Output", "Arrival"], ascending=[False, True], inplace=True)
             final_df["Arrival"] = pd.to_datetime(final_df["Arrival"], errors="coerce")
             
-            # 🔧 Create properly formatted display version
-            display_df = final_df.copy()
-            
-            # Format Arrival column: ddd yy-mm-dd hh:mm (e.g., Sun 25-07-27 18:00)
-            display_df["Arrival"] = display_df["Arrival"].dt.strftime("%a %y-%m-%d %H:%M")
-            
-            # Ensure proper column order with dynamic start hour
-            ordered_columns = [
-                "Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family",
-                f"Input @ {day_start_hour:02d}:00", f"Diff @ {day_start_hour:02d}:00", "Input @ Arrival", "Diff @ Arrival", 
-                "Input @ Report", "Diff @ Report", "Output"
-            ]
-            
-            # Only include columns that exist in the dataframe
-            display_columns = [col for col in ordered_columns if col in display_df.columns]
-            display_df = display_df[display_columns]
-            
-            st.subheader("📊 Final Traveler Report")
-            # Removed: Default display - only show filtered results based on traveler report settings
+            if len(final_df) > 0:
+                # 🔧 Create properly formatted display version
+                display_df = final_df.copy()
+                
+                # Format Arrival column: ddd yy-mm-dd hh:mm (e.g., Sun 25-07-27 18:00)
+                display_df["Arrival"] = display_df["Arrival"].dt.strftime("%a %y-%m-%d %H:%M")
+                
+                # Ensure proper column order with dynamic start hour - include Range and Zone if they exist
+                base_columns = [
+                    "Feed", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family",
+                    f"Input @ {day_start_hour:02d}:00", f"Diff @ {day_start_hour:02d}:00", "Input @ Arrival", "Diff @ Arrival", 
+                    "Input @ Report", "Diff @ Report", "Output"
+                ]
+                
+                # Add Range and Zone columns if they exist
+                if "Range" in display_df.columns:
+                    base_columns.append("Range")
+                if "Zone" in display_df.columns:
+                    base_columns.append("Zone")
+                
+                # Only include columns that exist in the dataframe
+                display_columns = [col for col in base_columns if col in display_df.columns]
+                display_df = display_df[display_columns]
+                
+                st.subheader("📊 Final Traveler Report (Range Filtered)")
+                
+                # Apply appropriate highlighting based on range mode
+                if filter_ranges and any(r["type"] != "full" for r in filter_ranges):
+                    # Custom ranges - use custom highlighting
+                    styled_df = highlight_custom_traveler_report(display_df, show_highlighting=True)
+                else:
+                    # Full range or no filtering - use standard highlighting
+                    styled_df = highlight_traveler_report(display_df)
+                    
+                st.dataframe(styled_df)
+            else:
+                st.warning("No data found within the specified ranges.")
             
             # 🧾 Excel export setup
             timestamp_str = report_time.strftime("%y-%m-%d_%H-%M")
