@@ -181,6 +181,9 @@ def _output_in_ranges(output, filter_ranges):
             return True
     return False
 
+# Debug counter for filtering
+_filter_debug_counter = {"total": 0, "filtered": 0, "passed": 0}
+
 def _get_range_info(output, filter_ranges):
     """Get range name and zone for a given output value"""
     for range_info in filter_ranges:
@@ -306,9 +309,14 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                 for _, row in measurements.iterrows():
                     output = calculate_pivot(H, L, C, row["m value"])
                     
-                    # Apply range filtering if specified
-                    if filter_ranges and not _output_in_ranges(output, filter_ranges):
-                        continue
+                    # Apply range filtering if specified with debugging
+                    if filter_ranges:
+                        _filter_debug_counter["total"] += 1
+                        if not _output_in_ranges(output, filter_ranges):
+                            _filter_debug_counter["filtered"] += 1
+                            continue
+                        else:
+                            _filter_debug_counter["passed"] += 1
                         
                     day = get_day_index(arrival_time, report_time, start_hour)
                     data_row = {
