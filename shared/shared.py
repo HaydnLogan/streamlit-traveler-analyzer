@@ -210,8 +210,8 @@ def _get_range_info(output, filter_ranges):
     # Fallback for full range mode
     return {"name": "Full Range", "zone": ""}
 
-# ✅ Main feed processor - UPDATED with new columns and range filtering
-def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value_at_start, small_df, filter_ranges=None):
+# ✅ Main feed processor - UPDATED with new columns (back to raw generation)
+def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value_at_start, small_df):
     df.columns = df.columns.str.strip().str.lower()
     df["time"] = df["time"].apply(clean_timestamp)
     df = df.iloc[::-1]  # reverse chronological
@@ -307,19 +307,9 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                 input_at_report = get_input_at_time(small_df, report_time)
                 
                 for _, row in measurements.iterrows():
-                    output = calculate_pivot(H, L, C, row["m value"])
-                    
-                    # Apply range filtering if specified with debugging
-                    if filter_ranges:
-                        _filter_debug_counter["total"] += 1
-                        if not _output_in_ranges(output, filter_ranges):
-                            _filter_debug_counter["filtered"] += 1
-                            continue
-                        else:
-                            _filter_debug_counter["passed"] += 1
-                        
+                    output = calculate_pivot(H, L, C, row["m value"])          
                     day = get_day_index(arrival_time, report_time, start_hour)
-                    data_row = {
+                    new_data_rows.append({
                         "Feed": feed_type,
                         "Arrival": arrival_time,
                         "Day": day,
@@ -336,15 +326,7 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                         "Input @ Report": input_at_report,
                         "Diff @ Report": output - input_at_report if input_at_report is not None else None,
                         "Output": output
-                    }
-                    
-                    # Add Range and Zone columns if filtering is applied
-                    if filter_ranges:
-                        range_info = _get_range_info(output, filter_ranges)
-                        data_row["Range"] = range_info["name"]
-                        data_row["Zone"] = range_info["zone"]
-                    
-                    new_data_rows.append(data_row)
+                    })
 
     return new_data_rows
 
