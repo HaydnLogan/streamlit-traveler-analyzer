@@ -11,6 +11,7 @@ from pandas import ExcelWriter
 pd.set_option("styler.render.max_elements", 2000000)
 
 from shared.shared import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time, get_input_at_day_start, highlight_custom_traveler_report
+from models.models_g import run_model_g_detection
 from models.models_a_today import run_a_model_detection_today
 from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_04gpr3 import run_c_model_detection
@@ -43,6 +44,7 @@ else:
     report_time = None
 
 # 🚥 Toggles
+run_g_models = st.sidebar.checkbox("🟢 Run Model G Detection", value=False)
 run_single_line = st.sidebar.checkbox("🎯 Run Single Line Mega Report", value=False)
 run_a_models = st.sidebar.checkbox("Run Model A Detection")
 run_b_models = st.sidebar.checkbox("Run Model B Detection")
@@ -617,7 +619,12 @@ if small_feed_file and big_feed_file and measurement_file:
                 except Exception as e:
                     st.error(f"Error generating Single Line Mega Report: {str(e)}")
                     st.error("Please check that all model files are available.")
-                    
+
+            if run_g_models:
+                st.markdown("---")
+                # from model_g import run_model_g_detection
+                run_model_g_detection(final_df)
+            
             if run_single_line:
                 st.markdown("---")
                 run_simple_single_line_analysis(final_df)
