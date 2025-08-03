@@ -81,7 +81,10 @@ def extract_origins(columns):
 
 # ✅ Get input value for a given report_time
 def get_input_value(df, report_time):
-    match = df[df["time"] == report_time]
+    # Ensure time column is datetime for comparison
+    df_copy = df.copy()
+    df_copy["time"] = pd.to_datetime(df_copy["time"])
+    match = df_copy[df_copy["time"] == report_time]
     return match.iloc[-1]["open"] if not match.empty and "open" in match.columns else None
 
 # ✅ Get input value at day start time (17:00 or 18:00) looking back from report time
@@ -99,14 +102,21 @@ def get_input_at_day_start(df, report_time, start_hour):
         target_time = target_time - pd.Timedelta(days=1)
     
     # First try exact match at the target time
-    exact_match = df[df["time"] == target_time]
+    # Ensure time column is datetime for comparison
+    df_copy = df.copy()
+    df_copy["time"] = pd.to_datetime(df_copy["time"])
+    exact_match = df_copy[df_copy["time"] == target_time]
     if not exact_match.empty and "open" in exact_match.columns:
         return exact_match.iloc[-1]["open"]
     
     # If no exact match, find the closest time to the target time that's <= report_time
     if "time" in df.columns and "open" in df.columns:
+        # Ensure time column is datetime
+        df_copy = df.copy()
+        df_copy["time"] = pd.to_datetime(df_copy["time"])
+        
         # Filter to times that are <= report_time
-        valid_times_df = df[df["time"] <= report_time]
+        valid_times_df = df_copy[df_copy["time"] <= report_time]
         if not valid_times_df.empty:
             valid_times_df = valid_times_df.copy()
             valid_times_df["time_diff"] = abs(valid_times_df["time"] - target_time)
@@ -127,13 +137,17 @@ def get_input_at_time(small_df, target_time):
         return None
     
     # First try exact match
-    exact_match = small_df[small_df["time"] == target_time]
+    # Ensure time column is datetime for comparison
+    small_df_copy = small_df.copy()
+    small_df_copy["time"] = pd.to_datetime(small_df_copy["time"])
+    exact_match = small_df_copy[small_df_copy["time"] == target_time]
     if not exact_match.empty and "open" in exact_match.columns:
         return exact_match.iloc[-1]["open"]
     
     # If no exact match, find closest time
     if "time" in small_df.columns and "open" in small_df.columns:
         small_df_copy = small_df.copy()
+        small_df_copy["time"] = pd.to_datetime(small_df_copy["time"])
         small_df_copy["time_diff"] = abs(small_df_copy["time"] - target_time)
         closest_row = small_df_copy.loc[small_df_copy["time_diff"].idxmin()]
         return closest_row["open"]
@@ -555,3 +569,4 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
                     styled = styled.set_properties(subset=(idx, "Zone"), **{"background-color": zone_color.split(":")[1].strip().rstrip(";")})
     
     return styled
+
