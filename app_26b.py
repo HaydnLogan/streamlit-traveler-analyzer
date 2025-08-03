@@ -1,5 +1,6 @@
 # v24 - UI redesign to show Full Range or Custom Range. 7.30.25
 # v25 - v24 did not produce the custom ranges first.  Reverting back to raw data production first, then custom printing afterwards. 7.31.25
+# v26a - First effort to find sequences in a range of outputs is too slow.  Moving to a hybrid solution with Octave in the next iteration.  
 
 import streamlit as st
 import pandas as pd
