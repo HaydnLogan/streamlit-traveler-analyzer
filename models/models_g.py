@@ -454,12 +454,12 @@ def run_model_g_detection(df, proximity_threshold=0.10):
                 input_at_report = ""
                 diff_report = ""
             
-            # Format arrival time
+            # Format arrival time into separate day and datetime columns
             if cluster_info['final_arrival']:
                 try:
                     arrival_dt = pd.to_datetime(cluster_info['final_arrival'])
-                    arrival_formatted = arrival_dt.strftime('%a %d-%m-%y %H:%M')
-                    arrival_excel = arrival_dt.strftime('%d-%b-%Y %H:%M')
+                    day_abbrev = arrival_dt.strftime('%a')  # Mon, Tue, Wed, etc.
+                    arrival_excel = arrival_dt.strftime('%d-%b-%Y %H:%M')  # Excel-friendly format
                     
                     # Calculate hours ago from current time
                     hours_ago = (pd.Timestamp.now() - arrival_dt).total_seconds() / 3600
@@ -508,8 +508,8 @@ def run_model_g_detection(df, proximity_threshold=0.10):
                 'Arrival Diff': diff_arrival,
                 'Input @ Report': input_at_report,
                 'Report Diff': diff_report,
-                'ddd': arrival_formatted.split()[0] if arrival_formatted else "",  # Day abbreviation
-                'Arrival': arrival_excel,
+                'ddd': day_abbrev,  # Day abbreviation (Mon, Tue, Wed, etc.)
+                'Arrival': arrival_excel,  # Excel-friendly datetime format
                 'Day': cluster_info['final_day'] or "",
                 'Hours ago': hours_ago_str,
                 'Pattern Sequences': pattern_str
