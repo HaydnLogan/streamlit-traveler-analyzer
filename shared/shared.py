@@ -154,20 +154,6 @@ def get_day_index(arrival, report_time, start_hour):
     days_diff = (arrival - report_day_start) // dt.timedelta(days=1)
     return f"[{int(days_diff)}]"
 
-# ✅ Highlight Anchor Origins ( old method)
-def highlight_anchor_origins(df):
-    def highlight(cell):
-        origin = str(cell).lower()
-        if origin in ["spain", "saturn"]:
-            return "background-color: #d4edda;"  # light green
-        elif origin == "jupiter":
-            return "background-color: #d1ecf1;"  # light blue
-        elif origin in ["kepler-62", "kepler-44"]:
-            return "background-color: #fff3cd;"  # light orange
-        return ""
-    
-    return df.style.applymap(highlight, subset=["Origin"])
-
 # ✅ Calculate weekly anchor time
 def get_weekly_anchor(report_time, weeks_back, start_hour):
     days_since_sunday = (report_time.weekday() + 1) % 7
@@ -274,9 +260,19 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
             for _, row in measurements.iterrows():
                 output = calculate_pivot(H, L, C, row["m value"])
                 day = get_day_index(arrival_time, report_time, start_hour)
+                
+                # Format arrival time into separate columns
+                try:
+                    day_abbrev = arrival_time.strftime('%a')  # Mon, Tue, Wed, etc.
+                    arrival_excel = arrival_time.strftime('%d-%b-%Y %H:%M')  # Excel-friendly format
+                except:
+                    day_abbrev = ""
+                    arrival_excel = str(arrival_time)
+                
                 new_data_rows.append({
                     "Feed": feed_type,
-                    "Arrival": arrival_time,
+                    "ddd": day_abbrev,
+                    "Arrival": arrival_excel,
                     "Day": day,
                     "Origin": origin,
                     "M Name": row["m name"],
@@ -307,11 +303,21 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                 input_at_report = get_input_at_time(small_df, report_time)
                 
                 for _, row in measurements.iterrows():
-                    output = calculate_pivot(H, L, C, row["m value"])          
+                    output = calculate_pivot(H, L, C, row["m value"])
                     day = get_day_index(arrival_time, report_time, start_hour)
+                    
+                    # Format arrival time into separate columns
+                    try:
+                        day_abbrev = arrival_time.strftime('%a')  # Mon, Tue, Wed, etc.
+                        arrival_excel = arrival_time.strftime('%d-%b-%Y %H:%M')  # Excel-friendly format
+                    except:
+                        day_abbrev = ""
+                        arrival_excel = str(arrival_time)
+                    
                     new_data_rows.append({
                         "Feed": feed_type,
-                        "Arrival": arrival_time,
+                        "ddd": day_abbrev,
+                        "Arrival": arrival_excel,
                         "Day": day,
                         "Origin": origin,
                         "M Name": row["m name"],
@@ -330,7 +336,24 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
 
     return new_data_rows
 
-# 🎨 🖌️ ✅ Enhanced highlighting for traveler reports with updated colors  
+# ✅ Highlight Anchor Origins ( old method)
+def highlight_anchor_origins(df):
+    def highlight(cell):
+        origin = str(cell).lower()
+        if origin in ["spain", "saturn"]:
+            return "background-color: #d4edda;"  # light green
+        elif origin == "jupiter":
+            return "background-color: #d1ecf1;"  # light blue
+        elif origin in ["kepler-62", "kepler-44"]:
+            return "background-color: #fff3cd;"  # light orange
+        return ""
+    
+    return df.style.applymap(highlight, subset=["Origin"])
+
+
+# This function is now replaced by the enhanced version below
+
+# ✅ Enhanced highlighting for traveler reports with updated colors and restored M# highlighting
 def highlight_traveler_report(df):
     """Apply highlighting to traveler report with updated origin colors, output duplicates, Day '[0]', and M# values"""
     def apply_styles(row):
@@ -341,11 +364,11 @@ def highlight_traveler_report(df):
         origin = str(row.get("Origin", "")).lower()
         if "Origin" in col_map:
             if origin in ["spain", "saturn"]:
-                style[col_map["Origin"]] = "background-color: #39FF14;"  # 🌿 Neon Green
+                style[col_map["Origin"]] = "background-color: #39FF14;"  # Neon Green
             elif origin == "jupiter":
-                style[col_map["Origin"]] = "background-color: #00e5ff;"  # 🌌 bright blue (changed from light blue #d1ecf1)
+                style[col_map["Origin"]] = "background-color: #d1ecf1;"  # light blue (unchanged)
             elif origin in ["kepler-62", "kepler-44"]:
-                style[col_map["Origin"]] = "background-color: #ff4d00;"  # 🟠 Red Orange
+                style[col_map["Origin"]] = "background-color: #ff4d00;"  # Red Orange
             elif origin in ["trinidad", "tobago"]:
                 style[col_map["Origin"]] = "background-color: #f0cb59;"  # Gold for Trinidad/Tobago
             elif "wasp" in origin:
@@ -396,7 +419,7 @@ def highlight_traveler_report(df):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
-    
+
 # ✅ Custom traveler report highlighting with zone colors and enhanced origin highlighting
 def highlight_custom_traveler_report(df, show_highlighting=True):
     """Apply highlighting for custom traveler report with zone colors and updated origin colors"""
@@ -476,7 +499,7 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
                         style[col_map["Zone"]] = "background-color: #aaccff;"  # Light blue
                     elif zone_val == "18 to 24":
                         style[col_map["Zone"]] = "background-color: #cccccc;"  # Gray
-        
+
         return style
     
     def highlight_zone(cell, range_name):
