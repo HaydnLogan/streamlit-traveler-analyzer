@@ -70,7 +70,7 @@ def group_by_proximity(outputs, proximity_threshold):
     return groups
 
 def check_descending_m_numbers(group):
-    """Check if M# values are in descending order by absolute value"""
+    """Check if M# values are in descending order by absolute value without duplicates"""
     if len(group) < 3:
         return False
     
@@ -80,9 +80,13 @@ def check_descending_m_numbers(group):
     # Extract absolute M# values in arrival order
     m_values = [abs(float(item['M #'])) for item in sorted_by_time]
     
-    # Check if they're in descending order
+    # Check for duplicates first
+    if len(set(m_values)) != len(m_values):
+        return False  # Has duplicates, reject
+    
+    # Check if they're in strictly descending order
     for i in range(len(m_values) - 1):
-        if m_values[i] < m_values[i + 1]:
+        if m_values[i] <= m_values[i + 1]:  # Changed from < to <= to catch equals
             return False
     
     return True
@@ -152,11 +156,17 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
         day_classification = classify_by_day(group)
         
         # Store group info for debugging
+        sorted_by_time = sorted(group, key=lambda x: x['Arrival'])
+        m_values = [abs(float(item['M #'])) for item in sorted_by_time]
+        has_duplicates = len(set(m_values)) != len(m_values)
+        
         group_info = {
             'outputs': [item['Output'] for item in group],
             'origins': [item['Origin'] for item in group],
             'days': [item['Day'] for item in group],
             'm_numbers': [item['M #'] for item in group],
+            'm_abs_values': m_values,
+            'has_duplicates': has_duplicates,
             'has_descending_m': has_descending_m,
             'has_anchor_epc': has_anchor_epc,
             'day_classification': day_classification,
@@ -180,8 +190,13 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
         else:
             # Track rejected groups for debugging
             group_info['rejection_reason'] = []
+            if has_duplicates:
+                group_info['rejection_reason'].append('Duplicate M# values found')
             if not has_descending_m:
-                group_info['rejection_reason'].append('M# not in descending order')
+                if has_duplicates:
+                    group_info['rejection_reason'].append('M# not in descending order (duplicates)')
+                else:
+                    group_info['rejection_reason'].append('M# not in descending order')
             if not has_anchor_epc:
                 group_info['rejection_reason'].append('No Anchor/EPC origin')
             
@@ -268,6 +283,8 @@ def run_model_g_detection(df, proximity_threshold=0.10):
                 st.markdown(f"- Size: {group_info['size']} travelers")
                 st.markdown(f"- Outputs: {[f'{x:.3f}' for x in group_info['outputs']]}")
                 st.markdown(f"- M# values: {group_info['m_numbers']}")
+                st.markdown(f"- M# absolute values: {group_info['m_abs_values']}")
+                st.markdown(f"- Has duplicates: {group_info['has_duplicates']}")
                 st.markdown(f"- Origins: {group_info['origins']}")
                 st.markdown(f"- Days: {group_info['days']}")
                 st.markdown(f"- Rejection reasons: {', '.join(group_info['rejection_reason'])}")
