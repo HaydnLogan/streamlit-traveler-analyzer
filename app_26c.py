@@ -559,7 +559,4 @@ elif small_feed_file and big_feed_file and measurement_file:
         st.text(traceback.format_exc())
 else:
     st.info("👆 Upload files above to begin analysis, or use the 'Upload Final Traveler Report' option to test the hybrid Model G system directly.")
-                run_x_model_detection(final_df)
-
-    except Exception as e:
-        st.error(f"❌ Error processing feeds: {e}")
+        
