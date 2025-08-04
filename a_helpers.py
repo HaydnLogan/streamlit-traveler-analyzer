@@ -194,9 +194,6 @@ def _output_in_ranges(output, filter_ranges):
             return True
     return False
 
-# Debug counter for filtering
-# _filter_debug_counter = {"total": 0, "filtered": 0, "passed": 0}
-
 def _get_range_info(output, filter_ranges):
     """Get range name and zone for a given output value"""
     for range_info in filter_ranges:
@@ -223,7 +220,31 @@ def _get_range_info(output, filter_ranges):
     # Fallback for full range mode
     return {"name": "Full Range", "zone": ""}
 
-# ✅ Main feed processor - UPDATED with new columns (back to raw generation)
+# Helper function to get measurement value with flexible column matching
+def get_measurement_value(row, possible_columns=None):
+    """Get M value from measurement row with flexible column name matching"""
+    if possible_columns is None:
+        possible_columns = ["M value", "m value", "M_value", "m_value", "M #", "m #", "m#", "M#"]
+    
+    # First try exact case-sensitive matches
+    for col in possible_columns:
+        if col in row.index:
+            return row[col]
+    
+    # If no exact match, try case-insensitive search
+    row_lower = {k.lower(): v for k, v in row.items()}
+    for col in ["m value", "m_value", "m #", "m#"]:
+        if col in row_lower:
+            return row_lower[col]
+    
+    # Return the first numeric column if nothing else works
+    for col, val in row.items():
+        if isinstance(val, (int, float)) and not pd.isna(val):
+            return val
+    
+    return 0  # Default fallback
+
+# ✅ Main feed processor - UPDATED with new columns and flexible measurement column handling
 def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value_at_start, small_df):
     df.columns = df.columns.str.strip().str.lower()
     df["time"] = df["time"].apply(clean_timestamp)
@@ -272,7 +293,9 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
             input_at_report = get_input_at_time(small_df, report_time)
             
             for _, row in measurements.iterrows():
-                output = calculate_pivot(H, L, C, row["m value"])
+                # Use flexible measurement value extraction
+                m_value = get_measurement_value(row)
+                output = calculate_pivot(H, L, C, m_value)
                 day = get_day_index(arrival_time, report_time, start_hour)
                 
                 # Format arrival time into separate columns
@@ -289,11 +312,11 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     "Arrival": arrival_excel,
                     "Day": day,
                     "Origin": origin,
-                    "M Name": row["m name"],
-                    "M #": row["m #"],
-                    "R #": row["r #"],
-                    "Tag": row["tag"],
-                    "Family": row["family"],
+                    "M Name": row.get("m name", row.get("M Name", "")),
+                    "M #": row.get("m #", row.get("M #", m_value)),
+                    "R #": row.get("r #", row.get("R #", "")),
+                    "Tag": row.get("tag", row.get("Tag", "")),
+                    "Family": row.get("family", row.get("Family", "")),
                     f"Input @ {start_hour:02d}:00": input_value_at_start,
                     f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
                     "Input @ Arrival": input_at_arrival,
@@ -317,7 +340,9 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                 input_at_report = get_input_at_time(small_df, report_time)
                 
                 for _, row in measurements.iterrows():
-                    output = calculate_pivot(H, L, C, row["m value"])
+                    # Use flexible measurement value extraction
+                    m_value = get_measurement_value(row)
+                    output = calculate_pivot(H, L, C, m_value)
                     day = get_day_index(arrival_time, report_time, start_hour)
                     
                     # Format arrival time into separate columns
@@ -334,11 +359,11 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                         "Arrival": arrival_excel,
                         "Day": day,
                         "Origin": origin,
-                        "M Name": row["m name"],
-                        "M #": row["m #"],
-                        "R #": row["r #"],
-                        "Tag": row["tag"],
-                        "Family": row["family"],
+                        "M Name": row.get("M Name", row.get("m name", "")),
+                        "M #": row.get("M #", row.get("m #", m_value)),
+                        "R #": row.get("R #", row.get("r #", "")),
+                        "Tag": row.get("Tag", row.get("tag", "")),
+                        "Family": row.get("Family", row.get("family", "")),
                         f"Input @ {start_hour:02d}:00": input_value_at_start,
                         f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
                         "Input @ Arrival": input_at_arrival,
@@ -349,23 +374,6 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     })
 
     return new_data_rows
-
-# ✅ Highlight Anchor Origins ( old method)
-def highlight_anchor_origins(df):
-    def highlight(cell):
-        origin = str(cell).lower()
-        if origin in ["spain", "saturn"]:
-            return "background-color: #d4edda;"  # light green
-        elif origin == "jupiter":
-            return "background-color: #d1ecf1;"  # light blue
-        elif origin in ["kepler-62", "kepler-44"]:
-            return "background-color: #fff3cd;"  # light orange
-        return ""
-    
-    return df.style.applymap(highlight, subset=["Origin"])
-
-
-# This function is now replaced by the enhanced version below
 
 # ✅ Enhanced highlighting for traveler reports with updated colors and restored M# highlighting
 def highlight_traveler_report(df):
@@ -506,52 +514,21 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
                 elif "Low" in range_val:
                     # Low ranges: blue gradient (bright blue to gray)
                     if zone_val == "0 to 6":
-                        style[col_map["Zone"]] = "background-color: #4488ff;"  # Bright blue
+                        style[col_map["Zone"]] = "background-color: #4444ff;"  # Bright blue
                     elif zone_val == "6 to 12":
-                        style[col_map["Zone"]] = "background-color: #77aaff;"  # Medium blue
+                        style[col_map["Zone"]] = "background-color: #7777ff;"  # Medium blue
                     elif zone_val == "12 to 18":
-                        style[col_map["Zone"]] = "background-color: #aaccff;"  # Light blue
+                        style[col_map["Zone"]] = "background-color: #aaaaff;"  # Light blue
                     elif zone_val == "18 to 24":
-                        style[col_map["Zone"]] = "background-color: #cccccc;"  # Gray
+                        style[col_map["Zone"]] = "background-color: #dddddd;"  # Gray
 
         return style
-    
-    def highlight_zone(cell, range_name):
-        """Apply zone highlighting based on range type and zone"""
-        zone = str(cell)
-        if "High" in range_name:
-            # High ranges: red gradient (bright red to orange)
-            if zone == "0 to 6":
-                return "background-color: #ff4444;"  # Bright red
-            elif zone == "6 to 12":
-                return "background-color: #ff7744;"  # Red-orange
-            elif zone == "12 to 18":
-                return "background-color: #ffaa44;"  # Orange
-            elif zone == "18 to 24":
-                return "background-color: #ffdd44;"  # Light orange
-        else:
-            # Low ranges: blue gradient (bright blue to gray)
-            if zone == "0 to 6":
-                return "background-color: #4488ff;"  # Bright blue
-            elif zone == "6 to 12":
-                return "background-color: #77aaff;"  # Medium blue
-            elif zone == "12 to 18":
-                return "background-color: #aaccff;"  # Light blue
-            elif zone == "18 to 24":
-                return "background-color: #cccccc;"  # Gray
-        return ""
     
     def highlight_output_duplicates(series):
         """Highlight outputs that appear more than once with yellow"""
         value_counts = series.value_counts()
         duplicates = value_counts[value_counts > 1].index
         return ['background-color: yellow' if val in duplicates else '' for val in series]
-    
-    def apply_zone_highlighting(row):
-        """Apply zone highlighting based on the range for this row"""
-        if "Zone" in row.index and "Range" in row.index:
-            return highlight_zone(row["Zone"], row["Range"])
-        return ""
     
     # Apply row-based styling first
     styled = df.style.apply(apply_styles, axis=1)
@@ -560,16 +537,4 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
     if "Output" in df.columns:
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
-    if "Zone" in df.columns:
-        # Apply zone highlighting row by row
-        for idx, row in df.iterrows():
-            if "Range" in df.columns:
-                zone_color = highlight_zone(row["Zone"], row["Range"])
-                if zone_color:
-                    styled = styled.set_properties(subset=(idx, "Zone"), **{"background-color": zone_color.split(":")[1].strip().rstrip(";")})
-    
     return styled
-
-
-
-
