@@ -11,12 +11,13 @@ from pandas import ExcelWriter
 # Configure pandas to handle large datasets
 pd.set_option("styler.render.max_elements", 2000000)
 
-from shared.shared_old import get_input_at_time
+from models.models_g import run_model_g_detection
+from shared.shared import clean_timestamp, get_input_at_time
 # , get_input_value
 # , highlight_traveler_report, get_input_at_time, get_input_at_day_start, highlight_custom_traveler_report  
 # clean_timestamp, process_feed
 # 
-from models.models_g import run_model_g_detection
+
 from models.models_a_today import run_a_model_detection_today
 from models.mod_b_05pg1 import run_b_model_detection
 from models.mod_c_04gpr3 import run_c_model_detection
