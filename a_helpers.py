@@ -79,7 +79,7 @@ def extract_origins(columns):
             origins.setdefault(core, []).append(col)
     return {origin: cols for origin, cols in origins.items() if len(cols) == 3}
 
-✅ Get input value for a given report_time
+# ✅ Get input value for a given report_time
 def get_input_value(df, report_time):
     # Ensure time column is datetime for comparison and handle timezone compatibility
     df_copy = df.copy()
@@ -569,5 +569,6 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
                     styled = styled.set_properties(subset=(idx, "Zone"), **{"background-color": zone_color.split(":")[1].strip().rstrip(";")})
     
     return styled
+
 
 
