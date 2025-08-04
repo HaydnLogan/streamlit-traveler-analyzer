@@ -5,7 +5,7 @@ from .shared import (
     highlight_traveler_report, 
     get_input_at_time, 
     get_input_at_day_start, 
-    highlight_custom_traveler_report
+    highlight_custom_traveler_report,
 )
 
 __all__ = [
@@ -15,8 +15,9 @@ __all__ = [
     "highlight_traveler_report", 
     "get_input_at_time", 
     "get_input_at_day_start", 
-    "highlight_custom_traveler_report"
+    "highlight_custom_traveler_report",
 ]
+
 
 
 
