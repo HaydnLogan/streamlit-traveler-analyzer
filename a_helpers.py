@@ -195,7 +195,7 @@ def _output_in_ranges(output, filter_ranges):
     return False
 
 # Debug counter for filtering
-_filter_debug_counter = {"total": 0, "filtered": 0, "passed": 0}
+# _filter_debug_counter = {"total": 0, "filtered": 0, "passed": 0}
 
 def _get_range_info(output, filter_ranges):
     """Get range name and zone for a given output value"""
@@ -569,6 +569,7 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
                     styled = styled.set_properties(subset=(idx, "Zone"), **{"background-color": zone_color.split(":")[1].strip().rstrip(";")})
     
     return styled
+
 
 
 
