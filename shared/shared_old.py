@@ -195,7 +195,7 @@ def _output_in_ranges(output, filter_ranges):
     return False
 
 # Debug counter for filtering
-_filter_debug_counter = {"total": 0, "filtered": 0, "passed": 0}
+# _filter_debug_counter = {"total": 0, "filtered": 0, "passed": 0}
 
 def _get_range_info(output, filter_ranges):
     """Get range name and zone for a given output value"""
