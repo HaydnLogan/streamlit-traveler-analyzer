@@ -95,7 +95,19 @@ def find_temporal_descending_sequences(group):
     if len(group) < 3:
         return []
     
-    # Sort by arrival time to get chronological order
+    # Handle sorting with both datetime and string formats
+    def get_sort_key(item):
+        arrival = item['Arrival']
+        if hasattr(arrival, 'isoformat'):
+            return arrival
+        else:
+            # Try to parse string datetime if needed
+            try:
+                return pd.to_datetime(arrival)
+            except:
+                return arrival
+    
+    sorted_by_time = sorted(group, key=get_sort_key)
     sorted_by_time = sorted(group, key=lambda x: x['Arrival'])
     
     # Find all possible descending subsequences of length 3+
@@ -162,10 +174,17 @@ def is_subsequence_contained(small_seq, large_seq):
     """
     if len(small_seq) >= len(large_seq):
         return False
+
+    # Convert Arrival to string format for comparison (handle both datetime and string formats)
+    def format_arrival(arrival):
+        if hasattr(arrival, 'isoformat'):
+            return arrival.isoformat()
+        else:
+            return str(arrival)
     
     # Create sets of unique identifiers for each sequence (using Output and Arrival as unique key)
-    small_items = {(item['Output'], item['Arrival'].isoformat()) for item in small_seq}
-    large_items = {(item['Output'], item['Arrival'].isoformat()) for item in large_seq}
+    small_items = {(item['Output'], format_arrival(item['Arrival'])) for item in small_seq}
+    large_items = {(item['Output'], format_arrival(item['Arrival'])) for item in large_seq}
     
     # Check if all items in small sequence are present in large sequence
     return small_items.issubset(large_items)
@@ -274,7 +293,19 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
             day_classification = classify_by_day(sequence)
             
             # Store sequence info for debugging
-            sorted_by_time = sorted(sequence, key=lambda x: x['Arrival'])
+            # Handle sorting with both datetime and string formats
+            def get_sort_key(item):
+                arrival = item['Arrival']
+                if hasattr(arrival, 'isoformat'):
+                    return arrival
+                else:
+                    # Try to parse string datetime if needed
+                    try:
+                        return pd.to_datetime(arrival)
+                    except:
+                        return arrival
+            
+            sorted_by_time = sorted(sequence, key=get_sort_key)
             m_values = [abs(float(item['M #'])) for item in sorted_by_time]
             has_duplicates = len(set(m_values)) != len(m_values)
             
