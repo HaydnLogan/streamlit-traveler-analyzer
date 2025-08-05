@@ -429,19 +429,15 @@ elif small_feed_file and big_feed_file and measurement_file:
         st.markdown(f"**Day Start Time:** {day_start_hour:02d}:00")
         st.markdown(f"**Total Entries:** {len(final_df_filtered)}")
         
-        # Apply highlighting based on report type
-        if use_custom_ranges:
-            styled_df = highlight_custom_traveler_report(final_df_filtered)
-            st.dataframe(styled_df, use_container_width=True)
-        else:
-            styled_df = highlight_traveler_report(final_df_filtered)
-            st.dataframe(styled_df, use_container_width=True)
+        # Display results without highlighting (for performance)
+        display_df = final_df_filtered[display_columns]
+        st.dataframe(display_df, use_container_width=True)
         
         # Download buttons
         timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
         
-        # CSV download
-        csv_data = final_df_filtered.to_csv(index=False)
+        # CSV download (exclude datetime column)
+        csv_data = display_df.to_csv(index=False)
         st.download_button(
             label="📥 Download Final Traveler Report (CSV)",
             data=csv_data,
@@ -449,10 +445,17 @@ elif small_feed_file and big_feed_file and measurement_file:
             mime="text/csv"
         )
         
-        # Excel download with highlighting
+        # Excel download with highlighting (exclude datetime column)
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-            final_df_filtered.to_excel(writer, sheet_name='Traveler Report', index=False)
+            # Apply highlighting for Excel export
+            if use_custom_ranges:
+                styled_df = highlight_custom_traveler_report(display_df)
+            else:
+                styled_df = highlight_traveler_report(display_df)
+            
+            # Convert styled DataFrame to Excel
+            styled_df.to_excel(writer, sheet_name='Traveler Report', index=False)
             
             workbook = writer.book
             worksheet = writer.sheets['Traveler Report']
@@ -466,7 +469,7 @@ elif small_feed_file and big_feed_file and measurement_file:
                 'border': 1
             })
             
-            for col_num, value in enumerate(final_df_filtered.columns.values):
+            for col_num, value in enumerate(display_df.columns.values):
                 worksheet.write(0, col_num, value, header_format)
         
         st.download_button(
@@ -565,4 +568,3 @@ elif small_feed_file and big_feed_file and measurement_file:
         st.text(traceback.format_exc())
 else:
     st.info("👆 Upload files above to begin analysis, or use the 'Upload Final Traveler Report' option to test the hybrid Model G system directly.")
-        
