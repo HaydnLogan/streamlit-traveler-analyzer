@@ -871,35 +871,6 @@ def run_model_g_detection(df, proximity_threshold=0.10):
                 st.markdown(f"- Rejection reasons: {', '.join(group_info['reasons'])}")
                 st.markdown("---")
     
-    # Display all proximity groups for debugging
-    if results['proximity_groups']:
-        with st.expander(f"🔧 All Proximity Groups ({len(results['proximity_groups'])}) - Technical Details"):
-            for i, group in enumerate(results['proximity_groups']):
-                st.markdown(f"**Group {i+1} ({len(group)} travelers):**")
-                
-                # Show both arrival time order and output order
-                group_by_arrival = sorted(group, key=lambda x: x['Arrival'])
-                group_by_output = sorted(group, key=lambda x: x['Output'])
-                
-                st.markdown("**Ordered by Arrival Time:**")
-                arrival_df = pd.DataFrame(group_by_arrival)
-                st.dataframe(arrival_df[['Arrival', 'Output', 'Origin', 'M #', 'Day']], use_container_width=True)
-                
-                st.markdown("**Ordered by Output Value:**")
-                output_df = pd.DataFrame(group_by_output)
-                st.dataframe(output_df[['Output', 'Arrival', 'Origin', 'M #', 'Day']], use_container_width=True)
-                
-                # Show output range and M# sequence
-                outputs = [item['Output'] for item in group]
-                m_sequence_by_arrival = [item['M #'] for item in group_by_arrival]
-                abs_m_sequence = [abs(float(m)) for m in m_sequence_by_arrival]
-                
-                st.markdown(f"- Output range: {min(outputs):.3f} to {max(outputs):.3f} (spread: {max(outputs) - min(outputs):.3f})")
-                st.markdown(f"- M# sequence by arrival: {m_sequence_by_arrival}")
-                st.markdown(f"- Absolute M# sequence: {abs_m_sequence}")
-                st.markdown(f"- Is descending: {all(abs_m_sequence[j] > abs_m_sequence[j+1] for j in range(len(abs_m_sequence)-1))}")
-                st.markdown("---")
-    
     return results
 
 if __name__ == "__main__":
