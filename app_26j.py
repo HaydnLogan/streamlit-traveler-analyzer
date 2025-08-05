@@ -148,14 +148,11 @@ if bypass_traveler_file:
         if 'Output' in final_df_filtered.columns and 'Arrival' in final_df_filtered.columns:
             final_df_filtered = final_df_filtered.sort_values(['Output', 'Arrival'], ascending=[False, True])
         
-        # Display results with highlighting
+        # Display results without highlighting (for performance)
         st.markdown(f"**Total Entries:** {len(final_df_filtered)}")
         
-        # Apply highlighting for Excel export
-        highlighted_df = highlight_traveler_report(final_df_filtered.copy())
-        
-        # Display the DataFrame
-        st.dataframe(highlighted_df, use_container_width=True)
+        # Display the DataFrame without highlighting
+        st.dataframe(final_df_filtered, use_container_width=True)
         
         # Generate download with report time in filename
         timestamp = report_time.strftime("%y-%m-%d_%H-%M")
