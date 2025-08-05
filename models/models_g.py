@@ -496,18 +496,23 @@ def run_model_g_detection(df, proximity_threshold=0.10):
             if cluster_info['final_arrival']:
                 try:
                     arrival_dt = pd.to_datetime(cluster_info['final_arrival'])
-                    day_abbrev = arrival_dt.strftime('%a')  # Mon, Tue, Wed, etc.
-                    arrival_excel = arrival_dt.strftime('%d-%b-%Y %H:%M')  # Excel-friendly format
-                    
-                    # Calculate hours ago from current time
-                    hours_ago = (pd.Timestamp.now() - arrival_dt).total_seconds() / 3600
-                    hours_ago_str = f"{int(hours_ago)} hours ago"
+                    if pd.notna(arrival_dt):  # Check if it's not NaT
+                        day_abbrev = arrival_dt.strftime('%a')  # Mon, Tue, Wed, etc.
+                        arrival_excel = arrival_dt.strftime('%d-%b-%Y %H:%M')  # Excel-friendly format
+                        
+                        # Calculate hours ago from current time
+                        hours_ago = (pd.Timestamp.now() - arrival_dt).total_seconds() / 3600
+                        hours_ago_str = f"{int(hours_ago)} hours ago"
+                    else:
+                        day_abbrev = ""
+                        arrival_excel = str(cluster_info['final_arrival'])
+                        hours_ago_str = ""
                 except:
-                    arrival_formatted = str(cluster_info['final_arrival'])
+                    day_abbrev = ""
                     arrival_excel = str(cluster_info['final_arrival'])
                     hours_ago_str = ""
             else:
-                arrival_formatted = ""
+                day_abbrev = ""
                 arrival_excel = ""
                 hours_ago_str = ""
             
@@ -566,8 +571,13 @@ def run_model_g_detection(df, proximity_threshold=0.10):
                 # Try to get report time from the dataframe
                 if 'Arrival' in df.columns and not df.empty:
                     arrival_times = pd.to_datetime(df['Arrival'], format='%d-%b-%Y %H:%M', errors='coerce')
-                    report_time = arrival_times.max()
-                    timestamp = report_time.strftime("%y-%m-%d_%H-%M")
+                    # Filter out NaT values and get the maximum valid time
+                    valid_times = arrival_times.dropna()
+                    if len(valid_times) > 0:
+                        report_time = valid_times.max()
+                        timestamp = report_time.strftime("%y-%m-%d_%H-%M")
+                    else:
+                        timestamp = pd.Timestamp.now().strftime('%y-%m-%d_%H-%M')
                 else:
                     timestamp = pd.Timestamp.now().strftime('%y-%m-%d_%H-%M')
             except:
