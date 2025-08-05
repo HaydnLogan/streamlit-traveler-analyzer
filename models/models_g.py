@@ -3,14 +3,18 @@ Model G Detection System
 Proximity-based traveler grouping with descending M# sequences.  Use with Meas 1a XO.
 
 Classification:
-- G.05.o1[0]: Descending Grn, * Origin included, Today
-- G.05.o2[≠0]: Descending Grn, * Origin included, Other days
+- G.05.o1[0]: Descending Grn to m50, to * Origin, Today
+- G.05.o2[≠0]: Descending Grn to m50, to * Origin, Other days
+- G.05.o3[0]: Descending Grn to ≠ m50, * Origin included, Today
+- G.05.o4[≠0]: Descending Grn to ≠ m50, * Origin included, Other days
 
 Requirements:
 - Minimum of 3 M #s in the sequence
 - M #s must arrive in descending order by absolute value
 - An Anchor or EPC origin must be in the sequence
 - Proximity grouping for outputs within specified distance
+- Categories o1/o2: Sequence must end in M# 50 AND Anchor Origin
+- Categories o3/o4: All other valid sequences with required origins
 """
 
 import pandas as pd
@@ -202,6 +206,30 @@ def has_required_origin(group):
             return True
     return False
 
+def ends_with_m50_and_anchor(sequence):
+    """Check if sequence ends in M# 50 and has Anchor origin at the end"""
+    if not sequence:
+        return False
+    
+    # Get the last item in temporal order (chronologically last arrival)
+    def get_sort_key(item):
+        arrival = item['Arrival']
+        if hasattr(arrival, 'isoformat'):
+            return arrival
+        else:
+            try:
+                return pd.to_datetime(arrival)
+            except:
+                return arrival
+    
+    last_item = max(sequence, key=get_sort_key)
+    
+    # Check if last item has M# 50 and Anchor origin
+    m_value = abs(float(last_item['M #']))
+    origin_type = get_origin_type(last_item['Origin'])
+    
+    return m_value == 50 and origin_type == 'Anchor'
+
 def classify_by_day(group):
     """Classify as [0] (today) or [≠0] (other days)"""
     # Check if any item in the group has Day = '[0]'
@@ -222,8 +250,10 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
         Dictionary with detected sequences
     """
     results = {
-        'G.05.o1[0]': [],    # Today sequences
-        'G.05.o2[≠0]': [],   # Other day sequences
+        'G.05.o1[0]': [],    # Today sequences ending in M50 + Anchor
+        'G.05.o2[≠0]': [],   # Other day sequences ending in M50 + Anchor
+        'G.05.o3[0]': [],    # Today sequences NOT ending in M50 + Anchor/EPIC (but must include Anchor/EPIC)
+        'G.05.o4[≠0]': [],   # Other day sequences NOT ending in M50 + Anchor/EPIC (but must include Anchor/EPIC)
         'proximity_groups': [],
         'rejected_groups': []
     }
@@ -328,11 +358,20 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
                 'is_descending': True  # Already validated by find_temporal_descending_sequences
             }
             
-            # Classify by day and add to appropriate category
+            # Check if sequence ends with M# 50 and Anchor origin
+            ends_with_m50_anchor = ends_with_m50_and_anchor(sequence)
+            
+            # Classify into appropriate category based on day and ending conditions
             if day_classification == '[0]':
-                results['G.05.o1[0]'].append(sequence_info)
+                if ends_with_m50_anchor:
+                    results['G.05.o1[0]'].append(sequence_info)  # Today, ends M50+Anchor
+                else:
+                    results['G.05.o3[0]'].append(sequence_info)  # Today, NOT ending M50+Anchor (but has Anchor/EPIC)
             else:
-                results['G.05.o2[≠0]'].append(sequence_info)
+                if ends_with_m50_anchor:
+                    results['G.05.o2[≠0]'].append(sequence_info)  # Other days, ends M50+Anchor
+                else:
+                    results['G.05.o4[≠0]'].append(sequence_info)  # Other days, NOT ending M50+Anchor (but has Anchor/EPIC)
     
     return results
 
@@ -363,15 +402,17 @@ def run_model_g_detection(df, proximity_threshold=0.10):
     
     # Display control toggles
     st.markdown("### 🎛️ Display Controls")
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        show_today = st.checkbox("📅 Today [0]", value=True, key="g_show_today")
+        show_o1 = st.checkbox("G.05.o1[0]: Today M50+Anchor", value=True, key="g_show_o1")
     with col2:
-        show_recent = st.checkbox("📈 Recent [-1 to -5]", value=True, key="g_show_recent")
+        show_o2 = st.checkbox("G.05.o2[≠0]: Other M50+Anchor", value=True, key="g_show_o2")
     with col3:
-        show_other_days = st.checkbox("📉 Other Days [-6+]", value=False, key="g_show_other")
+        show_o3 = st.checkbox("G.05.o3[0]: Today ≠M50+Anchor", value=False, key="g_show_o3")
     with col4:
+        show_o4 = st.checkbox("G.05.o4[≠0]: Other ≠M50+Anchor", value=False, key="g_show_o4")
+    with col5:
         show_rejected = st.checkbox("❌ Rejected Groups", value=False, key="g_show_rejected")
     
     # Run detection
@@ -380,50 +421,64 @@ def run_model_g_detection(df, proximity_threshold=0.10):
     # Display results summary
     st.markdown("### 📊 Detection Summary")
     
-    # Categorize Other Days sequences into Recent and Other Days
-    recent_sequences = []  # [-1] to [-5]
-    other_day_sequences = []  # [-6] and more negative
-    
-    for seq_info in results['G.05.o2[≠0]']:
-        # Check the days in this sequence to categorize it
-        days = seq_info['days']
-        # Extract numeric day values and find the least negative (most recent)
-        day_nums = []
-        for day_str in days:
-            try:
-                day_num = int(day_str.strip('[]'))
-                day_nums.append(day_num)
-            except:
-                day_nums.append(-999)  # fallback for parsing errors
+    # Categorize sequences for Recent vs Other Days display
+    def categorize_other_day_sequences(sequences):
+        recent = []  # [-1] to [-5]
+        other_days = []  # [-6] and more negative
         
-        most_recent_day = max(day_nums) if day_nums else -999
+        for seq_info in sequences:
+            days = seq_info['days']
+            day_nums = []
+            for day_str in days:
+                try:
+                    day_num = int(day_str.strip('[]'))
+                    day_nums.append(day_num)
+                except:
+                    day_nums.append(-999)
+            
+            most_recent_day = max(day_nums) if day_nums else -999
+            
+            if -5 <= most_recent_day <= -1:
+                recent.append(seq_info)
+            else:
+                other_days.append(seq_info)
         
-        # Categorize based on most recent day in the sequence
-        if -5 <= most_recent_day <= -1:
-            recent_sequences.append(seq_info)
-        else:
-            other_day_sequences.append(seq_info)
+        return recent, other_days
+
+    # Get recent vs other days breakdown for both M50+Anchor and ≠M50+Anchor categories
+    o2_recent, o2_other_days = categorize_other_day_sequences(results['G.05.o2[≠0]'])
+    o4_recent, o4_other_days = categorize_other_day_sequences(results['G.05.o4[≠0]'])
     
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("Total Proximity Groups", len(results['proximity_groups']))
     with col2:
-        st.metric("G.05.o1[0] (Today)", len(results['G.05.o1[0]']))
+        st.metric("G.05.o1[0]: Today M50+Anchor", len(results['G.05.o1[0]']))
     with col3:
-        st.metric("Recent ([-1] to [-5])", len(recent_sequences))
+        st.metric("G.05.o2[≠0]: Other M50+Anchor", len(results['G.05.o2[≠0]']))
     with col4:
-        st.metric("Other Days ([-6]+)", len(other_day_sequences))
+        st.metric("G.05.o3[0]: Today ≠M50+Anchor", len(results['G.05.o3[0]']))
     with col5:
-        st.metric("Rejected Groups", len(results['rejected_groups']))
+        st.metric("G.05.o4[≠0]: Other ≠M50+Anchor", len(results['G.05.o4[≠0]']))
     
 
 
-    # Create cluster table
-    if results['G.05.o1[0]'] or results['G.05.o2[≠0]']:
+    # Create cluster table for enabled categories
+    enabled_sequences = []
+    if show_o1:
+        enabled_sequences.extend(results['G.05.o1[0]'])
+    if show_o2:
+        enabled_sequences.extend(results['G.05.o2[≠0]'])
+    if show_o3:
+        enabled_sequences.extend(results['G.05.o3[0]'])
+    if show_o4:
+        enabled_sequences.extend(results['G.05.o4[≠0]'])
+    
+    if enabled_sequences:
         st.markdown("### 📊 Cluster Table")
         
         # Collect all sequences for cluster analysis
-        all_sequences = results['G.05.o1[0]'] + results['G.05.o2[≠0]']
+        all_sequences = enabled_sequences
         
         # Create cluster data by grouping sequences by their final output
         cluster_data = {}
@@ -596,42 +651,33 @@ def run_model_g_detection(df, proximity_threshold=0.10):
         st.markdown("---")
 
     # Display classified sequences
-    if results['G.05.o1[0]'] or results['G.05.o2[≠0]']:
+    if enabled_sequences:
         st.markdown("### ✅ Classified Sequences")
         
         # Prepare data for download
         all_classified_data = []
         
-        # Collect all classified sequences
-        for seq in results['G.05.o1[0]']:
-            # Create rows from the sequence data structure
-            for i, output in enumerate(seq['outputs']):
-                row = {
-                    'Output': output,
-                    'Origin': seq['origins'][i] if i < len(seq['origins']) else '',
-                    'M #': seq['m_values'][i] if i < len(seq['m_values']) else '',
-                    'Day': seq['days'][i] if i < len(seq['days']) else '',
-                    'Arrival': seq['arrivals'][i] if i < len(seq['arrivals']) else '',
-                    'Feed': seq['feeds'][i] if i < len(seq['feeds']) else '',
-                    'Model': 'G.05.o1[0]',
-                    'Classification': 'Today'
-                }
-                all_classified_data.append(row)
-        
-        for seq in results['G.05.o2[≠0]']:
-            # Create rows from the sequence data structure
-            for i, output in enumerate(seq['outputs']):
-                row = {
-                    'Output': output,
-                    'Origin': seq['origins'][i] if i < len(seq['origins']) else '',
-                    'M #': seq['m_values'][i] if i < len(seq['m_values']) else '',
-                    'Day': seq['days'][i] if i < len(seq['days']) else '',
-                    'Arrival': seq['arrivals'][i] if i < len(seq['arrivals']) else '',
-                    'Feed': seq['feeds'][i] if i < len(seq['feeds']) else '',
-                    'Model': 'G.05.o2[≠0]',
-                    'Classification': 'Other Days'
-                }
-                all_classified_data.append(row)
+        # Collect all enabled sequences
+        for category_name, sequences in [
+            ('G.05.o1[0]', results['G.05.o1[0]'] if show_o1 else []),
+            ('G.05.o2[≠0]', results['G.05.o2[≠0]'] if show_o2 else []),
+            ('G.05.o3[0]', results['G.05.o3[0]'] if show_o3 else []),
+            ('G.05.o4[≠0]', results['G.05.o4[≠0]'] if show_o4 else [])
+        ]:
+            for seq in sequences:
+                # Create rows from the sequence data structure
+                for i, output in enumerate(seq['outputs']):
+                    row = {
+                        'Output': output,
+                        'Origin': seq['origins'][i] if i < len(seq['origins']) else '',
+                        'M #': seq['m_values'][i] if i < len(seq['m_values']) else '',
+                        'Day': seq['days'][i] if i < len(seq['days']) else '',
+                        'Arrival': seq['arrivals'][i] if i < len(seq['arrivals']) else '',
+                        'Feed': seq['feeds'][i] if i < len(seq['feeds']) else '',
+                        'Model': category_name,
+                        'Classification': category_name.split('[')[0]  # Extract base name
+                    }
+                    all_classified_data.append(row)
         
         # Create download DataFrame if we have data
         if all_classified_data:
@@ -697,13 +743,12 @@ def run_model_g_detection(df, proximity_threshold=0.10):
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         
-        # Today sequences (conditionally displayed)
-        if show_today and results['G.05.o1[0]']:
-            with st.expander(f"🟢 G.05.o1[0] - Today Sequences ({len(results['G.05.o1[0]'])})"):
+        # Display each category based on toggles
+        if show_o1 and results['G.05.o1[0]']:
+            with st.expander(f"🟢 G.05.o1[0] - Today M50+Anchor ({len(results['G.05.o1[0]'])})"):
                 for i, seq_info in enumerate(results['G.05.o1[0]']):
                     st.markdown(f"**Sequence {i+1}:**")
                     
-                    # Extract data from the new sequence_info structure
                     outputs = [f"{x:.3f}" for x in seq_info['outputs']]
                     m_values = seq_info['m_values']
                     abs_m_values = [abs(float(m)) for m in m_values]
@@ -739,14 +784,18 @@ def run_model_g_detection(df, proximity_threshold=0.10):
                     st.dataframe(display_df, use_container_width=True)
                     st.markdown("---")
         
-        # Recent sequences ([-1] to [-5], conditionally displayed)
-        if show_recent and recent_sequences:
-            with st.expander(f"🔶 G.05.o2[Recent] - Recent Day Sequences ([-1] to [-5]) ({len(recent_sequences)})"):
-                for i, seq_info in enumerate(recent_sequences):
-                    st.markdown(f"**Sequence {i+1}:**")
-                    
-                    # Extract data from the new sequence_info structure
-                    outputs = [f"{x:.3f}" for x in seq_info['outputs']]
+        if show_o2 and results['G.05.o2[≠0]']:
+            # Split o2 into Recent and Other Days for display
+            o2_recent, o2_other = categorize_other_day_sequences(results['G.05.o2[≠0]'])
+            
+            # Recent sequences ([-1] to [-5])
+            if o2_recent:
+                with st.expander(f"🔶 G.05.o2[Recent] M50+Anchor ([-1] to [-5]) ({len(o2_recent)})"):
+                    for i, seq_info in enumerate(o2_recent):
+                        st.markdown(f"**Sequence {i+1}:**")
+                        
+                        # Extract data from the new sequence_info structure
+                        outputs = [f"{x:.3f}" for x in seq_info['outputs']]
                     m_values = seq_info['m_values']
                     abs_m_values = [abs(float(m)) for m in m_values]
                     origins = seq_info['origins']
@@ -781,13 +830,54 @@ def run_model_g_detection(df, proximity_threshold=0.10):
                     st.dataframe(display_df, use_container_width=True)
                     st.markdown("---")
                     
-        # Other day sequences ([-6] and beyond, conditionally displayed)
-        if show_other_days and other_day_sequences:
-            with st.expander(f"🔵 G.05.o2[Other] - Other Day Sequences ([-6] and beyond) ({len(other_day_sequences)})"):
-                for i, seq_info in enumerate(other_day_sequences):
+            # Other day sequences ([-6] and beyond)  
+            if o2_other:
+                with st.expander(f"🔵 G.05.o2[Other] M50+Anchor ([-6] and beyond) ({len(o2_other)})"):
+                    for i, seq_info in enumerate(o2_other):
+                        st.markdown(f"**Sequence {i+1}:**")
+                        
+                        # Extract data from the new sequence_info structure
+                        outputs = [f"{x:.3f}" for x in seq_info['outputs']]
+                    m_values = seq_info['m_values']
+                    abs_m_values = [abs(float(m)) for m in m_values]
+                    origins = seq_info['origins']
+                    days = seq_info['days']
+                    arrivals = seq_info['arrivals']
+                    
+                    st.markdown(f"- **Output Range:** {seq_info['output_range']}")
+                    st.markdown(f"- **Outputs:** {outputs}")
+                    st.markdown(f"- **M# sequence:** {m_values}")
+                    st.markdown(f"- **Absolute M# values:** {abs_m_values}")
+                    st.markdown(f"- **Origins:** {origins}")
+                    st.markdown(f"- **Days:** {days}")
+                    st.markdown(f"- **Group Size:** {seq_info['group_size']} travelers")
+                    st.markdown(f"- **Is Descending:** {'✅ Yes' if seq_info['is_descending'] else '❌ No'}")
+                    
+                    # Show time span
+                    if arrivals:
+                        first_arrival = arrivals[0]
+                        last_arrival = arrivals[-1]
+                        st.markdown(f"- **Time span:** {first_arrival} → {last_arrival}")
+                    
+                    # Create DataFrame for display
+                    display_data = {
+                        'Arrival': arrivals,
+                        'Output': seq_info['outputs'],
+                        'Origin': origins,
+                        'M #': m_values,
+                        'Day': days,
+                        'Feed': seq_info['feeds']
+                    }
+                    display_df = pd.DataFrame(display_data)
+                    st.dataframe(display_df, use_container_width=True)
+                    st.markdown("---")
+        
+        # Add display sections for o3 and o4 categories
+        if show_o3 and results['G.05.o3[0]']:
+            with st.expander(f"🟡 G.05.o3[0] - Today ≠M50+Anchor ({len(results['G.05.o3[0]'])})"):
+                for i, seq_info in enumerate(results['G.05.o3[0]']):
                     st.markdown(f"**Sequence {i+1}:**")
                     
-                    # Extract data from the new sequence_info structure
                     outputs = [f"{x:.3f}" for x in seq_info['outputs']]
                     m_values = seq_info['m_values']
                     abs_m_values = [abs(float(m)) for m in m_values]
@@ -822,6 +912,92 @@ def run_model_g_detection(df, proximity_threshold=0.10):
                     display_df = pd.DataFrame(display_data)
                     st.dataframe(display_df, use_container_width=True)
                     st.markdown("---")
+        
+        if show_o4 and results['G.05.o4[≠0]']:
+            # Split o4 into Recent and Other Days for display
+            o4_recent, o4_other = categorize_other_day_sequences(results['G.05.o4[≠0]'])
+            
+            # Recent sequences ([-1] to [-5])
+            if o4_recent:
+                with st.expander(f"🟠 G.05.o4[Recent] ≠M50+Anchor ([-1] to [-5]) ({len(o4_recent)})"):
+                    for i, seq_info in enumerate(o4_recent):
+                        st.markdown(f"**Sequence {i+1}:**")
+                        
+                        outputs = [f"{x:.3f}" for x in seq_info['outputs']]
+                        m_values = seq_info['m_values']
+                        abs_m_values = [abs(float(m)) for m in m_values]
+                        origins = seq_info['origins']
+                        days = seq_info['days']
+                        arrivals = seq_info['arrivals']
+                        
+                        st.markdown(f"- **Output Range:** {seq_info['output_range']}")
+                        st.markdown(f"- **Outputs:** {outputs}")
+                        st.markdown(f"- **M# sequence:** {m_values}")
+                        st.markdown(f"- **Absolute M# values:** {abs_m_values}")
+                        st.markdown(f"- **Origins:** {origins}")
+                        st.markdown(f"- **Days:** {days}")
+                        st.markdown(f"- **Group Size:** {seq_info['group_size']} travelers")
+                        st.markdown(f"- **Is Descending:** {'✅ Yes' if seq_info['is_descending'] else '❌ No'}")
+                        
+                        # Show time span
+                        if arrivals:
+                            first_arrival = arrivals[0]
+                            last_arrival = arrivals[-1]
+                            st.markdown(f"- **Time span:** {first_arrival} → {last_arrival}")
+                        
+                        # Create DataFrame for display
+                        display_data = {
+                            'Arrival': arrivals,
+                            'Output': seq_info['outputs'],
+                            'Origin': origins,
+                            'M #': m_values,
+                            'Day': days,
+                            'Feed': seq_info['feeds']
+                        }
+                        display_df = pd.DataFrame(display_data)
+                        st.dataframe(display_df, use_container_width=True)
+                        st.markdown("---")
+            
+            # Other day sequences ([-6] and beyond)  
+            if o4_other:
+                with st.expander(f"🔶 G.05.o4[Other] ≠M50+Anchor ([-6] and beyond) ({len(o4_other)})"):
+                    for i, seq_info in enumerate(o4_other):
+                        st.markdown(f"**Sequence {i+1}:**")
+                        
+                        outputs = [f"{x:.3f}" for x in seq_info['outputs']]
+                        m_values = seq_info['m_values']
+                        abs_m_values = [abs(float(m)) for m in m_values]
+                        origins = seq_info['origins']
+                        days = seq_info['days']
+                        arrivals = seq_info['arrivals']
+                        
+                        st.markdown(f"- **Output Range:** {seq_info['output_range']}")
+                        st.markdown(f"- **Outputs:** {outputs}")
+                        st.markdown(f"- **M# sequence:** {m_values}")
+                        st.markdown(f"- **Absolute M# values:** {abs_m_values}")
+                        st.markdown(f"- **Origins:** {origins}")
+                        st.markdown(f"- **Days:** {days}")
+                        st.markdown(f"- **Group Size:** {seq_info['group_size']} travelers")
+                        st.markdown(f"- **Is Descending:** {'✅ Yes' if seq_info['is_descending'] else '❌ No'}")
+                        
+                        # Show time span
+                        if arrivals:
+                            first_arrival = arrivals[0]
+                            last_arrival = arrivals[-1]
+                            st.markdown(f"- **Time span:** {first_arrival} → {last_arrival}")
+                        
+                        # Create DataFrame for display
+                        display_data = {
+                            'Arrival': arrivals,
+                            'Output': seq_info['outputs'],
+                            'Origin': origins,
+                            'M #': m_values,
+                            'Day': days,
+                            'Feed': seq_info['feeds']
+                        }
+                        display_df = pd.DataFrame(display_data)
+                        st.dataframe(display_df, use_container_width=True)
+                        st.markdown("---")
     
     # Display debugging information (conditionally displayed)
     if show_rejected and results['rejected_groups']:
