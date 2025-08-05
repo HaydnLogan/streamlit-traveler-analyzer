@@ -312,7 +312,13 @@ elif small_feed_file and big_feed_file and measurement_file:
         # Filter future data if requested
         if filter_future_data and report_time:
             initial_count = len(final_df)
-            final_df = final_df[final_df['Arrival'] <= report_time]
+            # Use datetime column for comparison, fallback to converting Arrival if needed
+            if 'Arrival_datetime' in final_df.columns:
+                final_df = final_df[final_df['Arrival_datetime'] <= report_time]
+            else:
+                # Convert Arrival column to datetime for comparison
+                final_df['Arrival_datetime'] = pd.to_datetime(final_df['Arrival'], format='%d-%b-%Y %H:%M', errors='coerce')
+                final_df = final_df[final_df['Arrival_datetime'] <= report_time]
             filtered_count = len(final_df)
             if initial_count != filtered_count:
                 st.info(f"Filtered {initial_count - filtered_count} future entries. Showing {filtered_count} entries at or before report time.")
