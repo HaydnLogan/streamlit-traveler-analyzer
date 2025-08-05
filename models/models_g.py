@@ -370,7 +370,7 @@ def run_model_g_detection(df, proximity_threshold=0.10):
     with col2:
         show_recent = st.checkbox("📈 Recent [-1 to -5]", value=True, key="g_show_recent")
     with col3:
-        show_other_days = st.checkbox("📉 Other Days [-6+]", value=True, key="g_show_other")
+        show_other_days = st.checkbox("📉 Other Days [-6+]", value=False, key="g_show_other")
     with col4:
         show_rejected = st.checkbox("❌ Rejected Groups", value=False, key="g_show_rejected")
     
