@@ -133,8 +133,8 @@ def find_temporal_descending_sequences(group):
             descending_pairs = sum(1 for i in range(len(m_values)-1) if m_values[i] > m_values[i+1])
             total_pairs = len(m_values) - 1
             
-            # Require at least 80% descending pairs and minimum 3 unique values
-            if (total_pairs > 0 and descending_pairs / total_pairs >= 0.8 and 
+            # Require STRICTLY descending for Model G (100% descending pairs)
+            if (total_pairs > 0 and descending_pairs == total_pairs and 
                 len(set(m_values)) >= 3):
                 valid_sequences.append(subsequence)
     
@@ -365,7 +365,14 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
                     results['G.05.o1[0]'].append(sequence_info)  # Today, ends M50+Anchor
                 else:
                     results['G.05.o2[≠0]'].append(sequence_info)  # Other days, ends M50+Anchor
-            # Note: Sequences that don't end with M50+Anchor are now ignored (no o3/o4)
+            else:
+                # Store rejected sequences for debugging
+                results['rejected_groups'].append({
+                    'outputs': sequence_info['outputs'],
+                    'reasons': [f'Does not end with M50+Anchor (ends with M#{abs(float(sorted_by_time[-1]["M #"]))} + {get_origin_type(sorted_by_time[-1]["Origin"])})'],
+                    'output_range': sequence_info['output_range'],
+                    'sequence_details': f"M# sequence: {sequence_info['m_values']}, Origins: {sequence_info['origins']}"
+                })
     
     return results
 
