@@ -128,7 +128,12 @@ if bypass_traveler_file:
             try:
                 # Try to parse arrival times to determine report time
                 arrival_times = pd.to_datetime(final_df['Arrival'], format='%d-%b-%Y %H:%M', errors='coerce')
-                report_time = arrival_times.max()
+                # Filter out NaT values and get the maximum valid time
+                valid_times = arrival_times.dropna()
+                if len(valid_times) > 0:
+                    report_time = valid_times.max()
+                else:
+                    report_time = dt.datetime.now()
             except:
                 report_time = dt.datetime.now()
         else:
