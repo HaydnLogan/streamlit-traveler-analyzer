@@ -9,45 +9,14 @@ from pandas import ExcelWriter
 # Configure pandas to handle large datasets
 pd.set_option("styler.render.max_elements", 2000000)
 
-# Import functions with fallbacks for missing modules
+# Import functions - these paths are confirmed working
 from a_helpers import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time, get_input_at_day_start, highlight_custom_traveler_report
-
-# Model detection functions with fallbacks
-try:
-    from model_g import run_model_g_detection
-except ImportError:
-    def run_model_g_detection(df, proximity_threshold=0.10):
-        st.warning("Model G detection not available")
-
-try:
-    from models_a_today import run_a_model_detection_today
-except ImportError:
-    def run_a_model_detection_today(df):
-        st.warning("Model A detection not available")
-
-try:
-    from mod_b_05 import run_b_model_detection
-except ImportError:
-    def run_b_model_detection(df):
-        st.warning("Model B detection not available")
-
-try:
-    from fixed_model_c_complete import run_c_model_detection
-except ImportError:
-    def run_c_model_detection(df, run_c01=True, run_c02=True, run_c04=True):
-        st.warning("Model C detection not available")
-
-try:
-    from mod_x_03 import run_x_model_detection
-except ImportError:
-    def run_x_model_detection(df):
-        st.warning("Model X detection not available")
-
-try:
-    from simple_mega_report import run_simple_single_line_analysis
-except ImportError:
-    def run_simple_single_line_analysis(df):
-        st.warning("Single Line Mega Report not available")
+from models.models_g import run_model_g_detection
+from models.models_a_today import run_a_model_detection_today
+from models.mod_b_05pg1 import run_b_model_detection
+from models.mod_c_04gpr3 import run_c_model_detection
+from models.mod_x_03g import run_x_model_detection
+from models.simple_mega_report2 import run_simple_single_line_analysis
 
 # 🔌 Streamlit interface (UI + orchestration)
 
