@@ -247,6 +247,9 @@ if small_feed_file and big_feed_file and measurement_file:
                 st.info(f"Custom Ranges filtering: {len(filter_ranges)} ranges active")
                 st.info(f"Filtered to {len(final_df_filtered)} entries within ranges")
         
+        # Sort by Output descending, then by Arrival ascending (oldest to newest)
+        final_df_filtered = final_df_filtered.sort_values(['Output', 'Arrival'], ascending=[False, True])
+        
         # Display results without highlighting (for performance)
         st.markdown(f"**Total Entries:** {len(final_df_filtered)}")
         
