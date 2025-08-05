@@ -561,12 +561,23 @@ def run_model_g_detection(df, proximity_threshold=0.10):
             cluster_df = pd.DataFrame(cluster_rows)
             st.dataframe(cluster_df, use_container_width=True)
             
-            # Download button for cluster table
+            # Download button for cluster table with report time in filename
+            try:
+                # Try to get report time from the dataframe
+                if 'Arrival' in df.columns and not df.empty:
+                    arrival_times = pd.to_datetime(df['Arrival'], format='%d-%b-%Y %H:%M', errors='coerce')
+                    report_time = arrival_times.max()
+                    timestamp = report_time.strftime("%y-%m-%d_%H-%M")
+                else:
+                    timestamp = pd.Timestamp.now().strftime('%y-%m-%d_%H-%M')
+            except:
+                timestamp = pd.Timestamp.now().strftime('%y-%m-%d_%H-%M')
+                
             cluster_csv = cluster_df.to_csv(index=False)
             st.download_button(
                 label="📥 Download Cluster Table (CSV)",
                 data=cluster_csv,
-                file_name=f"model_g_cluster_table_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                file_name=f"model_g_cluster_table_{timestamp}.csv",
                 mime="text/csv"
             )
         else:
