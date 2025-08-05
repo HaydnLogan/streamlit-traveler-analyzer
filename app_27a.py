@@ -284,12 +284,12 @@ elif small_feed_file and big_feed_file and measurement_file:
             
             for i, tab_name in enumerate(available_tabs[:4]):  # Limit to first 4 tabs
                 with tab_columns[i % 4]:
-                    if st.checkbox(f"Meas tab {i+1}{chr(97+i)} - {tab_name}", key=f"tab_{i}"):
-                        selected_tabs.append((f"Meas tab {i+1}{chr(97+i)}", tab_name))
+                    if st.checkbox(f"Meas tab {i+1} - {tab_name}", key=f"tab_{i}"):
+                        selected_tabs.append((f"Meas tab {i+1}", tab_name))
         else:
             # Single tab available
-            selected_tabs = [("Meas tab 1a", available_tabs[0])]
-            st.info("Single measurement tab detected - will generate Meas tab 1a traveler report")
+            selected_tabs = [("Meas tab 1", available_tabs[0])]
+            st.info("Single measurement tab detected - will generate Meas tab 1 traveler report")
         
         # Store traveler reports for model access
         traveler_reports = {}
@@ -348,11 +348,11 @@ elif small_feed_file and big_feed_file and measurement_file:
                         mask = (tab_df_filtered['Output'] >= low_limit) & (tab_df_filtered['Output'] <= high_limit)
                         tab_df_filtered = tab_df_filtered[mask]
                         
-                        # Add Range and Zone columns
-                        tab_df_filtered['Range'] = 'Full Range'
-                        tab_df_filtered['Zone'] = tab_df_filtered['Output'].apply(
-                            lambda x: f"Zone {min(int((abs(x - input_value_at_start) / full_range_value) * 4), 3) + 1}"
-                        )
+                        # Add Meas column for Full Range mode (no Zone column)
+                        tab_df_filtered['Meas'] = tab_name
+                        
+                        # Sort by Output descending, then Arrival ascending (oldest to newest)
+                        tab_df_filtered = tab_df_filtered.sort_values(['Output', 'Arrival'], ascending=[False, True])
                         
                         st.info(f"Full Range: {input_value_at_start} ± {full_range_value} = [{low_limit:.1f}, {high_limit:.1f}] ({len(tab_df_filtered)} entries)")
                         
@@ -397,6 +397,9 @@ elif small_feed_file and big_feed_file and measurement_file:
                             
                             tab_df_filtered['Zone'] = tab_df_filtered['Output'].apply(get_zone)
                             
+                            # Sort by Output descending, then Arrival ascending (oldest to newest)
+                            tab_df_filtered = tab_df_filtered.sort_values(['Output', 'Arrival'], ascending=[False, True])
+                            
                             st.info(f"Custom Ranges: {len(tab_df_filtered)} entries across {len(filter_ranges)} ranges")
                             
                             # Display WITH custom highlighting (Custom Ranges mode)
@@ -405,11 +408,15 @@ elif small_feed_file and big_feed_file and measurement_file:
                             st.dataframe(highlighted_df, use_container_width=True)
                         else:
                             st.info("No custom ranges configured - showing full data")
+                            # Sort by Output descending, then Arrival ascending (oldest to newest)
+                            tab_df_filtered = tab_df_filtered.sort_values(['Output', 'Arrival'], ascending=[False, True])
                             display_columns = [col for col in tab_df_filtered.columns if col != 'Arrival_datetime']
                             st.dataframe(tab_df_filtered[display_columns], use_container_width=True)
                     else:
                         # No filtering applied
                         st.info(f"No filtering applied - showing all {len(tab_df_filtered)} entries")
+                        # Sort by Output descending, then Arrival ascending (oldest to newest)
+                        tab_df_filtered = tab_df_filtered.sort_values(['Output', 'Arrival'], ascending=[False, True])
                         display_columns = [col for col in tab_df_filtered.columns if col != 'Arrival_datetime']
                         st.dataframe(tab_df_filtered[display_columns], use_container_width=True)
                     
@@ -480,13 +487,8 @@ elif small_feed_file and big_feed_file and measurement_file:
             if initial_count != filtered_count:
                 st.info(f"Filtered {initial_count - filtered_count} future entries. Showing {filtered_count} entries at or before report time.")
         
-        # Generate traveler report automatically
-        st.markdown("---")
-        st.markdown("### 📋 Final Traveler Report")
-        st.markdown(f"**Report Time:** {report_time.strftime('%d-%b-%y %H:%M')}")
-        st.markdown(f"**Day Start Time:** {day_start_hour:02d}:00")
-        
-        # Apply traveler report filtering if configured
+        # Skip Final Traveler Report - replaced by pre-run measurement tab reports
+        # Prepare final_df_filtered for model detection only
         final_df_filtered = final_df.copy()
         
         if use_full_range:
@@ -557,62 +559,8 @@ elif small_feed_file and big_feed_file and measurement_file:
                 st.info(f"Custom Ranges filtering: {len(filter_ranges)} ranges active")
                 st.info(f"Filtered to {len(final_df_filtered)} entries within ranges")
         
-        # Sort by Output descending, then by Arrival ascending (oldest to newest)
+        # Sort main data for model processing (no display section - replaced by pre-run reports)
         final_df_filtered = final_df_filtered.sort_values(['Output', 'Arrival'], ascending=[False, True])
-        
-        # Display results without highlighting (for performance)
-        st.markdown(f"**Total Entries:** {len(final_df_filtered)}")
-        
-        display_df = final_df_filtered[display_columns]
-        st.dataframe(display_df, use_container_width=True)
-        
-        # Download buttons with report time in filename
-        timestamp = report_time.strftime("%y-%m-%d_%H-%M")
-        
-        # CSV download (exclude datetime column)
-        csv_data = display_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Final Traveler Report (CSV)",
-            data=csv_data,
-            file_name=f"final_traveler_report_{timestamp}.csv",
-            mime="text/csv"
-        )
-        
-        # Excel download with highlighting
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-            display_df.to_excel(writer, sheet_name='Final Traveler Report', index=False)
-            
-            workbook = writer.book
-            worksheet = writer.sheets['Final Traveler Report']
-            
-            # Add header formatting
-            header_format = workbook.add_format({
-                'bold': True,
-                'text_wrap': True,
-                'valign': 'top',
-                'fg_color': '#D7E4BC',
-                'border': 1
-            })
-            
-            # Write headers with formatting
-            for col_num, value in enumerate(display_df.columns.values):
-                worksheet.write(0, col_num, value, header_format)
-            
-            # Apply highlighting based on the report type
-            if use_custom_ranges:
-                # Apply custom range highlighting for Excel
-                highlighted_excel_df = highlight_custom_traveler_report(display_df.copy())
-            else:
-                # Apply standard highlighting for Excel
-                highlighted_excel_df = highlight_traveler_report(display_df.copy())
-        
-        st.download_button(
-            label="📥 Download Final Traveler Report (Excel)",
-            data=excel_buffer.getvalue(), 
-            file_name=f"final_traveler_report_{timestamp}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
         
         # Model detections on the processed data
         if run_g_models:
@@ -631,16 +579,10 @@ elif small_feed_file and big_feed_file and measurement_file:
             
             with st.spinner("Running Model G detection..."):
                 try:
-                    # Pass traveler reports to Model G (G.05 uses Meas tab 1a)
-                    if "traveler_reports" in locals() and "Meas tab 1a" in traveler_reports:
-                        st.info("🎯 Using Meas tab 1a data for Model G detection")
-                        run_model_g_detection(traveler_reports["Meas tab 1a"], proximity_threshold)
-                    else:
-                        st.info("Using main processed data for Model G detection")
-                        run_model_g_detection(final_df_filtered, proximity_threshold)
-                    if "traveler_reports" in locals() and "Meas tab 1a" in traveler_reports:
-                        st.info("🎯 Using Meas tab 1a data for Model G detection")
-                        run_model_g_detection(traveler_reports["Meas tab 1a"], proximity_threshold)
+                    # Pass traveler reports to Model G (G.05 uses Meas tab 1)
+                    if "traveler_reports" in locals() and "Meas tab 1" in traveler_reports:
+                        st.info("🎯 Using Meas tab 1 data for Model G detection")
+                        run_model_g_detection(traveler_reports["Meas tab 1"], proximity_threshold)
                     else:
                         st.info("Using main processed data for Model G detection")
                         run_model_g_detection(final_df_filtered, proximity_threshold)
