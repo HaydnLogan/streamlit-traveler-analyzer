@@ -95,6 +95,7 @@ def find_temporal_descending_sequences(group):
     if len(group) < 3:
         return []
     
+    # Sort by arrival time to get chronological order
     # Handle sorting with both datetime and string formats
     def get_sort_key(item):
         arrival = item['Arrival']
@@ -108,7 +109,6 @@ def find_temporal_descending_sequences(group):
                 return arrival
     
     sorted_by_time = sorted(group, key=get_sort_key)
-    sorted_by_time = sorted(group, key=lambda x: x['Arrival'])
     
     # Find all possible descending subsequences of length 3+
     valid_sequences = []
@@ -174,7 +174,7 @@ def is_subsequence_contained(small_seq, large_seq):
     """
     if len(small_seq) >= len(large_seq):
         return False
-
+    
     # Convert Arrival to string format for comparison (handle both datetime and string formats)
     def format_arrival(arrival):
         if hasattr(arrival, 'isoformat'):
@@ -361,11 +361,18 @@ def run_model_g_detection(df, proximity_threshold=0.10):
     with col2:
         st.info(f"Grouping outputs within ±{proximity:.3f} of each other")
     
-    # Get display controls from session state (set in app.py)
-    show_today = st.session_state.get("app_today", True)
-    show_recent = st.session_state.get("app_recent", True) 
-    show_other_days = st.session_state.get("app_other", True)
-    show_rejected = st.session_state.get("app_rejected", False)
+    # Display control toggles
+    st.markdown("### 🎛️ Display Controls")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        show_today = st.checkbox("📅 Today [0]", value=True, key="g_show_today")
+    with col2:
+        show_recent = st.checkbox("📈 Recent [-1 to -5]", value=True, key="g_show_recent")
+    with col3:
+        show_other_days = st.checkbox("📉 Other Days [-6+]", value=True, key="g_show_other")
+    with col4:
+        show_rejected = st.checkbox("❌ Rejected Groups", value=False, key="g_show_rejected")
     
     # Run detection
     results = detect_model_g_sequences(df, proximity)
