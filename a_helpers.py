@@ -262,6 +262,10 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
             df = df[df["time"] >= cutoff]
 
     origins = extract_origins(df.columns)
+    
+    # Debug: Print origins found for big feed
+    if feed_type == "Big":
+        print(f"DEBUG: {feed_type} feed - Found {len(origins)} origins: {list(origins.keys())}")
     new_data_rows = []
 
     for origin, cols in origins.items():
@@ -376,6 +380,141 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                         })
 
     return new_data_rows
+
+# ✅ Apply Excel highlighting using xlsxwriter formatting
+def apply_excel_highlighting(workbook, worksheet, df, is_custom_ranges=False):
+    """Apply highlighting to Excel export using xlsxwriter formatting"""
+    
+    # Define formats
+    header_format = workbook.add_format({
+        'bold': True,
+        'text_wrap': True,
+        'valign': 'top',
+        'fg_color': '#D7E4BC',
+        'border': 1
+    })
+    
+    # Origin color formats
+    spain_saturn_format = workbook.add_format({'fg_color': '#39FF14'})  # Neon Green
+    jupiter_format = workbook.add_format({'fg_color': '#d1ecf1'})  # Light blue
+    kepler_format = workbook.add_format({'fg_color': '#ff4d00'})  # Red Orange
+    trinidad_tobago_format = workbook.add_format({'fg_color': '#f0cb59'})  # Gold
+    wasp_format = workbook.add_format({'fg_color': '#C0C0C0'})  # Light Gray
+    macedonia_format = workbook.add_format({'fg_color': '#e022d7'})  # Magenta
+    
+    # Day [0] format
+    day_zero_format = workbook.add_format({'fg_color': '#FFFF00'})  # Yellow
+    day_zero_bold_format = workbook.add_format({'fg_color': '#FFFF00', 'bold': True})  # Yellow + Bold
+    
+    # M# value formats
+    m0_format = workbook.add_format({'fg_color': '#E6E6FA', 'bold': True})  # Lavender
+    m40_format = workbook.add_format({'fg_color': '#D3D3D3', 'bold': True})  # Light gray
+    m54_format = workbook.add_format({'fg_color': '#ADD8E6', 'bold': True})  # Light blue
+    
+    # Zone formats (for custom ranges)
+    if is_custom_ranges:
+        zone_high_0to6_format = workbook.add_format({'fg_color': '#ff0000'})  # Bright red
+        zone_high_6to12_format = workbook.add_format({'fg_color': '#ff6666'})  # Medium red
+        zone_high_12to18_format = workbook.add_format({'fg_color': '#ffaaaa'})  # Light red
+        zone_high_18to24_format = workbook.add_format({'fg_color': '#ffdd44'})  # Light orange
+        zone_low_0to6_format = workbook.add_format({'fg_color': '#4444ff'})  # Bright blue
+        zone_low_6to12_format = workbook.add_format({'fg_color': '#7777ff'})  # Medium blue
+        zone_low_12to18_format = workbook.add_format({'fg_color': '#aaaaff'})  # Light blue
+        zone_low_18to24_format = workbook.add_format({'fg_color': '#dddddd'})  # Gray
+    
+    # Apply header formatting
+    for col_num, value in enumerate(df.columns.values):
+        worksheet.write(0, col_num, value, header_format)
+    
+    # Apply row formatting
+    for row_idx, (index, row) in enumerate(df.iterrows(), start=1):
+        # Origin highlighting
+        if 'Origin' in df.columns:
+            origin_col = df.columns.get_loc('Origin')
+            origin = str(row.get('Origin', '')).lower()
+            origin_format = None
+            
+            if origin in ['spain', 'saturn']:
+                origin_format = spain_saturn_format
+            elif origin == 'jupiter':
+                origin_format = jupiter_format
+            elif origin in ['kepler-62', 'kepler-44']:
+                origin_format = kepler_format
+            elif origin in ['trinidad', 'tobago']:
+                origin_format = trinidad_tobago_format
+            elif 'wasp' in origin:
+                origin_format = wasp_format
+            elif 'macedonia' in origin:
+                origin_format = macedonia_format
+            
+            if origin_format:
+                worksheet.write(row_idx, origin_col, row['Origin'], origin_format)
+        
+        # Day [0] highlighting
+        day_val = str(row.get('Day', '')).strip().lower()
+        if day_val == '[0]':
+            # Highlight Day column with bold
+            if 'Day' in df.columns:
+                day_col = df.columns.get_loc('Day')
+                worksheet.write(row_idx, day_col, row['Day'], day_zero_bold_format)
+            
+            # Highlight other columns (excluding Origin, M Name, M #)
+            for col_name in df.columns:
+                if col_name not in ['Origin', 'M Name', 'M #', 'Day']:
+                    col_idx = df.columns.get_loc(col_name)
+                    worksheet.write(row_idx, col_idx, row[col_name], day_zero_format)
+        
+        # M# value highlighting
+        if 'M #' in df.columns:
+            try:
+                m_val = int(row.get('M #', -999))
+                m_format = None
+                
+                if m_val == 0:
+                    m_format = m0_format
+                elif abs(m_val) == 40:
+                    m_format = m40_format
+                elif abs(m_val) == 54:
+                    m_format = m54_format
+                
+                if m_format:
+                    m_col = df.columns.get_loc('M #')
+                    worksheet.write(row_idx, m_col, row['M #'], m_format)
+                    
+                    if 'M Name' in df.columns:
+                        m_name_col = df.columns.get_loc('M Name')
+                        worksheet.write(row_idx, m_name_col, row['M Name'], m_format)
+            except:
+                pass
+        
+        # Zone highlighting for custom ranges
+        if is_custom_ranges and 'Zone' in df.columns and 'Range' in df.columns:
+            zone_val = str(row.get('Zone', ''))
+            range_val = str(row.get('Range', ''))
+            zone_col = df.columns.get_loc('Zone')
+            zone_format = None
+            
+            if 'High' in range_val:
+                if zone_val == '0 to 6':
+                    zone_format = zone_high_0to6_format
+                elif zone_val == '6 to 12':
+                    zone_format = zone_high_6to12_format
+                elif zone_val == '12 to 18':
+                    zone_format = zone_high_12to18_format
+                elif zone_val == '18 to 24':
+                    zone_format = zone_high_18to24_format
+            elif 'Low' in range_val:
+                if zone_val == '0 to 6':
+                    zone_format = zone_low_0to6_format
+                elif zone_val == '6 to 12':
+                    zone_format = zone_low_6to12_format
+                elif zone_val == '12 to 18':
+                    zone_format = zone_low_12to18_format
+                elif zone_val == '18 to 24':
+                    zone_format = zone_low_18to24_format
+            
+            if zone_format:
+                worksheet.write(row_idx, zone_col, row['Zone'], zone_format)
 
 # ✅ Enhanced highlighting for traveler reports with updated colors and restored M# highlighting
 def highlight_traveler_report(df):
