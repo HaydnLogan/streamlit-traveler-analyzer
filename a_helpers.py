@@ -699,5 +699,3 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
-
-
