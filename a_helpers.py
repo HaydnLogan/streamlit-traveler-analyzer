@@ -326,54 +326,51 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     "Diff @ Report": output - input_at_report if input_at_report is not None else None,
                     "Output": output
                 })
-            continue
-
-        for i in range(len(relevant_rows) - 1):
-            current = relevant_rows.iloc[i]
-            above = relevant_rows.iloc[i + 1]
-            changed = any(current[col] != above[col] for col in cols)
-            if changed:
-                arrival_time = current["time"]
-                H, L, C = current[cols[0]], current[cols[1]], current[cols[2]]
-                
-                # Calculate additional input values
-                input_at_arrival = get_input_at_time(small_df, arrival_time)
-                input_at_report = get_input_at_time(small_df, report_time)
-                
-                for _, row in measurements.iterrows():
-                    # Use flexible measurement value extraction
-                    m_value = get_measurement_value(row)
-                    output = calculate_pivot(H, L, C, m_value)
-                    day = get_day_index(arrival_time, report_time, start_hour)
+        else:
+            # Process regular (non-special) origins
+            for i in range(len(relevant_rows) - 1):
+                current = relevant_rows.iloc[i]
+                above = relevant_rows.iloc[i + 1]
+                changed = any(current[col] != above[col] for col in cols)
+                if changed:
+                    arrival_time = current["time"]
+                    H, L, C = current[cols[0]], current[cols[1]], current[cols[2]]
                     
-                    # Format arrival time into separate columns
-                    try:
-                        day_abbrev = arrival_time.strftime('%a')  # Mon, Tue, Wed, etc.
-                        arrival_excel = arrival_time.strftime('%d-%b-%Y %H:%M')  # Excel-friendly format
-                    except:
-                        day_abbrev = ""
-                        arrival_excel = str(arrival_time)
+                    # Calculate additional input values
+                    input_at_arrival = get_input_at_time(small_df, arrival_time)
+                    input_at_report = get_input_at_time(small_df, report_time)
                     
-                    new_data_rows.append({
-                        "Feed": feed_type,
-                        "ddd": day_abbrev,
-                        "Arrival": arrival_excel,
-                        "Arrival_datetime": arrival_time,  # Keep datetime for filtering
-                        "Day": day,
-                        "Origin": origin,
-                        "M Name": row.get("M Name", row.get("m name", "")),
-                        "M #": row.get("M #", row.get("m #", m_value)),
-                        "R #": row.get("R #", row.get("r #", "")),
-                        "Tag": row.get("Tag", row.get("tag", "")),
-                        "Family": row.get("Family", row.get("family", "")),
-                        f"Input @ {start_hour:02d}:00": input_value_at_start,
-                        f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
-                        "Input @ Arrival": input_at_arrival,
-                        "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
-                        "Input @ Report": input_at_report,
-                        "Diff @ Report": output - input_at_report if input_at_report is not None else None,
-                        "Output": output
-                    })
+                        for _, row in measurements.iterrows():
+                        output = calculate_pivot(H, L, C, row["m value"])
+                        day = get_day_index(arrival_time, report_time, start_hour)
+                        
+                        # Format arrival time into separate columns
+                        try:
+                            day_abbrev = arrival_time.strftime('%a')  # Mon, Tue, Wed, etc.
+                            arrival_excel = arrival_time.strftime('%d-%b-%Y %H:%M')  # Excel-friendly format
+                        except:
+                            day_abbrev = ""
+                            arrival_excel = str(arrival_time)
+                        
+                            new_data_rows.append({
+                            "Feed": feed_type,
+                            "ddd": day_abbrev,
+                            "Arrival": arrival_excel,
+                            "Day": day,
+                            "Origin": origin,
+                            "M Name": row["m name"],
+                            "M #": row["m #"],
+                            "R #": row["r #"],
+                            "Tag": row["tag"],
+                            "Family": row["family"],
+                            f"Input @ {start_hour:02d}:00": input_value_at_start,
+                            f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
+                            "Input @ Arrival": input_at_arrival,
+                            "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
+                            "Input @ Report": input_at_report,
+                            "Diff @ Report": output - input_at_report if input_at_report is not None else None,
+                            "Output": output
+                        })
 
     return new_data_rows
 
@@ -540,3 +537,4 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
