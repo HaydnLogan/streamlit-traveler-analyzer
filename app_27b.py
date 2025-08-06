@@ -10,7 +10,7 @@ from pandas import ExcelWriter
 pd.set_option("styler.render.max_elements", 2000000)
 
 # Import functions - these paths are confirmed working
-from a_helpers import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time, get_input_at_day_start, highlight_custom_traveler_report
+from a_helpers import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time, get_input_at_day_start, highlight_custom_traveler_report, apply_excel_highlighting
 
 # Model imports - work in your environment, fallbacks for this environment
 try:
@@ -509,8 +509,9 @@ elif small_feed_file and big_feed_file and measurement_file:
                         workbook = writer.book
                         worksheet = writer.sheets[tab_label.replace(" ", "_")]
                         
-                        # Apply Excel highlighting (simplified approach)
-                        # Will implement proper highlighting after fixing main issue
+                        # Apply Excel highlighting using xlsxwriter formatting
+                        apply_excel_highlighting(workbook, worksheet, tab_df_filtered[display_columns], 
+                                                use_custom_ranges and filter_ranges)
                     
                     excel_buffer.seek(0)
                     st.download_button(
