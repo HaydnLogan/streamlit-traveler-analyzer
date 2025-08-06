@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import datetime as dt
 from dateutil import parser
 
@@ -263,9 +264,7 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
 
     origins = extract_origins(df.columns)
     
-    # Debug: Print origins found for big feed
-    if feed_type == "Big":
-        print(f"DEBUG: {feed_type} feed - Found {len(origins)} origins: {list(origins.keys())}")
+
     new_data_rows = []
 
     for origin, cols in origins.items():
@@ -379,6 +378,8 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                             "Output": output
                         })
 
+
+
     return new_data_rows
 
 # ✅ Apply Excel highlighting using xlsxwriter formatting
@@ -448,7 +449,10 @@ def apply_excel_highlighting(workbook, worksheet, df, is_custom_ranges=False):
                 origin_format = macedonia_format
             
             if origin_format:
-                worksheet.write(row_idx, origin_col, row['Origin'], origin_format)
+                value = row['Origin']
+                if pd.isna(value):
+                    value = ''
+                worksheet.write(row_idx, origin_col, value, origin_format)
         
         # Day [0] highlighting
         day_val = str(row.get('Day', '')).strip().lower()
@@ -456,13 +460,20 @@ def apply_excel_highlighting(workbook, worksheet, df, is_custom_ranges=False):
             # Highlight Day column with bold
             if 'Day' in df.columns:
                 day_col = df.columns.get_loc('Day')
-                worksheet.write(row_idx, day_col, row['Day'], day_zero_bold_format)
+                value = row['Day']
+                if pd.isna(value):
+                    value = ''
+                worksheet.write(row_idx, day_col, value, day_zero_bold_format)
             
             # Highlight other columns (excluding Origin, M Name, M #)
             for col_name in df.columns:
                 if col_name not in ['Origin', 'M Name', 'M #', 'Day']:
                     col_idx = df.columns.get_loc(col_name)
-                    worksheet.write(row_idx, col_idx, row[col_name], day_zero_format)
+                    # Handle NaN/INF values for Excel compatibility
+                    value = row[col_name]
+                    if pd.isna(value) or (isinstance(value, float) and (np.isinf(value) or np.isnan(value))):
+                        value = ''  # Replace NaN/INF with empty string
+                    worksheet.write(row_idx, col_idx, value, day_zero_format)
         
         # M# value highlighting
         if 'M #' in df.columns:
@@ -479,11 +490,17 @@ def apply_excel_highlighting(workbook, worksheet, df, is_custom_ranges=False):
                 
                 if m_format:
                     m_col = df.columns.get_loc('M #')
-                    worksheet.write(row_idx, m_col, row['M #'], m_format)
+                    m_value = row['M #']
+                    if pd.isna(m_value) or (isinstance(m_value, float) and (np.isinf(m_value) or np.isnan(m_value))):
+                        m_value = ''
+                    worksheet.write(row_idx, m_col, m_value, m_format)
                     
                     if 'M Name' in df.columns:
                         m_name_col = df.columns.get_loc('M Name')
-                        worksheet.write(row_idx, m_name_col, row['M Name'], m_format)
+                        m_name_value = row['M Name']
+                        if pd.isna(m_name_value):
+                            m_name_value = ''
+                        worksheet.write(row_idx, m_name_col, m_name_value, m_format)
             except:
                 pass
         
@@ -514,7 +531,10 @@ def apply_excel_highlighting(workbook, worksheet, df, is_custom_ranges=False):
                     zone_format = zone_low_18to24_format
             
             if zone_format:
-                worksheet.write(row_idx, zone_col, row['Zone'], zone_format)
+                zone_value = row['Zone']
+                if pd.isna(zone_value):
+                    zone_value = ''
+                worksheet.write(row_idx, zone_col, zone_value, zone_format)
 
 # ✅ Enhanced highlighting for traveler reports with updated colors and restored M# highlighting
 def highlight_traveler_report(df):
