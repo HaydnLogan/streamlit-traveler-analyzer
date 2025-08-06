@@ -324,6 +324,10 @@ elif small_feed_file and big_feed_file and measurement_file:
                 big_data = process_feed(big_df, "Big", report_time, scope_type, scope_value,
                                       day_start_hour, current_measurements_df, input_value_at_start, small_df)
                 
+                # Debug: Check feed processing results
+                st.info(f"Small feed processed: {len(small_data)} entries")
+                st.info(f"Big feed processed: {len(big_data)} entries")
+                
                 # Combine processed data for this measurement tab
                 tab_data = small_data + big_data
                 if tab_data:
@@ -377,6 +381,16 @@ elif small_feed_file and big_feed_file and measurement_file:
                             # Debug: Show data before filtering
                             original_count = len(tab_df_filtered)
                             
+                            # Show sample of outputs before filtering
+                            if 'Output' in tab_df_filtered.columns:
+                                output_values = sorted(tab_df_filtered['Output'].unique())
+                                st.info(f"Sample outputs before filtering: {output_values[:10]}...{output_values[-10:] if len(output_values) > 10 else ''}")
+                            
+                            # Check feed distribution before filtering
+                            if 'Feed' in tab_df_filtered.columns:
+                                feed_counts = tab_df_filtered['Feed'].value_counts()
+                                st.info(f"Feed distribution before filtering: {dict(feed_counts)}")
+                            
                             # Filter data to custom ranges
                             mask = pd.Series([False] * len(tab_df_filtered))
                             for range_info in filter_ranges:
@@ -388,6 +402,12 @@ elif small_feed_file and big_feed_file and measurement_file:
                             
                             tab_df_filtered = tab_df_filtered[mask]
                             filtered_count = len(tab_df_filtered)
+                            
+                            # Check feed distribution after filtering
+                            if 'Feed' in tab_df_filtered.columns and filtered_count > 0:
+                                feed_counts_after = tab_df_filtered['Feed'].value_counts()
+                                st.info(f"Feed distribution after filtering: {dict(feed_counts_after)}")
+                            
                             st.info(f"Total entries: {original_count} → {filtered_count} after custom range filtering")
                             
                             # Add Range and Zone columns
