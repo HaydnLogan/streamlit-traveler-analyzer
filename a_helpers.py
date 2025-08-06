@@ -412,16 +412,15 @@ def apply_excel_highlighting(workbook, worksheet, df, is_custom_ranges=False):
     m40_format = workbook.add_format({'fg_color': '#D3D3D3', 'bold': True})  # Light gray
     m54_format = workbook.add_format({'fg_color': '#ADD8E6', 'bold': True})  # Light blue
     
-    # Zone formats (for custom ranges)
-    if is_custom_ranges:
-        zone_high_0to6_format = workbook.add_format({'fg_color': '#ff0000'})  # Bright red
-        zone_high_6to12_format = workbook.add_format({'fg_color': '#ff6666'})  # Medium red
-        zone_high_12to18_format = workbook.add_format({'fg_color': '#ffaaaa'})  # Light red
-        zone_high_18to24_format = workbook.add_format({'fg_color': '#ffdd44'})  # Light orange
-        zone_low_0to6_format = workbook.add_format({'fg_color': '#4444ff'})  # Bright blue
-        zone_low_6to12_format = workbook.add_format({'fg_color': '#7777ff'})  # Medium blue
-        zone_low_12to18_format = workbook.add_format({'fg_color': '#aaaaff'})  # Light blue
-        zone_low_18to24_format = workbook.add_format({'fg_color': '#dddddd'})  # Gray
+    # Zone formats (always define, used conditionally)
+    zone_high_0to6_format = workbook.add_format({'fg_color': '#ff0000'})  # Bright red
+    zone_high_6to12_format = workbook.add_format({'fg_color': '#ff6666'})  # Medium red
+    zone_high_12to18_format = workbook.add_format({'fg_color': '#ffaaaa'})  # Light red
+    zone_high_18to24_format = workbook.add_format({'fg_color': '#ffdd44'})  # Light orange
+    zone_low_0to6_format = workbook.add_format({'fg_color': '#4444ff'})  # Bright blue
+    zone_low_6to12_format = workbook.add_format({'fg_color': '#7777ff'})  # Medium blue
+    zone_low_12to18_format = workbook.add_format({'fg_color': '#aaaaff'})  # Light blue
+    zone_low_18to24_format = workbook.add_format({'fg_color': '#dddddd'})  # Gray
     
     # Apply header formatting
     for col_num, value in enumerate(df.columns.values):
