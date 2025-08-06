@@ -423,16 +423,28 @@ elif small_feed_file and big_feed_file and measurement_file:
                                 st.info(f"Feed distribution before filtering: {dict(feed_counts)}")
                             
                             # Filter data to custom ranges
-                            mask = pd.Series([False] * len(tab_df_filtered))
+                            mask = pd.Series([False] * len(tab_df_filtered), index=tab_df_filtered.index)
                             for range_info in filter_ranges:
                                 range_mask = (tab_df_filtered['Output'] >= range_info['lower']) & (tab_df_filtered['Output'] <= range_info['upper'])
                                 mask = mask | range_mask
                                 # Debug info for each range
                                 range_count = range_mask.sum()
                                 st.info(f"Range {range_info['name']}: [{range_info['lower']:.1f}, {range_info['upper']:.1f}] - {range_count} entries")
+                                
+                                # Show which origins are in this range
+                                if range_count > 0:
+                                    range_data = tab_df_filtered[range_mask]
+                                    origins_in_range = sorted(range_data['Origin'].unique())
+                                    st.info(f"Origins in {range_info['name']}: {origins_in_range}")
+                                    
+                                    # Show breakdown by origin
+                                    origin_counts = range_data['Origin'].value_counts()
+                                    st.info(f"Entries per origin in {range_info['name']}: {dict(origin_counts)}")
                             
                             tab_df_filtered = tab_df_filtered[mask]
                             filtered_count = len(tab_df_filtered)
+                            
+
                             
                             # Check feed distribution after filtering
                             if 'Feed' in tab_df_filtered.columns and filtered_count > 0:
@@ -524,12 +536,31 @@ elif small_feed_file and big_feed_file and measurement_file:
                     st.warning(f"No data generated for {tab_label}")
         
         # Use the primary measurement tab for main processing
-        # Process small and big feeds (without debug messages)
+        # Process small and big feeds with debug info
+        st.info("🔍 Processing feeds - checking origins...")
+        
         small_data = process_feed(small_df, "Small", report_time, scope_type, scope_value, 
                                 day_start_hour, measurements_df, input_value_at_start, small_df)
         
         big_data = process_feed(big_df, "Big", report_time, scope_type, scope_value,
                               day_start_hour, measurements_df, input_value_at_start, small_df)
+        
+        # Show debug info about big feed processing
+        st.info(f"Debug: Small feed generated {len(small_data)} rows")
+        st.info(f"Debug: Big feed generated {len(big_data)} rows")
+        
+        # Display big feed debug info if available
+        try:
+            from a_helpers import big_feed_debug_info
+            if 'big_feed_debug_info' in globals() or hasattr(a_helpers, 'big_feed_debug_info'):
+                debug_info = getattr(a_helpers, 'big_feed_debug_info', {})
+                if debug_info:
+                    st.info(f"🔍 Big Feed Analysis:")
+                    st.info(f"- Total columns: {debug_info.get('column_count', 'unknown')}")
+                    st.info(f"- Origins detected: {debug_info.get('total_origins', 'unknown')}")
+                    st.info(f"- Origin names: {debug_info.get('origin_names', [])}")
+        except:
+            pass
         
         # Combine processed data
         all_data = small_data + big_data
