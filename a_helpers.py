@@ -313,11 +313,11 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     "Arrival_datetime": arrival_time,  # Keep datetime for filtering
                     "Day": day,
                     "Origin": origin,
-                    "M Name": row.get("M Name", row.get("m name", "")),
-                    "M #": row.get("M #", row.get("m #", m_value)),
-                    "R #": row.get("R #", row.get("r #", "")),
-                    "Tag": row.get("Tag", row.get("tag", "")),
-                    "Family": row.get("Family", row.get("family", "")),
+                    "M Name": row["m name"],
+                    "M #": row["m #"],
+                    "R #": row["r #"],
+                    "Tag": row["tag"],
+                    "Family": row["family"],
                     f"Input @ {start_hour:02d}:00": input_value_at_start,
                     f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
                     "Input @ Arrival": input_at_arrival,
@@ -340,8 +340,10 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                     input_at_arrival = get_input_at_time(small_df, arrival_time)
                     input_at_report = get_input_at_time(small_df, report_time)
                     
-                        for _, row in measurements.iterrows():
-                        output = calculate_pivot(H, L, C, row["m value"])
+                    for _, row in measurements.iterrows():
+                        # Use flexible measurement value extraction
+                        m_value = get_measurement_value(row)
+                        output = calculate_pivot(H, L, C, m_value)
                         day = get_day_index(arrival_time, report_time, start_hour)
                         
                         # Format arrival time into separate columns
@@ -352,10 +354,11 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                             day_abbrev = ""
                             arrival_excel = str(arrival_time)
                         
-                            new_data_rows.append({
+                        new_data_rows.append({
                             "Feed": feed_type,
                             "ddd": day_abbrev,
                             "Arrival": arrival_excel,
+                            "Arrival_datetime": arrival_time,  # Keep datetime for filtering
                             "Day": day,
                             "Origin": origin,
                             "M Name": row["m name"],
@@ -537,4 +540,5 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
 
