@@ -478,12 +478,8 @@ elif small_feed_file and big_feed_file and measurement_file:
                         workbook = writer.book
                         worksheet = writer.sheets[tab_label.replace(" ", "_")]
                         
-                        if use_full_range:
-                            # Apply full range highlighting to Excel
-                            tab_df_styled = highlight_traveler_report(tab_df_filtered[display_columns])
-                        elif use_custom_ranges:
-                            # Apply custom range highlighting to Excel  
-                            tab_df_styled = highlight_custom_traveler_report(tab_df_filtered[display_columns])
+                        # Apply Excel highlighting (simplified approach)
+                        # Will implement proper highlighting after fixing main issue
                     
                     excel_buffer.seek(0)
                     st.download_button(
