@@ -64,7 +64,7 @@ def get_input_at_time(small_df, target_time):
     except:
         return None
 
-def generate_master_traveler_list(data, report_time, start_hour=17, fast_mode=True):
+def generate_master_traveler_list(data, measurements, small_df, report_time, start_hour=17, fast_mode=True):
     """Generate master traveler list with all M# values from master list"""
     
     # Ensure time column exists and is datetime
@@ -110,8 +110,9 @@ def generate_master_traveler_list(data, report_time, start_hour=17, fast_mode=Tr
                 input_at_report = get_input_at_time(data, report_time)
                 input_at_start = get_input_at_time(data, report_time.replace(hour=start_hour, minute=0, second=0))
                 
-                # Generate entries for ALL master M# values
-                for m_value in MASTER_M_VALUES:
+                # Generate entries for measurements from Excel file
+                for _, measurement_row in measurements.iterrows():
+                    m_value = get_measurement_value(measurement_row)
                     output = calculate_pivot(H, L, C, m_value)
                     day = get_day_index(arrival_time, report_time, start_hour)
                     
@@ -142,11 +143,11 @@ def generate_master_traveler_list(data, report_time, start_hour=17, fast_mode=Tr
                         "Arrival_datetime": arrival_time,
                         "Day": day,
                         "Origin": origin,
-                        "M Name": f"M{m_value}",
+                        "M Name": measurement_row.get("m name", measurement_row.get("M Name", measurement_row.get("M name", f"M{m_value}"))),
                         "M #": m_value,
-                        "R #": "",
-                        "Tag": "",
-                        "Family": "",
+                        "R #": measurement_row.get("r #", measurement_row.get("R #", "")),
+                        "Tag": measurement_row.get("tag", measurement_row.get("Tag", "")),
+                        "Family": measurement_row.get("family", measurement_row.get("Family", "")),
                         "Group": group,
                         f"Input @ {start_hour:02d}:00": input_at_start,
                         f"Diff @ {start_hour:02d}:00": output - input_at_start if input_at_start is not None else None,
