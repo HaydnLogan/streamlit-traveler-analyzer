@@ -21,7 +21,7 @@ from models.simple_mega_report2 import run_simple_single_line_analysis
 # 🔌 Streamlit interface (UI + orchestration)
 
 st.set_page_config(layout="wide")
-st.header("🧬 Data Feed Processor + Model A/B/C Detector. v26c1")
+st.header("🧬 Data Processor + Model A/B/C/G Detector. v27a")
 
 # 📤 Uploads
 small_feed_file = st.file_uploader("Upload small feed", type="csv")
@@ -374,13 +374,21 @@ elif small_feed_file and big_feed_file and measurement_file:
                             filter_ranges.append({"name": "Low 2", "type": "low", "upper": low2 + 24, "lower": low2})
                         
                         if filter_ranges:
+                            # Debug: Show data before filtering
+                            original_count = len(tab_df_filtered)
+                            
                             # Filter data to custom ranges
                             mask = pd.Series([False] * len(tab_df_filtered))
                             for range_info in filter_ranges:
                                 range_mask = (tab_df_filtered['Output'] >= range_info['lower']) & (tab_df_filtered['Output'] <= range_info['upper'])
                                 mask = mask | range_mask
+                                # Debug info for each range
+                                range_count = range_mask.sum()
+                                st.info(f"Range {range_info['name']}: [{range_info['lower']:.1f}, {range_info['upper']:.1f}] - {range_count} entries")
                             
                             tab_df_filtered = tab_df_filtered[mask]
+                            filtered_count = len(tab_df_filtered)
+                            st.info(f"Total entries: {original_count} → {filtered_count} after custom range filtering")
                             
                             # Add Range and Zone columns
                             tab_df_filtered['Range'] = tab_df_filtered['Output'].apply(
@@ -390,10 +398,24 @@ elif small_feed_file and big_feed_file and measurement_file:
                             def get_zone(output_val):
                                 for range_info in filter_ranges:
                                     if range_info['lower'] <= output_val <= range_info['upper']:
-                                        range_span = range_info['upper'] - range_info['lower']
-                                        distance_from_lower = output_val - range_info['lower']
-                                        return f"Zone {min(int((distance_from_lower / range_span) * 4), 3) + 1}"
-                                return "Zone 1"
+                                        # Calculate distance using the same logic as shared_updated.py
+                                        if range_info['type'] == 'high':
+                                            # For highs, measure distance from upper limit
+                                            distance = range_info['upper'] - output_val
+                                        else:
+                                            # For lows, measure distance from lower limit
+                                            distance = output_val - range_info['lower']
+                                        
+                                        # Apply the correct zone labels
+                                        if distance <= 6:
+                                            return "0 to 6"
+                                        elif distance <= 12:
+                                            return "6 to 12"
+                                        elif distance <= 18:
+                                            return "12 to 18"
+                                        else:
+                                            return "18 to 24"
+                                return "0 to 6"
                             
                             tab_df_filtered['Zone'] = tab_df_filtered['Output'].apply(get_zone)
                             
