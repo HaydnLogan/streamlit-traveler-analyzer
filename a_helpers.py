@@ -38,6 +38,236 @@ FAMILY_DELTA_TRAVELERS = {3, -3, 103, -103}
 # Family Echo travelers (M# values of 1, -1, 111, -111)
 FAMILY_ECHO_TRAVELERS = {1, -1, 111, -111}
 
+# New Grouping Classifications
+# Group 1a (empty)
+GROUP_1A_TRAVELERS = set()
+
+# Group 1b (complete integer sequence)
+GROUP_1B_TRAVELERS = {111, 107, 103, 96, 87, 77, 68, 60, 55, 50, 43, 41, 40, 39, 36, 30, 22, 14, 10, 6, 5, 3, 2, 1, 0, 
+                      -1, -2, -3, -5, -6, -10, -14, -22, -30, -36, -39, -40, -41, -43, -50, -55, -60, -68, -77, -87, -96, -103, -107, -111}
+
+# Group 2a (decimal sequence - higher ranges)
+GROUP_2A_TRAVELERS = {101.0, 98.2, 99.1, 98.2, 98.1, 97.2, 97.1, 96.1, 95.5, 95, 93.5, 92, 90.5, 89, 86.5, 85, 83.0, 80, 78.01, 74, 71, 67, 62, 54, 40, 0,
+                      -40, -54, -62, -67, -71, -74, -78.01, -80, -83.0, -85, -86.5, -89, -90.5, -92, -93.5, -95, -95.5, -96.1, -97.1, -97.2, -98.1, -98.2, -99.1, -98.2, -101.0}
+
+# Group 2b (extended decimal sequence)
+GROUP_2B_TRAVELERS = {101.0, 98.2, 99.1, 98.2, 98.1, 97.2, 97.1, 96.1, 95.5, 95, 93.5, 92, 90.5, 89, 86.5, 85, 83.0, 80, 78.01, 74, 71, 67, 62, 57, 54, 47, 45, 40, 38, 33, 27, 24, 15, 12, 0,
+                      -12, -15, -24, -27, -33, -38, -40, -45, -47, -54, -57, -62, -67, -71, -74, -78.01, -80, -83.0, -85, -86.5, -89, -90.5, -92, -93.5, -95, -95.5, -96.1, -97.1, -97.2, -98.1, -98.2, -99.1, -98.2, -101.0}
+
+def generate_master_traveler_list(data, measurements, small_df, report_time, start_hour=17, fast_mode=True):
+    """Generate master traveler list using first measurement tab, then filter for 4 sub-reports"""
+    
+    # Ensure time column exists and is datetime
+    if 'time' not in data.columns:
+        return {}
+    
+    data['time'] = pd.to_datetime(data['time'])
+    
+    # Define measurement columns
+    price_cols = ['high', 'low', 'close']
+    if not all(col in data.columns for col in price_cols):
+        return {}
+    
+    # Get unique origins
+    origins = data['origin'].unique() if 'origin' in data.columns else ['default']
+    
+    # Process each origin to create master list
+    all_traveler_data = []
+    
+    for origin in origins:
+        origin_data = data[data['origin'] == origin] if 'origin' in data.columns else data
+        
+        if len(origin_data) < 2:
+            continue
+            
+        # Sort by time
+        origin_data = origin_data.sort_values('time')
+        
+        # Find price changes
+        for i in range(len(origin_data) - 1):
+            current = origin_data.iloc[i]
+            next_row = origin_data.iloc[i + 1]
+            
+            # Check if any price changed
+            price_changed = any(current[col] != next_row[col] for col in price_cols)
+            
+            if price_changed:
+                arrival_time = current['time']
+                H, L, C = current['high'], current['low'], current['close']
+                
+                # Calculate input values
+                input_at_arrival = get_input_at_time(small_df, arrival_time)
+                input_at_report = get_input_at_time(small_df, report_time)
+                input_at_start = get_input_at_time(small_df, report_time.replace(hour=start_hour, minute=0, second=0))
+                
+                # Generate entries for measurements from Excel file
+                for _, measurement_row in measurements.iterrows():
+                    m_value = get_measurement_value(measurement_row)
+                    output = calculate_pivot(H, L, C, m_value)
+                    day = get_day_index(arrival_time, report_time, start_hour)
+                    
+                    # Format arrival time
+                    try:
+                        day_abbrev = arrival_time.strftime('%a')
+                        arrival_excel = arrival_time.strftime('%d-%b-%Y %H:%M')
+                    except:
+                        day_abbrev = ""
+                        arrival_excel = str(arrival_time)
+                    
+                    # Classify group
+                    group = classify_traveler_group(m_value)
+                    
+                    traveler_entry = {
+                        "Feed": "auto",
+                        "ddd": day_abbrev,
+                        "Arrival": arrival_excel,
+                        "Arrival_datetime": arrival_time,
+                        "Day": day,
+                        "Origin": origin,
+                        "M Name": measurement_row.get("m name", measurement_row.get("M Name", measurement_row.get("M name", f"M{m_value}"))),
+                        "M #": m_value,
+                        "R #": measurement_row.get("r #", measurement_row.get("R #", "")),
+                        "Tag": measurement_row.get("tag", measurement_row.get("Tag", "")),
+                        "Family": measurement_row.get("family", measurement_row.get("Family", "")),
+                        "Group": group,
+                        f"Input @ {start_hour:02d}:00": input_at_start,
+                        f"Diff @ {start_hour:02d}:00": output - input_at_start if input_at_start is not None else None,
+                        "Input @ Arrival": input_at_arrival,
+                        "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
+                        "Input @ Report": input_at_report,
+                        "Diff @ Report": output - input_at_report if input_at_report is not None else None,
+                        "Output": output
+                    }
+                    
+                    all_traveler_data.append(traveler_entry)
+    
+    # Convert to DataFrame
+    master_df = pd.DataFrame(all_traveler_data)
+    
+    if master_df.empty:
+        return {}
+    
+    # Remove Arrival_datetime for final output
+    master_display_df = master_df.drop('Arrival_datetime', axis=1) if 'Arrival_datetime' in master_df.columns else master_df
+    
+    # Filter into 4 sub-reports
+    reports = {}
+    
+    # Group 1a
+    group_1a_df = master_display_df[master_display_df['Group'] == 'Group 1a'].copy()
+    reports["Grp 1a"] = group_1a_df
+    
+    # Group 1b  
+    group_1b_df = master_display_df[master_display_df['Group'] == 'Group 1b'].copy()
+    reports["Grp 1b"] = group_1b_df
+    
+    # Group 2a
+    group_2a_df = master_display_df[master_display_df['Group'] == 'Group 2a'].copy()
+    reports["Grp 2a"] = group_2a_df
+    
+    # Group 2b
+    group_2b_df = master_display_df[master_display_df['Group'] == 'Group 2b'].copy()
+    reports["Grp 2b"] = group_2b_df
+    
+    return reports
+
+def get_measurement_value(row):
+    """Extract measurement value from row using flexible column naming"""
+    for col in ['m #', 'M #', 'M value', 'm value', 'measurement']:
+        if col in row and pd.notna(row[col]):
+            return float(row[col])
+    return 0
+
+def calculate_pivot(H, L, C, m_value):
+    """Calculate output using pivot formula"""
+    try:
+        H, L, C, m_value = float(H), float(L), float(C), float(m_value)
+        return ((H + L + C) / 3) + (m_value / 1000)
+    except:
+        return 0
+
+def get_day_index(arrival_time, report_time, start_hour):
+    """Calculate day index based on arrival and report times"""
+    try:
+        # Convert to datetime if needed
+        if isinstance(arrival_time, str):
+            arrival_time = pd.to_datetime(arrival_time)
+        if isinstance(report_time, str):
+            report_time = pd.to_datetime(report_time)
+        
+        # Calculate day difference
+        day_diff = (report_time.date() - arrival_time.date()).days
+        return f"[{day_diff}]"
+    except:
+        return "[0]"
+
+def classify_traveler_group(m_value):
+    """Classify M# value into new grouping system"""
+    try:
+        # Handle both int and float values
+        m_val = float(m_value) if not pd.isna(m_value) else None
+        if m_val is None:
+            return "Unclassified"
+            
+        # Check Group 1a (empty)
+        if m_val in GROUP_1A_TRAVELERS:
+            return "Group 1a"
+            
+        # Check Group 1b (complete integer sequence)
+        if m_val in GROUP_1B_TRAVELERS:
+            return "Group 1b"
+            
+        # Check Group 2a (decimal sequence - higher ranges)
+        if m_val in GROUP_2A_TRAVELERS:
+            return "Group 2a"
+            
+        # Check Group 2b (extended decimal sequence)
+        if m_val in GROUP_2B_TRAVELERS:
+            return "Group 2b"
+            
+        return "Unclassified"
+    except:
+        return "Unclassified"
+
+def get_traveler_family_summary(m_value):
+    """Get comprehensive traveler family classification"""
+    families = []
+    try:
+        m_val = float(m_value) if not pd.isna(m_value) else None
+        if m_val is None:
+            return "None"
+            
+        # Check all family classifications
+        if m_val in STRENGTH_TRAVELERS:
+            families.append("Strength")
+        if m_val in TAG_B_TRAVELERS:
+            families.append("Tag B")
+        if m_val in FAMILY_GRY_TRAVELERS:
+            families.append("Gry")
+        if m_val in FAMILY_ORN_TRAVELERS:
+            families.append("Orn")
+        if m_val in FAMILY_BLU_TRAVELERS:
+            families.append("Blu")
+        if m_val in FAMILY_ALPHA_TRAVELERS:
+            families.append("Alpha")
+        if m_val in FAMILY_BRAVO_TRAVELERS:
+            families.append("Bravo")
+        if m_val in FAMILY_CHARLIE_TRAVELERS:
+            families.append("Charlie")
+        if m_val in FAMILY_DELTA_TRAVELERS:
+            families.append("Delta")
+        if m_val in FAMILY_ECHO_TRAVELERS:
+            families.append("Echo")
+            
+        # Add new groupings
+        group = classify_traveler_group(m_val)
+        if group != "Unclassified":
+            families.append(group)
+            
+        return " | ".join(families) if families else "Unclassified"
+    except:
+        return "Error"
+
 def clean_timestamp(value):
     try:
         # Handle ISO format with timezone (e.g., 2025-07-24T15:30:00-04:00)
