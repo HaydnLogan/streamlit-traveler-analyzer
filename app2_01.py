@@ -15,18 +15,28 @@ from a_helpers2 import (
 st.title("🚀 Master Traveler List Performance Test")
 st.write("Testing master list approach vs individual tab processing")
 
-# File upload
-uploaded_file = st.file_uploader("Upload your data file", type=['csv', 'xlsx'])
+# File uploads - same as original app
+st.subheader("📁 File Upload")
+col1, col2, col3 = st.columns(3)
 
-if uploaded_file:
-    # Load data
-    if uploaded_file.name.endswith('.xlsx'):
-        try:
-            data = pd.read_excel(uploaded_file, sheet_name=0)
-        except:
-            data = pd.read_csv(uploaded_file)
-    else:
-        data = pd.read_csv(uploaded_file)
+with col1:
+    data_file = st.file_uploader("Upload Data CSV", type=['csv'], key="data")
+with col2:
+    meas_file = st.file_uploader("Upload Measurements Excel", type=['xlsx'], key="meas") 
+with col3:
+    small_file = st.file_uploader("Upload Small CSV", type=['csv'], key="small")
+
+if data_file and meas_file and small_file:
+    # Load all three files
+    try:
+        data = pd.read_csv(data_file)
+        measurements = pd.read_excel(meas_file, sheet_name=0)  # Use first sheet for master list
+        small_df = pd.read_csv(small_file)
+        
+        st.success("✅ All 3 files loaded successfully!")
+    except Exception as e:
+        st.error(f"Error loading files: {str(e)}")
+        st.stop()
     
     st.write(f"📊 Data loaded: {len(data)} rows, {len(data.columns)} columns")
     
@@ -53,6 +63,8 @@ if uploaded_file:
             # Generate master traveler list with all M# values
             master_list = generate_master_traveler_list(
                 data, 
+                measurements,
+                small_df,
                 report_datetime, 
                 start_hour,
                 fast_mode=fast_mode
@@ -127,7 +139,10 @@ if uploaded_file:
             st.code(traceback.format_exc())
 
 else:
-    st.info("👆 Please upload a CSV or Excel file to begin testing")
+    st.info("👆 Please upload all 3 files to begin testing:")
+    st.write("1. **Data CSV**: Main time series data with high/low/close prices")
+    st.write("2. **Measurements Excel**: File with M# values and measurement definitions") 
+    st.write("3. **Small CSV**: Input data for calculations")
     
     # Show group information
     st.write("📋 **Traveler Group Definitions:**")
@@ -146,3 +161,4 @@ else:
         
         st.write("**Group 2b** (70 values):")
         st.code(str(GROUP_2B_VALUES[:10]) + "...")
+
