@@ -12,13 +12,16 @@ from pandas import ExcelWriter
 pd.set_option("styler.render.max_elements", 2000000)
 
 # Import functions - these paths are confirmed working
-from a_helpers import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time, get_input_at_day_start, highlight_custom_traveler_report, apply_excel_highlighting, generate_master_traveler_list
+from a_helpers import clean_timestamp, process_feed, get_input_value, highlight_traveler_report, get_input_at_time, get_input_at_day_start, highlight_custom_traveler_report, apply_excel_highlighting, generate_master_traveler_list, GROUP_1A_TRAVELERS, GROUP_1B_TRAVELERS, GROUP_2A_TRAVELERS, GROUP_2B_TRAVELERS
 
 # Model imports - work in your environment, fallbacks for this environment
 try:
-    from models.models_g import run_model_g_detection
+    from models_g_updated import run_model_g_detection
 except ImportError:
-    from model_g_detector import run_model_g_detection
+    try:
+        from models.models_g import run_model_g_detection
+    except ImportError:
+        from model_g_detector import run_model_g_detection
 
 try:
     from models.models_a_today import run_a_model_detection_today
@@ -374,29 +377,55 @@ elif small_feed_file and big_feed_file and measurement_file:
         # Create master list with performance timing
         with st.spinner("Creating master traveler list and filtering for 4 sub-reports..."):
             try:
-                # Combine big and small data first
-                combined_data = []
-                big_df['time'] = big_df['time'].apply(clean_timestamp)
-                small_df['time'] = small_df['time'].apply(clean_timestamp)
+                # Process big and small feeds separately with proper feed labels
+                all_traveler_data = []
                 
-                # Add origin column if missing
-                if 'origin' not in big_df.columns:
-                    big_df['origin'] = 'big_feed'
-                if 'origin' not in small_df.columns:
-                    small_df['origin'] = 'small_feed'
+                # Process Big feed data  
+                if len(big_df) > 0:
+                    big_df['time'] = big_df['time'].apply(clean_timestamp)
+                    big_data = process_feed(big_df, "Big", report_time, scope_type, scope_value, 
+                                          day_start_hour, master_measurements_df, input_value_at_start, small_df)
+                    all_traveler_data.extend(big_data)
                 
-                # Combine dataframes
-                combined_df = pd.concat([big_df, small_df], ignore_index=True)
+                # Process Small feed data
+                if len(small_df) > 0:
+                    small_df['time'] = small_df['time'].apply(clean_timestamp)  
+                    small_data = process_feed(small_df, "Small", report_time, scope_type, scope_value,
+                                            day_start_hour, master_measurements_df, input_value_at_start, small_df)
+                    all_traveler_data.extend(small_data)
                 
-                # Generate master traveler list and 4 sub-reports
-                traveler_reports = generate_master_traveler_list(
-                    combined_df, 
-                    master_measurements_df, 
-                    small_df, 
-                    report_time, 
-                    day_start_hour, 
-                    fast_mode
-                )
+                # Convert to DataFrame for group filtering
+                if all_traveler_data:
+                    master_df = pd.DataFrame(all_traveler_data)
+                    
+                    # Filter into 4 groups based on M# values
+                    traveler_reports = {}
+                    
+                    # Group 1a
+                    group_1a_mask = master_df['M #'].isin(GROUP_1A_TRAVELERS)
+                    traveler_reports["Grp 1a"] = master_df[group_1a_mask].copy()
+                    
+                    # Group 1b
+                    group_1b_mask = master_df['M #'].isin(GROUP_1B_TRAVELERS)
+                    traveler_reports["Grp 1b"] = master_df[group_1b_mask].copy()
+                    
+                    # Group 2a  
+                    group_2a_mask = master_df['M #'].isin(GROUP_2A_TRAVELERS)
+                    traveler_reports["Grp 2a"] = master_df[group_2a_mask].copy()
+                    
+                    # Group 2b
+                    group_2b_mask = master_df['M #'].isin(GROUP_2B_TRAVELERS) 
+                    traveler_reports["Grp 2b"] = master_df[group_2b_mask].copy()
+                    
+                    # Sort each group: Output descending, then Arrival ascending (old to new)
+                    for group_name, group_df in traveler_reports.items():
+                        if not group_df.empty:
+                            # Keep Arrival_datetime column - user wants it for Excel datetime recognition
+                            traveler_reports[group_name] = group_df.sort_values(
+                                ['Output', 'Arrival'], ascending=[False, True]
+                            )
+                else:
+                    traveler_reports = {}
                 
                 if traveler_reports:
                     # Display summary
@@ -417,6 +446,76 @@ elif small_feed_file and big_feed_file and measurement_file:
             except Exception as e:
                 st.error(f"Error generating master traveler list: {str(e)}")
                 traveler_reports = {}
+        
+        # Excel Export for Master Traveler Lists
+        if traveler_reports:
+            st.markdown("---")
+            st.markdown("### 📥 Unified Excel Download - Master Traveler Groups")
+            
+            import io
+            
+            # Use report datetime for filename instead of current time
+            report_datetime_str = report_time.strftime("%d-%b-%y_%H-%M") if report_time else dt.datetime.now().strftime("%d-%b-%y_%H-%M")
+            
+            # Create unified Excel file with all 4 groups
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+                workbook = writer.book
+                
+                for group_name, group_data in traveler_reports.items():
+                    if not group_data.empty:
+                        # Clean sheet name (Excel limit: 31 chars)
+                        sheet_name = group_name.replace(" ", "_").replace("-", "_")[:31]
+                        
+                        # Remove Group column if present and write data to sheet
+                        export_data = group_data.copy()
+                        if 'Group' in export_data.columns:
+                            export_data = export_data.drop('Group', axis=1)
+                        export_data.to_excel(writer, sheet_name=sheet_name, index=False)
+                        
+                        # Apply highlighting to worksheet (use export_data without Group column)
+                        worksheet = writer.sheets[sheet_name]
+                        apply_excel_highlighting(workbook, worksheet, export_data, False)  # No custom ranges for master list
+            
+            excel_buffer.seek(0)
+            
+            # Show download button
+            total_entries = sum(len(df) for df in traveler_reports.values())
+            st.download_button(
+                label=f"📥 Download All 4 Traveler Groups (Unified Excel)",
+                data=excel_buffer,
+                file_name=f"master_traveler_groups_{report_datetime_str}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                help=f"Excel file contains {len(traveler_reports)} groups with {total_entries} total entries"
+            )
+            
+            st.success(f"✅ Unified Excel file ready with {len(traveler_reports)} traveler groups ({total_entries} total entries)")
+            
+            # Performance summary
+            processing_time = time.time() - start_time
+            st.markdown("---")
+            st.markdown("### ⏱️ Performance Summary")
+            
+            perf_col1, perf_col2, perf_col3 = st.columns(3)
+            with perf_col1:
+                st.metric("Processing Time", f"{processing_time:.1f}s")
+            with perf_col2:
+                st.metric("Groups Generated", len(traveler_reports))
+            with perf_col3:
+                st.metric("Total Entries", total_entries)
+            
+            # Show performance improvement
+            if processing_time < 60:  # Less than 1 minute
+                st.success(f"🚀 **Excellent Performance**: Master list approach completed in {processing_time:.1f}s")
+                st.info("💡 This is much faster than processing each measurement tab separately (previously ~500+ seconds)")
+            elif processing_time < 180:  # Less than 3 minutes  
+                st.info(f"⚡ **Good Performance**: Completed in {processing_time:.1f}s with master list approach")
+            else:
+                st.warning(f"⏱️ Processing took {processing_time:.1f}s - consider enabling Fast Mode for better performance")
+                
+            st.markdown("---")
+            st.info("🎯 **Processing Complete**: Master traveler list generated and filtered into 4 groups. Download your unified Excel file above.")
+            st.markdown("**Optional**: You can continue below for additional model detection and analysis.")
         
         # Legacy processing fallback (remove old complex loop):
         if False:  # Disabled - using master list approach instead
@@ -811,64 +910,17 @@ elif small_feed_file and big_feed_file and measurement_file:
         # Model detections on the processed data
         if run_g_models:
             st.markdown("---")
-            st.markdown("### 🟢 Model G Detection System")
-            st.markdown("*2-category classification: o1 (today) vs o2 (other day) sequences*")
-            st.markdown("*Requirements: M# 50 ending + Anchor Origin + 100% strictly descending*")
             
-            with st.spinner("Running Model G detection..."):
-                try:
-                    # Use Meas tab 1 data if available (preferred for Model G)
-                    if "traveler_reports" in locals() and "Meas tab 1" in traveler_reports:
-                        st.info("🎯 Using Meas tab 1 data for Model G detection")
-                        detection_data = traveler_reports["Meas tab 1"]
-                    else:
-                        st.info("Using main processed data for Model G detection")
-                        detection_data = final_df_filtered
-                    
-                    # Run Model G detection
-                    g_results = run_model_g_detection(detection_data, report_time)
-                    
-                    if g_results['success']:
-                        # Display summary
-                        summary = g_results['summary']
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("o1 (Today)", summary['total_o1'])
-                        with col2:
-                            st.metric("o2 (Other Day)", summary['total_o2'])
-                        with col3:
-                            st.metric("Total Sequences", summary['total_sequences'])
-                        
-                        # Display results table if any sequences found
-                        if not g_results['results_df'].empty:
-                            st.markdown("#### Detection Results")
-                            st.dataframe(g_results['results_df'], use_container_width=True)
-                            
-                            # Export options for Model G results
-                            timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-                            
-                            # Excel export
-                            excel_buffer = io.BytesIO()
-                            with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-                                g_results['results_df'].to_excel(writer, sheet_name='Model G Results', index=False)
-                            
-                            st.download_button(
-                                label="📥 Download Model G Results (Excel)",
-                                data=excel_buffer.getvalue(),
-                                file_name=f"model_g_results_{timestamp}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            )
-                            
-                        else:
-                            st.info("No Model G sequences detected matching criteria (M# 50 + Anchor Origin + Strictly Descending)")
-                            
-                    else:
-                        st.error(f"Model G detection error: {g_results['error']}")
-                        
-                except Exception as e:
-                    st.error(f"Model G detection error: {str(e)}")
-                    import traceback
-                    st.text(traceback.format_exc())
+            # Use Meas tab 1 data if available (preferred for Model G)
+            if "traveler_reports" in locals() and "Meas tab 1" in traveler_reports:
+                st.info("🎯 Using Meas tab 1 data for Model G detection")
+                detection_data = traveler_reports["Meas tab 1"]
+            else:
+                st.info("Using main processed data for Model G detection")
+                detection_data = final_df_filtered
+            
+            # Run Model G detection (handles its own display now)
+            g_results = run_model_g_detection(detection_data, report_time)
         
         if run_single_line:
             st.markdown("---")
