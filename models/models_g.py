@@ -48,7 +48,6 @@ def _round_m(m):
 
 def _chronological_arrivals(items):
     # Return arrivals as pandas Timestamps; ignore unparsable
-    import pandas as pd
     out = []
     for it in items:
         a = it.get("Arrival")
@@ -63,7 +62,6 @@ def _arrivals_ok_for_g08(items):
     arr = _chronological_arrivals(items)
     if not arr or all(pd.isna(x) for x in arr):
         return False
-    import pandas as pd
     # mask for NaT
     arr2 = [x for x in arr if pd.notna(x)]
     if not arr2:
@@ -80,7 +78,6 @@ def _arrivals_ok_for_g08(items):
 
 def _g08_day_from_final(items):
     # Derive [0] vs [≠0] from the final arrival timestamp's Day label
-    import pandas as pd
     arr = _chronological_arrivals(items)
     arr2 = [a for a in arr if pd.notna(a)]
     if not arr2:
@@ -407,7 +404,6 @@ def run_model_g_detection(df, report_time=None, key_suffix=""):
             'error': str(e),
             'results_df': pd.DataFrame(),
             'summary': {'total_o1': 0, 'total_o2': 0, 'total_sequences': 0}
-        }
         }
 
 def display_sequence_details(seq_info):
