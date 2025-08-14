@@ -20,7 +20,7 @@ from a_helpers import (
 
 # Model imports - work in your environment, fallbacks for this environment
 try:
-    from models_g_updated import run_model_g_detection
+    from models.models_g import run_model_g_detection
 except ImportError:
     try:
         from models.models_g import run_model_g_detection
