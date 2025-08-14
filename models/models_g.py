@@ -24,16 +24,133 @@ import numpy as np
 import io
 from datetime import datetime
 
+# --- G.08 support: constants & helpers ---
+try:
+    # Prefer using helpers' canonical group
+    from a_helpers import GROUP_1B_TRAVELERS as _G1B_SRC
+    GROUP_1B_TRAVELERS = set(_G1B_SRC)
+except Exception:
+    # Fallback (copied from helpers)
+    GROUP_1B_TRAVELERS = {
+        111, 107, 103, 96, 87, 77, 68, 60, 55, 50, 43, 41, 40, 39, 36, 30, 22, 14, 10, 6, 5, 3, 2, 1, 0,
+        -1, -2, -3, -5, -6, -10, -14, -22, -30, -36, -39, -40, -41, -43, -50, -55, -60, -68, -77, -87, -96, -103, -107, -111
+    }
+
+# x0Pd.w lists (descending order; both polarities)
+X0PDW_POS = [111, 107, 103, 96, 87, 77, 68, 60, 50, 40, 39, 36, 30, 22, 14, 10, 6, 5, 3, 2, 1, 0]
+X0PDW_NEG = [-111, -107, -103, -96, -87, -77, -68, -60, -50, -40, -39, -36, -30, -22, -14, -10, -6, -5, -3, -2, -1, 0]
+
+def _round_m(m):
+    try:
+        return int(round(float(m)))
+    except Exception:
+        return None
+
+def _chronological_arrivals(items):
+    # Return arrivals as pandas Timestamps; ignore unparsable
+    import pandas as pd
+    out = []
+    for it in items:
+        a = it.get("Arrival")
+        try:
+            out.append(pd.to_datetime(a))
+        except Exception:
+            out.append(pd.NaT)
+    return out
+
+def _arrivals_ok_for_g08(items):
+    # No repeated Arrival datetimes except possibly at the END
+    arr = _chronological_arrivals(items)
+    if not arr or all(pd.isna(x) for x in arr):
+        return False
+    import pandas as pd
+    # mask for NaT
+    arr2 = [x for x in arr if pd.notna(x)]
+    if not arr2:
+        return False
+    final_t = max(arr2)
+    # Count duplicates not equal to final_t
+    counts = {}
+    for t in arr2:
+        counts[t] = counts.get(t, 0) + 1
+    for t, c in counts.items():
+        if t != final_t and c > 1:
+            return False
+    return True
+
+def _g08_day_from_final(items):
+    # Derive [0] vs [≠0] from the final arrival timestamp's Day label
+    import pandas as pd
+    arr = _chronological_arrivals(items)
+    arr2 = [a for a in arr if pd.notna(a)]
+    if not arr2:
+        return "[≠0]"
+    final_t = max(arr2)
+    days = { it.get("Day") for it in items if pd.to_datetime(it.get("Arrival"), errors="coerce") == final_t }
+    return "[0]" if "[0]" in days else "[≠0]"
+
+def _is_x0pdw_descending(items):
+    # Items are expected in chronological order
+    if len(items) < 3:
+        return False
+    m_vals = [ _round_m(it.get("M #")) for it in items ]
+    if any(v is None for v in m_vals):
+        return False
+    # All in Group 1b
+    if not all(v in GROUP_1B_TRAVELERS for v in m_vals):
+        return False
+    # Determine polarity (allow 0 only at the end)
+    non_zero = [v for v in m_vals if v != 0]
+    if not non_zero:
+        return False
+    same_sign = all(v > 0 for v in non_zero) or all(v < 0 for v in non_zero)
+    if not same_sign:
+        return False
+    pos = non_zero[0] > 0
+    order_list = X0PDW_POS if pos else X0PDW_NEG
+    # Map to indices in the canonical list
+    try:
+        indices = [ order_list.index(v) for v in m_vals ]
+    except ValueError:
+        return False
+    # Strictly increasing indices (descending values) — allow equal only if value==0 and it's the final item
+    for i in range(len(indices)-1):
+        if indices[i+1] <= indices[i]:
+            # Special case: last step can be equal if last value is 0
+            if i == len(indices)-2 and m_vals[-1] == 0 and indices[i+1] == indices[i]:
+                continue
+            return False
+    return True
+
+def _g08_end_type(items):
+    # Determine end classification: 'anchor', 'epic', or 'both'
+    import pandas as pd
+    arr = _chronological_arrivals(items)
+    arr2 = [a for a in arr if pd.notna(a)]
+    if not arr2:
+        return None
+    final_t = max(arr2)
+    end_items = [it for it in items if pd.to_datetime(it.get("Arrival"), errors="coerce") == final_t]
+    types = { get_origin_type(it.get("Origin", "")) for it in end_items }
+    if "Anchor" in types and "EPC" in types:
+        return "both"
+    if "Anchor" in types:
+        return "anchor"
+    if "EPC" in types:
+        return "epic"
+    return None
+# --- end G.08 support ---
+
+
+
 def run_model_g_detection(df, report_time=None, key_suffix=""):
-    """Main function to run Model G detection with full cluster display"""
+    """Main function to run Model G detection with full cluster display, including G.08"""
     
     st.subheader("🔍 Model G Detection - Proximity-Based Traveler Grouping")
     
-    # Show dataset info for large datasets
     if len(df) > 10000:
         st.info(f"📊 Processing dataset: {len(df):,} rows | Using optimized Python algorithm for large datasets")
     
-    # Proximity input and display controls
     col1, col2 = st.columns([1, 3])
     with col1:
         proximity_threshold = st.number_input(
@@ -46,306 +163,232 @@ def run_model_g_detection(df, report_time=None, key_suffix=""):
             help="Maximum distance between outputs to be considered in same group",
             key=f"g_proximity_threshold{key_suffix}"
         )
-    
     with col2:
         st.info(f"Grouping outputs within ±{proximity_threshold:.3f} of each other")
     
-    # Display control toggles
     st.markdown("### 🎛️ Display Controls")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        show_o1 = st.checkbox("G.05.o1[0]: Today M50+Anchor", value=True, key=f"g_show_o1{key_suffix}")
-        show_g06_o1 = st.checkbox("G.06.o1[0]: Today Opposites", value=True, key=f"g_show_g06_o1{key_suffix}")
-    with col2:
-        show_o2 = st.checkbox("G.05.o2[≠0]: Other M50+Anchor", value=True, key=f"g_show_o2{key_suffix}")
-        show_g06_o2 = st.checkbox("G.06.o2[≠0]: Other Opposites", value=True, key=f"g_show_g06_o2{key_suffix}")
-    with col3:
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        show_o1 = st.checkbox("G.05.o1[0] Today M50+Anchor", value=True, key=f"g_show_o1{key_suffix}")
+        show_g06_o1 = st.checkbox("G.06.o1[0] Today Opposites", value=True, key=f"g_show_g06_o1{key_suffix}")
+        show_g08_a0 = st.checkbox("G.08.01[0] x0Pd.w→Anchor Today", value=True, key=f"g_show_g08_a0{key_suffix}")
+    with c2:
+        show_o2 = st.checkbox("G.05.o2[≠0] Other M50+Anchor", value=True, key=f"g_show_o2{key_suffix}")
+        show_g06_o2 = st.checkbox("G.06.o2[≠0] Other Opposites", value=True, key=f"g_show_g06_o2{key_suffix}")
+        show_g08_aN = st.checkbox("G.08.01[≠0] x0Pd.w→Anchor Other", value=True, key=f"g_show_g08_aN{key_suffix}")
+    with c3:
         show_rejected = st.checkbox("❌ Rejected Groups", value=False, key=f"g_show_rejected{key_suffix}")
         st.session_state['debug_g06'] = st.checkbox("🔍 G.06 Debug", value=False, key=f"g_debug_g06{key_suffix}")
+        show_g08_e0 = st.checkbox("G.08.02[0] x0Pd.w→Epic Today", value=True, key=f"g_show_g08_e0{key_suffix}")
+    
+    c4, c5 = st.columns(2)
+    with c4:
+        show_g08_eN = st.checkbox("G.08.02[≠0] x0Pd.w→Epic Other", value=True, key=f"g_show_g08_eN{key_suffix}")
+    with c5:
+        show_g08_b0 = st.checkbox("G.08.03[0] x0Pd.w→Both Today", value=True, key=f"g_show_g08_b0{key_suffix}")
+        show_g08_bN = st.checkbox("G.08.03[≠0] x0Pd.w→Both Other", value=True, key=f"g_show_g08_bN{key_suffix}")
     
     try:
-        # Run the detection
         results = detect_model_g_sequences(df, proximity_threshold)
         
-        # Display cluster summary
+        # Summary metrics
         st.markdown("### 📊 Cluster Analysis Summary")
-        col1, col2, col3, col4 = st.columns(4)
+        r = results
+        mcols = st.columns(6)
+        mcols[0].metric("Proximity Groups", len(r['proximity_groups']))
+        mcols[1].metric("G.05 Today", len(r['G.05.o1[0]']))
+        mcols[2].metric("G.05 Other", len(r['G.05.o2[≠0]']))
+        mcols[3].metric("G.06 Today", len(r['G.06.o1[0]']))
+        mcols[4].metric("G.06 Other", len(r['G.06.o2[≠0]']))
+        mcols[5].metric("Rejected Groups", len(r['rejected_groups']))
         
-        with col1:
-            st.metric("Proximity Groups", len(results['proximity_groups']))
-        with col2:
-            st.metric("G.05 Today (o1)", len(results['G.05.o1[0]']))
-        with col3:
-            st.metric("G.05 Other (o2)", len(results['G.05.o2[≠0]']))
-        with col4:
-            st.metric("G.06 Today", len(results['G.06.o1[0]']))
+        m2 = st.columns(6)
+        m2[0].metric("G.08.01 Today (Anchor)", len(r['G.08.01[0]']))
+        m2[1].metric("G.08.01 Other (Anchor)", len(r['G.08.01[≠0]']))
+        m2[2].metric("G.08.02 Today (Epic)", len(r['G.08.02[0]']))
+        m2[3].metric("G.08.02 Other (Epic)", len(r['G.08.02[≠0]']))
+        m2[4].metric("G.08.03 Today (Both)", len(r['G.08.03[0]']))
+        m2[5].metric("G.08.03 Other (Both)", len(r['G.08.03[≠0]']))
         
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("G.06 Other", len(results['G.06.o2[≠0]']))
-        with col4:
-            st.metric("Rejected Groups", len(results['rejected_groups']))
-        
-        # Create cluster table for enabled categories
+        # Collect sequences for cluster table
         enabled_sequences = []
-        if show_o1:
-            enabled_sequences.extend(results['G.05.o1[0]'])
-        if show_o2:
-            enabled_sequences.extend(results['G.05.o2[≠0]'])
-        if show_g06_o1:
-            enabled_sequences.extend(results['G.06.o1[0]'])
-        if show_g06_o2:
-            enabled_sequences.extend(results['G.06.o2[≠0]'])
+        if show_o1: enabled_sequences.extend(r['G.05.o1[0]'])
+        if show_o2: enabled_sequences.extend(r['G.05.o2[≠0]'])
+        if show_g06_o1: enabled_sequences.extend(r['G.06.o1[0]'])
+        if show_g06_o2: enabled_sequences.extend(r['G.06.o2[≠0]'])
+        if show_g08_a0: enabled_sequences.extend(r['G.08.01[0]'])
+        if show_g08_aN: enabled_sequences.extend(r['G.08.01[≠0]'])
+        if show_g08_e0: enabled_sequences.extend(r['G.08.02[0]'])
+        if show_g08_eN: enabled_sequences.extend(r['G.08.02[≠0]'])
+        if show_g08_b0: enabled_sequences.extend(r['G.08.03[0]'])
+        if show_g08_bN: enabled_sequences.extend(r['G.08.03[≠0]'])
         
         if enabled_sequences:
             st.markdown("### 📊 Cluster Table")
-            
-            # Collect all sequences for cluster analysis
-            all_sequences = enabled_sequences
-            
-            # Create cluster data by grouping sequences by their final output
+            # Group by final output
             cluster_data = {}
-            
-            for seq_info in all_sequences:
-                # Get the final output (last in chronological order)
-                final_output = seq_info['outputs'][-1]  # Last output in the sequence
-                
+            for seq_info in enabled_sequences:
+                final_output = seq_info['outputs'][-1]
                 if final_output not in cluster_data:
-                    cluster_data[final_output] = {
-                        'sequences': [],
-                        'largest_length': 0,
-                        'unique_count': 0,
-                        'final_arrival': None,
-                        'final_day': None,
-                        'final_origin': None
-                    }
-                
-                # Add this sequence to the cluster
+                    cluster_data[final_output] = {'sequences': [], 'largest_length': 0,
+                                                  'unique_count': 0, 'final_arrival': None,
+                                                  'final_day': None, 'final_origin': None}
                 cluster_data[final_output]['sequences'].append(seq_info)
-                
-                # Update largest sequence length
-                seq_length = len(seq_info['outputs'])
-                if seq_length > cluster_data[final_output]['largest_length']:
-                    cluster_data[final_output]['largest_length'] = seq_length
-                    # Store arrival info from the largest sequence
+                sl = len(seq_info['outputs'])
+                if sl > cluster_data[final_output]['largest_length']:
+                    cluster_data[final_output]['largest_length'] = sl
                     cluster_data[final_output]['final_arrival'] = seq_info['arrivals'][-1]
                     cluster_data[final_output]['final_day'] = seq_info['days'][-1]
                     cluster_data[final_output]['final_origin'] = seq_info['origins'][-1]
-                
-                # Count unique sequences
                 cluster_data[final_output]['unique_count'] = len(cluster_data[final_output]['sequences'])
             
-            # Build cluster table data
-            cluster_rows = []
-            for output, cluster_info in cluster_data.items():
-                # Get representative sequence (the largest one)
-                largest_seq = max(cluster_info['sequences'], key=lambda x: len(x['outputs']))
+            rows = []
+            for output, info in cluster_data.items():
+                largest_seq = max(info['sequences'], key=lambda x: len(x['outputs']))
+                final_arrival = largest_seq['arrivals'][-1]
                 
-                # Get the end-of-sequence row data from the original dataframe
-                final_output = largest_seq['outputs'][-1]  # Last output in the sequence
-                final_arrival = largest_seq['arrivals'][-1]  # Last arrival time
-                
-                # Find the corresponding row in the dataframe for end-of-sequence values
-                end_sequence_row = None
+                # Pull inputs from df row matching the end
+                end_row = None
                 for idx, row in df.iterrows():
-                    if (abs(row['Output'] - final_output) < 0.001 and  # Match output within tolerance
-                        pd.to_datetime(row['Arrival']) == pd.to_datetime(final_arrival)):  # Match arrival time
-                        end_sequence_row = row
-                        break
-                
-                # Extract input values from the end-of-sequence row
-                if end_sequence_row is not None:
-                    input_at_18 = end_sequence_row.get('Input @ 18:00', "")
-                    diff_18 = end_sequence_row.get('Diff @ 18:00', "")
-                    input_at_arrival = end_sequence_row.get('Input @ Arrival', "")
-                    diff_arrival = end_sequence_row.get('Diff @ Arrival', "")
-                    input_at_report = end_sequence_row.get('Input @ Report', "")
-                    diff_report = end_sequence_row.get('Diff @ Report', "")
-                else:
-                    # Fallback if no matching row found
-                    input_at_18 = ""
-                    diff_18 = ""
-                    input_at_arrival = ""
-                    diff_arrival = ""
-                    input_at_report = ""
-                    diff_report = ""
-                
-                # Format arrival time into separate day and datetime columns
-                if cluster_info['final_arrival']:
                     try:
-                        arrival_dt = pd.to_datetime(cluster_info['final_arrival'])
-                        if pd.notna(arrival_dt):  # Check if it's not NaT
-                            day_abbrev = arrival_dt.strftime('%a')  # Mon, Tue, Wed, etc.
-                            arrival_excel = arrival_dt.strftime('%d-%b-%Y %H:%M')  # Excel-friendly format
-                            
-                            # Calculate hours ago from current time
-                            hours_ago = (pd.Timestamp.now() - arrival_dt).total_seconds() / 3600
-                            hours_ago_str = f"{int(hours_ago)} hours ago"
-                        else:
-                            day_abbrev = ""
-                            arrival_excel = str(cluster_info['final_arrival'])
-                            hours_ago_str = ""
-                    except:
-                        day_abbrev = ""
-                        arrival_excel = str(cluster_info['final_arrival'])
-                        hours_ago_str = ""
+                        if (abs(row['Output'] - output) < 0.001 and 
+                            pd.to_datetime(row['Arrival']) == pd.to_datetime(final_arrival)):
+                            end_row = row
+                            break
+                    except Exception:
+                        continue
+                if end_row is not None:
+                    input_at_18 = end_row.get('Input @ 18:00', "")
+                    diff_18 = end_row.get('Diff @ 18:00', "")
+                    input_at_arrival = end_row.get('Input @ Arrival', "")
+                    diff_arrival = end_row.get('Diff @ Arrival', "")
+                    input_at_report = end_row.get('Input @ Report', "")
+                    diff_report = end_row.get('Diff @ Report', "")
                 else:
-                    day_abbrev = ""
-                    arrival_excel = ""
+                    input_at_18 = diff_18 = input_at_arrival = diff_arrival = input_at_report = diff_report = ""
+                
+                # Format arrival
+                try:
+                    adt = pd.to_datetime(info['final_arrival'])
+                    ddd = adt.strftime('%a')
+                    arrival_excel = adt.strftime('%d-%b-%Y %H:%M')
+                    hours_ago = (pd.Timestamp.now() - adt).total_seconds() / 3600
+                    hours_ago_str = f"{int(hours_ago)} hours ago"
+                except Exception:
+                    ddd = ""
+                    arrival_excel = str(info['final_arrival'])
                     hours_ago_str = ""
                 
-                # Create pattern sequences description
+                # Build pattern description for sequences >= 4
                 pattern_sequences = []
-                for seq in cluster_info['sequences']:
-                    m_values = [str(m) for m in seq['m_values']]
-                    origins = [str(o) for o in seq['origins']]
-                    
-                    # Get M names from the original dataframe by matching M# values
-                    m_names = []
-                    for m_val in seq['m_values']:
-                        # Find corresponding M name in the dataframe
-                        matching_rows = df[df['M #'] == m_val]
-                        if not matching_rows.empty:
-                            m_name = matching_rows.iloc[0].get('M Name', f'M{m_val}')
-                            m_names.append(str(m_name))
-                        else:
-                            m_names.append(f'M{m_val}')
-                    
-                    if len(seq['outputs']) >= 4:  # Only show sequences with 4+ elements
-                        # Determine if this is G.05 or G.06 based on sequence category
-                        seq_category = seq.get('category', 'G.05')  # Default to G.05 if not specified
-                        model_type = 'G.06' if 'G.06' in seq_category else 'G.05'
-                        pattern_desc = f"{model_type} | M Names: {','.join(m_names)} | M#: {','.join(m_values)} | Origins: {','.join(origins)}"
-                        pattern_sequences.append(pattern_desc)
-                
+                for seq in info['sequences']:
+                    if len(seq['outputs']) >= 4:
+                        m_values = [str(m) for m in seq['m_values']]
+                        origins = [str(o) for o in seq['origins']]
+                        # Label model from category
+                        model_type = seq.get('category', 'G.05')
+                        pattern_sequences.append(f"{model_type} | M#: {','.join(m_values)} | Origins: {','.join(origins)}")
                 pattern_str = " | ".join(pattern_sequences) if pattern_sequences else "No valid patterns"
                 
-                cluster_rows.append({
+                rows.append({
                     'Output': f"{output:.3f}",
-                    'Largest sequence length': cluster_info['largest_length'],
-                    'Unique Sequences': cluster_info['unique_count'],
-                    'Stars': "",  # Blank for now
-                    'Booster Score': "",  # Blank for now
+                    'Largest sequence length': info['largest_length'],
+                    'Unique Sequences': info['unique_count'],
+                    'Stars': "",
+                    'Booster Score': "",
                     'Input @ 18:00': input_at_18,
                     '18:00 Diff': diff_18,
                     'Input @ Arrival': input_at_arrival,
                     'Arrival Diff': diff_arrival,
                     'Input @ Report': input_at_report,
                     'Report Diff': diff_report,
-                    'ddd': day_abbrev,  # Day abbreviation (Mon, Tue, Wed, etc.)
-                    'Arrival': arrival_excel,  # Excel-friendly datetime format
-                    'Day': cluster_info['final_day'] or "",
+                    'ddd': ddd,
+                    'Arrival': arrival_excel,
+                    'Day': info['final_day'] or "",
                     'Hours ago': hours_ago_str,
                     'Pattern Sequences': pattern_str
                 })
             
-            # Sort by output value (descending)
-            cluster_rows.sort(key=lambda x: float(x['Output']), reverse=True)
-            
-            # Display cluster table
-            if cluster_rows:
-                cluster_df = pd.DataFrame(cluster_rows)
+            rows.sort(key=lambda x: float(x['Output']), reverse=True)
+            if rows:
+                cluster_df = pd.DataFrame(rows)
                 st.dataframe(cluster_df, use_container_width=True)
-                
-                # Download button for cluster table with report time in filename
+                # Filename timestamp
                 try:
-                    # Try to get report time from the dataframe
                     if 'Arrival' in df.columns and not df.empty:
-                        arrival_times = pd.to_datetime(df['Arrival'], format='%d-%b-%Y %H:%M', errors='coerce')
-                        # Filter out NaT values and get the maximum valid time
+                        arrival_times = pd.to_datetime(df['Arrival'], errors='coerce')
                         valid_times = arrival_times.dropna()
                         if len(valid_times) > 0:
                             report_time = valid_times.max()
-                            timestamp = report_time.strftime("%y-%m-%d_%H-%M")
+                            ts = report_time.strftime("%y-%m-%d_%H-%M")
                         else:
-                            timestamp = pd.Timestamp.now().strftime('%y-%m-%d_%H-%M')
+                            ts = pd.Timestamp.now().strftime('%y-%m-%d_%H-%M')
                     else:
-                        timestamp = pd.Timestamp.now().strftime('%y-%m-%d_%H-%M')
-                except:
-                    timestamp = pd.Timestamp.now().strftime('%y-%m-%d_%H-%M')
-                    
-                cluster_csv = cluster_df.to_csv(index=False)
+                        ts = pd.Timestamp.now().strftime('%y-%m-%d_%H-%M')
+                except Exception:
+                    ts = pd.Timestamp.now().strftime('%y-%m-%d_%H-%M')
                 st.download_button(
-                    label="📥 Download Cluster Table (CSV)",
-                    data=cluster_csv,
-                    file_name=f"model_g_cluster_table_{timestamp}.csv",
+                    "📥 Download Cluster Table (CSV)",
+                    cluster_df.to_csv(index=False),
+                    file_name=f"model_g_cluster_table_{ts}.csv",
                     mime="text/csv",
                     key=f"g_download_cluster{key_suffix}"
                 )
-            else:
-                st.info("No cluster data available")
-            
             st.markdown("---")
         
-        # Display o1 sequences
-        if show_o1 and results['G.05.o1[0]']:
-            st.markdown("### 🟢 G.05.o1[0]: Today Sequences (M50 + Anchor Origin)")
-            for i, seq_info in enumerate(results['G.05.o1[0]']):
-                with st.expander(f"Sequence {i+1}: {len(seq_info['sequence'])} travelers | Range: {seq_info['output_range']}"):
-                    display_sequence_details(seq_info)
+        # Optional: show per-category details (compact)
+        def _show_cat(name, seqs, color):
+            if not seqs: 
+                return
+            st.markdown(f"### {color} {name} ({len(seqs)})")
+            for i, s in enumerate(seqs):
+                with st.expander(f"{name} #{i+1}: {len(s['sequence'])} travelers | {s['output_range']}"):
+                    display_sequence_details(s)
         
-        # Display o2 sequences  
-        if show_o2 and results['G.05.o2[≠0]']:
-            st.markdown("### 🔵 G.05.o2[≠0]: Other Day Sequences (M50 + Anchor Origin)")
-            for i, seq_info in enumerate(results['G.05.o2[≠0]']):
-                with st.expander(f"Sequence {i+1}: {len(seq_info['sequence'])} travelers | Range: {seq_info['output_range']}"):
-                    display_sequence_details(seq_info)
+        if show_o1: _show_cat("G.05.o1[0]", r['G.05.o1[0]'], "🟢")
+        if show_o2: _show_cat("G.05.o2[≠0]", r['G.05.o2[≠0]'], "🔵")
+        if show_g06_o1: _show_cat("G.06.o1[0]", r['G.06.o1[0]'], "🟡")
+        if show_g06_o2: _show_cat("G.06.o2[≠0]", r['G.06.o2[≠0]'], "🟠")
+        if show_g08_a0: _show_cat("G.08.01[0] (Anchor)", r['G.08.01[0]'], "🟩")
+        if show_g08_aN: _show_cat("G.08.01[≠0] (Anchor)", r['G.08.01[≠0]'], "🟦")
+        if show_g08_e0: _show_cat("G.08.02[0] (Epic)", r['G.08.02[0]'], "🟥")
+        if show_g08_eN: _show_cat("G.08.02[≠0] (Epic)", r['G.08.02[≠0]'], "🟪")
+        if show_g08_b0: _show_cat("G.08.03[0] (Both)", r['G.08.03[0]'], "🟧")
+        if show_g08_bN: _show_cat("G.08.03[≠0] (Both)", r['G.08.03[≠0]'], "🟫")
         
-        # Display G.06.o1 sequences (Today Opposites)
-        if show_g06_o1 and results['G.06.o1[0]']:
-            st.markdown("### 🟡 G.06.o1[0]: Today Sequences (Opposite M# 50 Ending)")
-            for i, seq_info in enumerate(results['G.06.o1[0]']):
-                with st.expander(f"G.06 Sequence {i+1}: {len(seq_info['sequence'])} travelers | Range: {seq_info['output_range']}"):
-                    display_sequence_details(seq_info)
-        
-        # Display G.06.o2 sequences (Other Day Opposites)  
-        if show_g06_o2 and results['G.06.o2[≠0]']:
-            st.markdown("### 🟠 G.06.o2[≠0]: Other Day Sequences (Opposite M# 50 Ending)")
-            for i, seq_info in enumerate(results['G.06.o2[≠0]']):
-                with st.expander(f"G.06 Sequence {i+1}: {len(seq_info['sequence'])} travelers | Range: {seq_info['output_range']}"):
-                    display_sequence_details(seq_info)
-        
-        # Display rejected groups
-        if show_rejected and results['rejected_groups']:
-            st.markdown("### ❌ Rejected Groups")
-            for i, rejected in enumerate(results['rejected_groups']):
-                with st.expander(f"Rejected Group {i+1}: {len(rejected['outputs'])} outputs | {rejected['output_range']}"):
-                    st.write(f"**Reasons:** {', '.join(rejected['reasons'])}")
-                    st.write(f"**Outputs:** {rejected['outputs']}")
-                    if 'sequence_details' in rejected:
-                        st.write(f"**Details:** {rejected['sequence_details']}")
-        
-        # Format results for the main app interface
+        # Prepare simple results & summary for app
         all_sequences = []
-        all_sequences.extend(results['G.05.o1[0]'])
-        all_sequences.extend(results['G.05.o2[≠0]'])
-        all_sequences.extend(results['G.06.o1[0]'])
-        all_sequences.extend(results['G.06.o2[≠0]'])
+        for k in ['G.05.o1[0]','G.05.o2[≠0]','G.06.o1[0]','G.06.o2[≠0]',
+                  'G.08.01[0]','G.08.01[≠0]','G.08.02[0]','G.08.02[≠0]','G.08.03[0]','G.08.03[≠0]']:
+            all_sequences.extend(results[k])
         
         if all_sequences:
-            # Create simplified DataFrame for main app display
             simple_results = []
-            for seq_info in all_sequences:
+            for s in all_sequences:
                 simple_results.append({
-                    'category': seq_info.get('category', 'G.05.o1[0]' if seq_info in results['G.05.o1[0]'] else 'G.05.o2[≠0]'),
-                    'count': len(seq_info['sequence']),
-                    'day_type': seq_info['day_type'],
-                    'output_range': seq_info['output_range']
+                    'category': s.get('category', ''),
+                    'count': len(s['sequence']),
+                    'day_type': s['day_type'],
+                    'output_range': s['output_range']
                 })
             results_df = pd.DataFrame(simple_results)
         else:
             results_df = pd.DataFrame()
         
-        # Calculate summary
         summary = {
-            'total_o1': len(results['G.05.o1[0]']) + len(results['G.06.o1[0]']),
-            'total_o2': len(results['G.05.o2[≠0]']) + len(results['G.06.o2[≠0]']),
+            'total_o1': len(r['G.05.o1[0]']) + len(r['G.06.o1[0]']),
+            'total_o2': len(r['G.05.o2[≠0]']) + len(r['G.06.o2[≠0]']),
             'total_sequences': len(all_sequences),
-            'g05_o1': len(results['G.05.o1[0]']),
-            'g05_o2': len(results['G.05.o2[≠0]']),
-            'g06_o1': len(results['G.06.o1[0]']),
-            'g06_o2': len(results['G.06.o2[≠0]'])
+            'g05_o1': len(r['G.05.o1[0]']),
+            'g05_o2': len(r['G.05.o2[≠0]']),
+            'g06_o1': len(r['G.06.o1[0]']),
+            'g06_o2': len(r['G.06.o2[≠0]']),
+            'g08_01_0': len(r['G.08.01[0]']),
+            'g08_01_N': len(r['G.08.01[≠0]']),
+            'g08_02_0': len(r['G.08.02[0]']),
+            'g08_02_N': len(r['G.08.02[≠0]']),
+            'g08_03_0': len(r['G.08.03[0]']),
+            'g08_03_N': len(r['G.08.03[≠0]'])
         }
         
         return {
@@ -364,6 +407,7 @@ def run_model_g_detection(df, report_time=None, key_suffix=""):
             'error': str(e),
             'results_df': pd.DataFrame(),
             'summary': {'total_o1': 0, 'total_o2': 0, 'total_sequences': 0}
+        }
         }
 
 def display_sequence_details(seq_info):
@@ -615,28 +659,192 @@ def classify_by_day(group):
             return '[0]'
     return '[≠0]'
 
+
 def detect_model_g_sequences(df, proximity_threshold=0.10):
     """
-    Detect Model G sequences in the dataframe
-    
-    Args:
-        df: DataFrame with traveler data
-        proximity_threshold: Maximum distance between outputs to be considered in same group
-    
-    Returns:
-        Dictionary with detected sequences
+    Detect Model G sequences (G.05, G.06 and G.08) in the dataframe
     """
     results = {
         'G.05.o1[0]': [],    # Today sequences ending in M50 + Anchor
         'G.05.o2[≠0]': [],   # Other day sequences ending in M50 + Anchor
-        'G.06.o1[0]': [],    # Today sequences with opposite M# ending (+50/-50 or -50/+50)
+        'G.06.o1[0]': [],    # Today sequences with opposite M# ending
         'G.06.o2[≠0]': [],   # Other day sequences with opposite M# ending
+        # New G.08 buckets
+        'G.08.01[0]': [],    # x0Pd.w descending, ends in anchor today
+        'G.08.01[≠0]': [],   # x0Pd.w descending, ends in anchor other days
+        'G.08.02[0]': [],    # x0Pd.w descending, ends in epic today
+        'G.08.02[≠0]': [],   # x0Pd.w descending, ends in epic other days
+        'G.08.03[0]': [],    # x0Pd.w descending, ends in both today
+        'G.08.03[≠0]': [],   # x0Pd.w descending, ends in both other days
         'proximity_groups': [],
         'rejected_groups': []
     }
     
     if df.empty:
         return results
+    
+    # Convert dataframe to list of dictionaries for easier processing
+    data_list = []
+    for _, row in df.iterrows():
+        try:
+            out_val = float(row['Output'])
+        except Exception:
+            continue
+        data_list.append({
+            'Output': out_val,
+            'Arrival': row.get('Arrival'),
+            'Origin': row.get('Origin', ''),
+            'M #': row.get('M #'),
+            'Day': row.get('Day', ''),
+            'Feed': row.get('Feed', ''),
+            'M Name': row.get('M Name', ''),
+            'R #': row.get('R #', ''),
+            'Tag': row.get('Tag', ''),
+            'Family': row.get('Family', '')
+        })
+    
+    # Group by proximity
+    proximity_groups = group_by_proximity(data_list, proximity_threshold)
+    results['proximity_groups'] = proximity_groups
+    
+    # Debug proximity grouping (only when G.06 debug enabled)
+    if st.session_state.get('debug_g06', False):
+        st.write(f"Debug - Found {len(proximity_groups)} proximity groups")
+        for i, group in enumerate(proximity_groups):
+            st.write(f"Debug - Group {i+1}: {len(group)} items")
+            st.write(f"Debug - Group {i+1} outputs: {[item['Output'] for item in group]}")
+            st.write(f"Debug - Group {i+1} M# values: {[item['M #'] for item in group]}")
+            st.write(f"Debug - Group {i+1} origins: {[item['Origin'] for item in group]}")
+        st.write("---")
+    
+    # Process each proximity group and extract sequences
+    for group in proximity_groups:
+        # Check basic requirements for G.05/G.06 (Anchor/EPC presence)
+        has_anchor_epc = has_required_origin(group)
+        
+        # Find all valid temporal descending sequences within this group
+        valid_sequences = find_temporal_descending_sequences(group)
+        
+        output_values_group = [item['Output'] for item in group]
+        
+        if not valid_sequences:
+            # Store rejected group info
+            min_output = min(output_values_group)
+            max_output = max(output_values_group)
+            output_range_spread = max_output - min_output
+            
+            reasons = []
+            if not has_anchor_epc:
+                reasons.append('No Anchor/EPC origin')
+            reasons.append('No valid descending sequences found')
+            
+            results['rejected_groups'].append({
+                'outputs': output_values_group,
+                'reasons': reasons,
+                'output_range': f"{min_output:.3f} to {max_output:.3f} (spread: {output_range_spread:.3f})"
+            })
+            continue
+        
+        # Process each valid sequence separately
+        for sequence in valid_sequences:
+            # Sort chronologically for consistent checks
+            def sort_key(item):
+                a = item['Arrival']
+                try:
+                    return pd.to_datetime(a)
+                except Exception:
+                    return a
+            sorted_by_time = sorted(sequence, key=sort_key)
+
+            # Build common properties
+            m_values = [float(item['M #']) for item in sorted_by_time]
+            has_duplicates = len(set(m_values)) != len(m_values)
+            outputs_seq = [item['Output'] for item in sorted_by_time]
+            min_output = min(outputs_seq)
+            max_output = max(outputs_seq)
+            output_range_spread = max_output - min_output
+            day_classification_any = classify_by_day(sorted_by_time)  # legacy for G.05/G.06
+            
+            sequence_info = {
+                'sequence': sorted_by_time,
+                'outputs': outputs_seq,
+                'origins': [item['Origin'] for item in sorted_by_time],
+                'm_values': m_values,
+                'days': [item['Day'] for item in sorted_by_time],
+                'feeds': [item['Feed'] for item in sorted_by_time],
+                'arrivals': [item['Arrival'] for item in sorted_by_time],
+                'has_duplicates': has_duplicates,
+                'output_range': f"{min_output:.3f} to {max_output:.3f} (spread: {output_range_spread:.3f})",
+                'group_size': len(sorted_by_time),
+                'is_descending': True,  # validated by finder
+                'day_type': day_classification_any
+            }
+            
+            # --- G.06 classification ---
+            if ends_with_opposite_m50_pair(sorted_by_time):
+                if day_classification_any == '[0]':
+                    si = sequence_info.copy()
+                    si['category'] = 'G.06.o1[0]'
+                    results['G.06.o1[0]'].append(si)
+                else:
+                    si = sequence_info.copy()
+                    si['category'] = 'G.06.o2[≠0]'
+                    results['G.06.o2[≠0]'].append(si)
+            
+            # --- G.05 classification ---
+            if ends_with_m50_and_anchor(sorted_by_time):
+                si = sequence_info.copy()
+                if day_classification_any == '[0]':
+                    si['category'] = 'G.05.o1[0]'
+                    results['G.05.o1[0]'].append(si)
+                else:
+                    si['category'] = 'G.05.o2[≠0]'
+                    results['G.05.o2[≠0]'].append(si)
+            
+            # --- G.08 classification ---
+            # Requirements:
+            # - Use Group 1b / x0Pd.w list (polarity-consistent), strictly descending indices
+            # - length >= 3
+            # - chronological, no repeating Arrival datetimes except possibly at the end
+            # - ending origin type: anchor / epic / both (both = two end items at same Arrival having Anchor and EPC)
+            if len(sorted_by_time) >= 3 and _arrivals_ok_for_g08(sorted_by_time) and _is_x0pdw_descending(sorted_by_time):
+                end_type = _g08_end_type(sorted_by_time)  # 'anchor' | 'epic' | 'both' | None
+                if end_type is not None:
+                    day_final = _g08_day_from_final(sorted_by_time)
+                    si = sequence_info.copy()
+                    si['category'] = f"G.08.{ {'anchor':'01','epic':'02','both':'03'}[end_type] }{day_final}"
+                    # Route to bucket
+                    if end_type == 'anchor':
+                        key = 'G.08.01[0]' if day_final == '[0]' else 'G.08.01[≠0]'
+                        results[key].append(si)
+                    elif end_type == 'epic':
+                        key = 'G.08.02[0]' if day_final == '[0]' else 'G.08.02[≠0]'
+                        results[key].append(si)
+                    elif end_type == 'both':
+                        key = 'G.08.03[0]' if day_final == '[0]' else 'G.08.03[≠0]'
+                        results[key].append(si)
+                else:
+                    # If it matches x0Pd.w but does not end in Anchor/EPC, consider as rejected with reason
+                    results['rejected_groups'].append({
+                        'outputs': outputs_seq,
+                        'reasons': ['G.08: End does not classify as Anchor/EPC/Both'],
+                        'output_range': sequence_info['output_range'],
+                        'sequence_details': f"M# sequence: {sequence_info['m_values']}, Origins: {sequence_info['origins']}"
+                    })
+            else:
+                # If descending but fails arrivals/x0Pd.w, don't add an extra reject to avoid noise
+                pass
+            
+            # If the sequence met none of G.05/G.06/G.08, record a generic rejection for visibility
+            if (len(results['G.05.o1[0]']) + len(results['G.05.o2[≠0]']) +
+                len(results['G.06.o1[0]']) + len(results['G.06.o2[≠0]']) +
+                len(results['G.08.01[0]']) + len(results['G.08.01[≠0]']) +
+                len(results['G.08.02[0]']) + len(results['G.08.02[≠0]']) +
+                len(results['G.08.03[0]']) + len(results['G.08.03[≠0]'])) == 0:
+                # only add once across the entire run if absolutely nothing matched
+                pass
+    
+    return results
     
     # Convert dataframe to list of dictionaries for easier processing
     data_list = []
