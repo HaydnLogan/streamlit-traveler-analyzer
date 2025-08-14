@@ -42,14 +42,29 @@ FAMILY_ECHO_TRAVELERS = {1, -1, 111, -111}
 # Group 1a (Green Family, X0p)
 GROUP_1A_TRAVELERS = {111, 107, 103, 96, 87, 77, 68, 60, 50, -50, -60, -68, -77, -87, -96, -103, -107, -111}
 
-# Group 1b (Green Family, X0p & d)
-GROUP_1B_TRAVELERS = {111, 107, 103, 96, 87, 77, 68, 60, 55, 50, 43, 41, 40, 39, 36, 30, 22, 14, 10, 6, 5, 3, 2, 1, 0, -1, -2, -3, -5, -6, -10, -14, -22, -30, -36, -39, -40, -41, -43, -50, -55, -60, -68, -77, -87, -96, -103, -107, -111}
+# Group 1b (Green Family, X0p & d) - Additional 30 values including decimals and middle ranges
+GROUP_1B_TRAVELERS = {
+    111, 107, 103, 96, 87, 77, 68, 60, 55, 50, 43, 41, 40, 39, 36, 30, 22, 14,
+    10, 6, 5, 3, 2, 1, 0, -1, -2, -3, -5, -6, -10, -14, -22, -30, -36, -39,
+    -40, -41, -43, -50, -55, -60, -68, -77, -87, -96, -103, -107, -111
+}
 
 # Group 2a (Indigo Family, P only)
-GROUP_2A_TRAVELERS = {101, 98.2, 99.1, 98.2, 98.1, 97.2, 97.1, 96.1, 95.5, 95, 93.5, 92, 90.5, 89, 86.5, 85, 83.0, 80, 78.01, 74, 71, 67, 62, 54, 40, 0, -40, -54, -62, -67, -71, -74, -78.01, -80, -83.0, -85, -86.5, -89, -90.5, -92, -93.5, -95, -95.5, -96.1, -97.1, -97.2, -98.1, -98.2, -99.1, -98.2, -101}
+GROUP_2A_TRAVELERS = {
+    101, 98.2, 99.1, 98.2, 98.1, 97.2, 97.1, 96.1, 95.5, 95, 93.5, 92, 90.5,
+    89, 86.5, 85, 83, 80, 78.01, 74, 71, 67, 62, 54, 40, 0, -40, -54, -62, -67,
+    -71, -74, -78.01, -80, -83, -85, -86.5, -89, -90.5, -92, -93.5, -95, -95.5,
+    -96.1, -97.1, -97.2, -98.1, -98.2, -99.1, -98.2, -101
+}
 
 # Group 2b (Indigo Family, P & D)
-GROUP_2B_TRAVELERS = {101, 98.2, 99.1, 98.2, 98.1, 97.2, 97.1, 96.1, 95.5, 95, 93.5, 92, 90.5, 89, 86.5, 85, 83.0, 80, 78.01, 74, 71, 67, 62, 57, 54, 47, 45, 40, 38, 33, 27, 24, 15, 12, 0, -12, -15, -24, -27, -33, -38, -40, -45, -47, -54, -57, -62, -67, -71, -74, -78.01, -80, -83.0, -85, -86.5, -89, -90.5, -92, -93.5, -95, -95.5, -96.1, -97.1, -97.2, -98.1, -98.2, -99.1, -98.2, -101}
+GROUP_2B_TRAVELERS = {
+    101, 98.2, 99.1, 98.2, 98.1, 97.2, 97.1, 96.1, 95.5, 95, 93.5, 92, 90.5,
+    89, 86.5, 85, 83.0, 80, 78.01, 74, 71, 67, 62, 57, 54, 47, 45, 40, 38, 33,
+    27, 24, 15, 12, 0, -12, -15, -24, -27, -33, -38, -40, -45, -47, -54, -57,
+    -62, -67, -71, -74, -78.01, -80, -83.0, -85, -86.5, -89, -90.5, -92, -93.5,
+    -95, -95.5, -96.1, -97.1, -97.2, -98.1, -98.2, -99.1, -98.2, -101
+}
 
 def generate_master_traveler_list(data, measurements, small_df, report_time, start_hour=17, fast_mode=True):
     """Generate master traveler list using first measurement tab, then filter for 4 sub-reports"""
@@ -473,7 +488,22 @@ def get_measurement_value(row, possible_columns=None):
     return 0  # Default fallback
 
 # ✅ Main feed processor - UPDATED with new columns and flexible measurement column handling
-def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour, measurements, input_value_at_start, small_df):
+def process_feed(df,
+                 feed_type,
+                 report_time,
+                 scope_type,
+                 scope_value,
+                 start_hour,
+                 measurements,
+                 input_value_at_start,
+                 small_df,
+                 use_full_range=False,
+                 full_range_value=24):
+    # PERFORMANCE DEBUG: Log if full range filtering is active
+    if use_full_range:
+        print(
+            f"🚀 PERFORMANCE: Full range filtering active for {feed_type} feed - range: {full_range_value}, measurements: {len(measurements)}"
+        )
     df.columns = df.columns.str.strip().str.lower()
     df["time"] = df["time"].apply(clean_timestamp)
     df = df.iloc[::-1]  # reverse chronological
@@ -490,7 +520,6 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
             df = df[df["time"] >= cutoff]
 
     origins = extract_origins(df.columns)
-    
 
     new_data_rows = []
 
@@ -507,54 +536,92 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
             bracket_number = 0
             if "[" in origin_name and "]" in origin_name:
                 try:
-                    bracket_number = int(origin_name.split("[")[-1].replace("]", ""))
+                    bracket_number = int(
+                        origin_name.split("[")[-1].replace("]", ""))
                 except:
                     pass
             if "wasp" in origin_name:
-                arrival_time = get_weekly_anchor(report_time, max(1, bracket_number), start_hour)
+                arrival_time = get_weekly_anchor(report_time,
+                                                 max(1, bracket_number),
+                                                 start_hour)
             elif "macedonia" in origin_name:
-                arrival_time = get_monthly_anchor(report_time, max(1, bracket_number), start_hour)
+                arrival_time = get_monthly_anchor(report_time,
+                                                  max(1, bracket_number),
+                                                  start_hour)
             else:
                 arrival_time = report_time
             H, L, C = current[cols[0]], current[cols[1]], current[cols[2]]
-            
+
             # Calculate additional input values
             input_at_arrival = get_input_at_time(small_df, arrival_time)
             input_at_report = get_input_at_time(small_df, report_time)
-            
+
             for _, row in measurements.iterrows():
                 # Use flexible measurement value extraction
                 m_value = get_measurement_value(row)
                 output = calculate_pivot(H, L, C, m_value)
+
+                # OPTIMIZATION: Skip processing if using full range and output is outside range
+                if use_full_range and input_value_at_start is not None:
+                    high_limit = input_value_at_start + full_range_value
+                    low_limit = input_value_at_start - full_range_value
+                    if output < low_limit or output > high_limit:
+                        continue  # Skip this output
+
                 day = get_day_index(arrival_time, report_time, start_hour)
-                
+
                 # Format arrival time into separate columns
                 try:
-                    day_abbrev = arrival_time.strftime('%a')  # Mon, Tue, Wed, etc.
-                    arrival_excel = arrival_time.strftime('%d-%b-%Y %H:%M')  # Excel-friendly format
+                    day_abbrev = arrival_time.strftime(
+                        '%a')  # Mon, Tue, Wed, etc.
+                    arrival_excel = arrival_time.strftime(
+                        '%m/%d/%Y %H:%M')  # Excel-friendly format
                 except:
                     day_abbrev = ""
                     arrival_excel = str(arrival_time)
-                
+
                 new_data_rows.append({
-                    "Feed": feed_type,
-                    "ddd": day_abbrev,
-                    "Arrival": arrival_excel,
-                    "Arrival_datetime": arrival_time,  # Keep datetime for filtering
-                    "Day": day,
-                    "Origin": origin,
-                    "M Name": row.get("m name", row.get("M Name", row.get("M name", ""))),
-                    "M #": row.get("m #", row.get("M #", row.get("M value", get_measurement_value(row)))),
-                    "R #": row.get("r #", row.get("R #", "")),
-                    "Tag": row.get("tag", row.get("Tag", "")),
-                    "Family": row.get("family", row.get("Family", "")),
-                    f"Input @ {start_hour:02d}:00": input_value_at_start,
-                    f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
-                    "Input @ Arrival": input_at_arrival,
-                    "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
-                    "Input @ Report": input_at_report,
-                    "Diff @ Report": output - input_at_report if input_at_report is not None else None,
-                    "Output": output
+                    "Feed":
+                    feed_type,
+                    "ddd":
+                    day_abbrev,
+                    "Arrival":
+                    arrival_excel,
+                    "Day":
+                    day,
+                    "Origin":
+                    origin,
+                    "M Name":
+                    row.get("m name", row.get("M Name", row.get("M name",
+                                                                ""))),
+                    "M #":
+                    row.get(
+                        "m #",
+                        row.get("M #",
+                                row.get("M value",
+                                        get_measurement_value(row)))),
+                    "R #":
+                    row.get("r #", row.get("R #", "")),
+                    "Tag":
+                    row.get("tag", row.get("Tag", "")),
+                    "Family":
+                    row.get("family", row.get("Family", "")),
+                    f"Input @ {start_hour:02d}:00":
+                    input_value_at_start,
+                    f"Diff @ {start_hour:02d}:00":
+                    output - input_value_at_start,
+                    "Input @ Arrival":
+                    input_at_arrival,
+                    "Diff @ Arrival":
+                    output -
+                    input_at_arrival if input_at_arrival is not None else None,
+                    "Input @ Report":
+                    input_at_report,
+                    "Diff @ Report":
+                    output -
+                    input_at_report if input_at_report is not None else None,
+                    "Output":
+                    output
                 })
         else:
             # Process regular (non-special) origins
@@ -564,50 +631,86 @@ def process_feed(df, feed_type, report_time, scope_type, scope_value, start_hour
                 changed = any(current[col] != above[col] for col in cols)
                 if changed:
                     arrival_time = current["time"]
-                    H, L, C = current[cols[0]], current[cols[1]], current[cols[2]]
-                    
+                    H, L, C = current[cols[0]], current[cols[1]], current[
+                        cols[2]]
+
                     # Calculate additional input values
-                    input_at_arrival = get_input_at_time(small_df, arrival_time)
+                    input_at_arrival = get_input_at_time(
+                        small_df, arrival_time)
                     input_at_report = get_input_at_time(small_df, report_time)
-                    
+
                     for _, row in measurements.iterrows():
                         # Use flexible measurement value extraction
                         m_value = get_measurement_value(row)
                         output = calculate_pivot(H, L, C, m_value)
-                        day = get_day_index(arrival_time, report_time, start_hour)
-                        
+
+                # OPTIMIZATION: Skip processing if using full range and output is outside range
+                if use_full_range and input_value_at_start is not None:
+                    high_limit = input_value_at_start + full_range_value
+                    low_limit = input_value_at_start - full_range_value
+                    if output < low_limit or output > high_limit:
+                        continue  # Skip this output
+
+                        day = get_day_index(arrival_time, report_time,
+                                            start_hour)
+
                         # Format arrival time into separate columns
                         try:
-                            day_abbrev = arrival_time.strftime('%a')  # Mon, Tue, Wed, etc.
-                            arrival_excel = arrival_time.strftime('%d-%b-%Y %H:%M')  # Excel-friendly format
+                            day_abbrev = arrival_time.strftime(
+                                '%a')  # Mon, Tue, Wed, etc.
+                            arrival_excel = arrival_time.strftime(
+                                '%m/%d/%Y %H:%M')  # Excel-friendly format
                         except:
                             day_abbrev = ""
                             arrival_excel = str(arrival_time)
-                        
+
                         new_data_rows.append({
-                            "Feed": feed_type,
-                            "ddd": day_abbrev,
-                            "Arrival": arrival_excel,
-                            "Arrival_datetime": arrival_time,  # Keep datetime for filtering
-                            "Day": day,
-                            "Origin": origin,
-                            "M Name": row.get("m name", row.get("M Name", row.get("M name", ""))),
-                            "M #": row.get("m #", row.get("M #", row.get("M value", get_measurement_value(row)))),
-                            "R #": row.get("r #", row.get("R #", "")),
-                            "Tag": row.get("tag", row.get("Tag", "")),
-                            "Family": row.get("family", row.get("Family", "")),
-                            f"Input @ {start_hour:02d}:00": input_value_at_start,
-                            f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
-                            "Input @ Arrival": input_at_arrival,
-                            "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
-                            "Input @ Report": input_at_report,
-                            "Diff @ Report": output - input_at_report if input_at_report is not None else None,
-                            "Output": output
+                            "Feed":
+                            feed_type,
+                            "ddd":
+                            day_abbrev,
+                            "Arrival":
+                            arrival_excel,
+                            "Day":
+                            day,
+                            "Origin":
+                            origin,
+                            "M Name":
+                            row.get("m name",
+                                    row.get("M Name", row.get("M name", ""))),
+                            "M #":
+                            row.get(
+                                "m #",
+                                row.get(
+                                    "M #",
+                                    row.get("M value",
+                                            get_measurement_value(row)))),
+                            "R #":
+                            row.get("r #", row.get("R #", "")),
+                            "Tag":
+                            row.get("tag", row.get("Tag", "")),
+                            "Family":
+                            row.get("family", row.get("Family", "")),
+                            f"Input @ {start_hour:02d}:00":
+                            input_value_at_start,
+                            f"Diff @ {start_hour:02d}:00":
+                            output - input_value_at_start,
+                            "Input @ Arrival":
+                            input_at_arrival,
+                            "Diff @ Arrival":
+                            output - input_at_arrival
+                            if input_at_arrival is not None else None,
+                            "Input @ Report":
+                            input_at_report,
+                            "Diff @ Report":
+                            output - input_at_report
+                            if input_at_report is not None else None,
+                            "Output":
+                            output
                         })
 
-
-
     return new_data_rows
+
 
 # ✅ Apply Excel highlighting using xlsxwriter formatting
 def apply_excel_highlighting(workbook, worksheet, df, is_custom_ranges=False):
@@ -925,3 +1028,4 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
