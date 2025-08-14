@@ -60,7 +60,6 @@ except ImportError:
 
 # === Unified Export Helper ===
 def render_unified_export(traveler_reports, report_time):
-    """Render a single Excel download with all traveler groups."""
     if not traveler_reports:
         return
 
@@ -72,47 +71,61 @@ def render_unified_export(traveler_reports, report_time):
         else dt.datetime.now().strftime("%d-%b-%y_%H-%M")
     )
 
+    def _coerce_arrival_datetime(df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        if "Arrival_datetime" in df.columns:
+            df["Arrival"] = pd.to_datetime(df["Arrival_datetime"], errors="coerce")
+        elif "Arrival" in df.columns:
+            df["Arrival"] = pd.to_datetime(df["Arrival"], errors="coerce", infer_datetime_format=True)
+        return df
+
     excel_buffer = io.BytesIO()
-    with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+    with pd.ExcelWriter(excel_buffer, engine="xlsxwriter", datetime_format="mm/dd/yyyy hh:mm") as writer:
         workbook = writer.book
+        header_fmt = workbook.add_format({
+            "bold": True, "text_wrap": True, "valign": "top",
+            "fg_color": "#D7E4BC", "border": 1
+        })
+        date_fmt = workbook.add_format({"num_format": "mm/dd/yyyy hh:mm"})
+
         for group_name, group_data in traveler_reports.items():
-            if isinstance(group_data, pd.DataFrame) and not group_data.empty:
-                # Excel sheet name rules
-                sheet_name = group_name.replace(" ", "_").replace("-", "_")[:31]
+            if not isinstance(group_data, pd.DataFrame) or group_data.empty:
+                continue
 
-                # Drop a 'Group' column if present (it is only for display)
-                export_data = group_data.drop(columns=['Group'], errors='ignore').copy()
-                export_data.to_excel(writer, sheet_name=sheet_name, index=False)
+            sheet_name = group_name.replace(" ", "_").replace("-", "_")[:31]
+            export_data = group_data.drop(columns=["Group"], errors="ignore").copy()
+            export_data = _coerce_arrival_datetime(export_data)   # <-- force real datetimes
 
-                # Highlighting
-                worksheet = writer.sheets[sheet_name]
-                try:
-                    apply_excel_highlighting(workbook, worksheet, export_data, False)
-                except Exception as e:
-                    # Do not crash export if highlighting fails
-                    st.warning(f"Highlighting skipped for '{sheet_name}': {e}")
+            export_data.to_excel(writer, sheet_name=sheet_name, index=False)
+            ws = writer.sheets[sheet_name]
+
+            # headers
+            for c, name in enumerate(export_data.columns):
+                ws.write(0, c, name, header_fmt)
+
+            # make Arrival display as a date in Excel
+            if "Arrival" in export_data.columns:
+                a_idx = export_data.columns.get_loc("Arrival")
+                ws.set_column(a_idx, a_idx, 18, date_fmt)
+
+            # your existing conditional coloring
+            try:
+                apply_excel_highlighting(workbook, ws, export_data, False)
+            except Exception as e:
+                st.warning(f"Highlighting skipped for '{sheet_name}': {e}")
 
     excel_buffer.seek(0)
-    total_entries = sum(
-        len(df) for df in traveler_reports.values()
-        if isinstance(df, pd.DataFrame)
-    )
-    num_groups = len(
-        [k for k, v in traveler_reports.items()
-         if isinstance(v, pd.DataFrame) and not v.empty]
-    )
+    total_entries = sum(len(df) for df in traveler_reports.values() if isinstance(df, pd.DataFrame))
+    num_groups = sum(1 for v in traveler_reports.values() if isinstance(v, pd.DataFrame) and not v.empty)
 
     st.download_button(
-        label="📥 Download All Traveler Groups (Unified Excel)",
+        "📥 Download All Traveler Groups (Unified Excel)",
         data=excel_buffer.getvalue(),
         file_name=f"master_traveler_groups_{report_datetime_str}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         help=f"Excel file contains {num_groups} groups with {total_entries} total entries"
     )
-    st.success(
-        f"✅ Unified Excel file ready with {len(traveler_reports)} traveler groups "
-        f"({total_entries} total entries)"
-    )
+
 
 
 # 🔌 Streamlit interface (UI + orchestration)
