@@ -629,6 +629,8 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
     results = {
         'G.05.o1[0]': [],    # Today sequences ending in M50 + Anchor
         'G.05.o2[≠0]': [],   # Other day sequences ending in M50 + Anchor
+        'G.06.o1[0]': [],    # Today sequences with opposite M# ending (+50/-50 or -50/+50)
+        'G.06.o2[≠0]': [],   # Other day sequences with opposite M# ending
         'proximity_groups': [],
         'rejected_groups': []
     }
@@ -655,6 +657,16 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
     # Group by proximity
     proximity_groups = group_by_proximity(data_list, proximity_threshold)
     results['proximity_groups'] = proximity_groups
+    
+    # Debug proximity grouping (only when G.06 debug enabled)
+    if st.session_state.get('debug_g06', False):
+        st.write(f"Debug - Found {len(proximity_groups)} proximity groups")
+        for i, group in enumerate(proximity_groups):
+            st.write(f"Debug - Group {i+1}: {len(group)} items")
+            st.write(f"Debug - Group {i+1} outputs: {[item['Output'] for item in group]}")
+            st.write(f"Debug - Group {i+1} M# values: {[item['M #'] for item in group]}")
+            st.write(f"Debug - Group {i+1} origins: {[item['Origin'] for item in group]}")
+        st.write("---")
     
     # Process each proximity group and extract sequences
     for group in proximity_groups:
@@ -698,13 +710,11 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
             day_classification = classify_by_day(sequence)
             
             # Store sequence info for debugging
-            # Handle sorting with both datetime and string formats
             def get_sort_key(item):
                 arrival = item['Arrival']
                 if hasattr(arrival, 'isoformat'):
                     return arrival
                 else:
-                    # Try to parse string datetime if needed
                     try:
                         return pd.to_datetime(arrival)
                     except:
@@ -721,6 +731,7 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
             output_range_spread = max_output - min_output
             
             sequence_info = {
+                'sequence': sequence,
                 'outputs': output_values,
                 'origins': [item['Origin'] for item in sequence],
                 'm_values': [float(item['M #']) for item in sorted_by_time],
@@ -730,23 +741,63 @@ def detect_model_g_sequences(df, proximity_threshold=0.10):
                 'has_duplicates': has_duplicates,
                 'output_range': f"{min_output:.3f} to {max_output:.3f} (spread: {output_range_spread:.3f})",
                 'group_size': len(sequence),
-                'is_descending': True  # Already validated by find_temporal_descending_sequences
+                'is_descending': True,  # Already validated by find_temporal_descending_sequences
+                'day_type': day_classification
             }
             
             # Check if sequence ends with M# 50 and Anchor origin
             ends_with_m50_anchor = ends_with_m50_and_anchor(sequence)
             
-            # Only classify sequences that end with M50 + Anchor (o1/o2 only)
-            if ends_with_m50_anchor:
+            # Check if sequence ends with opposite M# values (+50/-50 or -50/+50) - G.06
+            ends_with_opposite_m50 = ends_with_opposite_m50_pair(sequence)
+            
+            # Debug logging for G.06 (only when enabled)
+            if st.session_state.get('debug_g06', False):
+                st.write(f"Debug - Processing sequence with {len(sequence)} items")
+                st.write(f"Debug - M# values: {[float(item['M #']) for item in sorted_by_time]}")
+                st.write(f"Debug - Origins: {[item['Origin'] for item in sorted_by_time]}")
+                st.write(f"Debug - Output values: {[float(item['Output']) for item in sorted_by_time]}")
+                st.write(f"Debug - Days: {[item['Day'] for item in sorted_by_time]}")
+                st.write(f"Debug - Feeds: {[item['Feed'] for item in sorted_by_time]}")
+                st.write(f"Debug - G.05 check (M50+Anchor): {ends_with_m50_anchor}")
+                st.write(f"Debug - G.06 check (Opposite M50): {ends_with_opposite_m50}")
+                if len(sorted_by_time) >= 2:
+                    st.write(f"Debug - Last two M# values: {[float(sorted_by_time[-2]['M #']), float(sorted_by_time[-1]['M #'])]}")
+                    st.write(f"Debug - Final origin type: {get_origin_type(sorted_by_time[-1]['Origin'])}")
+                st.write("---")
+            
+            # G.06 classification: sequences with opposite M# endings (independent check)
+            if ends_with_opposite_m50:
                 if day_classification == '[0]':
-                    results['G.05.o1[0]'].append(sequence_info)  # Today, ends M50+Anchor
+                    sequence_info['category'] = 'G.06.o1[0]'
+                    results['G.06.o1[0]'].append(sequence_info)  # Today, opposite M# ending
                 else:
-                    results['G.05.o2[≠0]'].append(sequence_info)  # Other days, ends M50+Anchor
-            else:
+                    sequence_info['category'] = 'G.06.o2[≠0]'
+                    results['G.06.o2[≠0]'].append(sequence_info)  # Other days, opposite M# ending
+            
+            # G.05 classification: sequences that end with M50 + Anchor (independent check)
+            if ends_with_m50_anchor:
+                # Create a copy for G.05 since a sequence could match both G.05 and G.06
+                g05_sequence_info = sequence_info.copy()
+                if day_classification == '[0]':
+                    g05_sequence_info['category'] = 'G.05.o1[0]'
+                    results['G.05.o1[0]'].append(g05_sequence_info)  # Today, ends M50+Anchor
+                else:
+                    g05_sequence_info['category'] = 'G.05.o2[≠0]'
+                    results['G.05.o2[≠0]'].append(g05_sequence_info)  # Other days, ends M50+Anchor
+            
+            # If sequence doesn't meet either G.05 or G.06 criteria, add to rejected
+            if not ends_with_m50_anchor and not ends_with_opposite_m50:
                 # Store rejected sequences for debugging
+                last_m_value = float(sorted_by_time[-1]["M #"])
+                second_last_m_value = float(sorted_by_time[-2]["M #"]) if len(sorted_by_time) >= 2 else None
+                rejection_reason = f'Does not meet G.05 (M50+Anchor) or G.06 (opposite M# pair) criteria'
+                if second_last_m_value is not None:
+                    rejection_reason += f' (ends with M#{last_m_value}, M#{second_last_m_value} + {get_origin_type(sorted_by_time[-1]["Origin"])})'
+                
                 results['rejected_groups'].append({
                     'outputs': sequence_info['outputs'],
-                    'reasons': [f'Does not end with M50+Anchor (ends with M#{abs(float(sorted_by_time[-1]["M #"]))} + {get_origin_type(sorted_by_time[-1]["Origin"])})'],
+                    'reasons': [rejection_reason],
                     'output_range': sequence_info['output_range'],
                     'sequence_details': f"M# sequence: {sequence_info['m_values']}, Origins: {sequence_info['origins']}"
                 })
