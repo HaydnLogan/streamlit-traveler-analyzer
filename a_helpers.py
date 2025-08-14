@@ -581,47 +581,26 @@ def process_feed(df,
                     arrival_excel = str(arrival_time)
 
                 new_data_rows.append({
-                    "Feed":
-                    feed_type,
-                    "ddd":
-                    day_abbrev,
-                    "Arrival":
-                    arrival_excel,
-                    "Day":
-                    day,
-                    "Origin":
-                    origin,
-                    "M Name":
-                    row.get("m name", row.get("M Name", row.get("M name",
-                                                                ""))),
-                    "M #":
-                    row.get(
-                        "m #",
-                        row.get("M #",
-                                row.get("M value",
-                                        get_measurement_value(row)))),
-                    "R #":
-                    row.get("r #", row.get("R #", "")),
-                    "Tag":
-                    row.get("tag", row.get("Tag", "")),
-                    "Family":
-                    row.get("family", row.get("Family", "")),
-                    f"Input @ {start_hour:02d}:00":
-                    input_value_at_start,
-                    f"Diff @ {start_hour:02d}:00":
-                    output - input_value_at_start,
-                    "Input @ Arrival":
-                    input_at_arrival,
-                    "Diff @ Arrival":
-                    output -
-                    input_at_arrival if input_at_arrival is not None else None,
-                    "Input @ Report":
-                    input_at_report,
-                    "Diff @ Report":
-                    output -
-                    input_at_report if input_at_report is not None else None,
-                    "Output":
-                    output
+                    "Feed": feed_type,
+                    "ddd": day_abbrev,
+                    "Arrival": arrival_excel,
+                    "Arrival_datetime": arrival_time,
+                    "Day": day,
+                    "Origin": origin,
+                    "M Name": row.get("m name", row.get("M Name", row.get("M name", ""))),
+                    "M #": row.get("m #", row.get("M #", row.get("M value", et_measurement_value(row)))),
+                    "R #": row.get("r #", row.get("R #", "")),
+                    "Tag": row.get("tag", row.get("Tag", "")),
+                    "Family": row.get("family", row.get("Family", "")),
+                    f"Input @ {start_hour:02d}:00": input_value_at_start,
+                    f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
+                    "Input @ Arrival": input_at_arrival,
+                    "Diff @ Arrival": output - input_at_arrival
+                    if input_at_arrival is not None else None,
+                    "Input @ Report": input_at_report,
+                    "Diff @ Report": output - input_at_report
+                    if input_at_report is not None else None,
+                    "Output": output
                 })
         else:
             # Process regular (non-special) origins
@@ -665,48 +644,26 @@ def process_feed(df,
                             arrival_excel = str(arrival_time)
 
                         new_data_rows.append({
-                            "Feed":
-                            feed_type,
-                            "ddd":
-                            day_abbrev,
-                            "Arrival":
-                            arrival_excel,
-                            "Day":
-                            day,
-                            "Origin":
-                            origin,
-                            "M Name":
-                            row.get("m name",
-                                    row.get("M Name", row.get("M name", ""))),
-                            "M #":
-                            row.get(
-                                "m #",
-                                row.get(
-                                    "M #",
-                                    row.get("M value",
-                                            get_measurement_value(row)))),
-                            "R #":
-                            row.get("r #", row.get("R #", "")),
-                            "Tag":
-                            row.get("tag", row.get("Tag", "")),
-                            "Family":
-                            row.get("family", row.get("Family", "")),
-                            f"Input @ {start_hour:02d}:00":
-                            input_value_at_start,
-                            f"Diff @ {start_hour:02d}:00":
-                            output - input_value_at_start,
-                            "Input @ Arrival":
-                            input_at_arrival,
-                            "Diff @ Arrival":
-                            output - input_at_arrival
+                            "Feed": feed_type,
+                            "ddd": day_abbrev,
+                            "Arrival": arrival_excel,
+                            "Arrival_datetime": arrival_time,
+                            "Day": day,
+                            "Origin": origin,
+                            "M Name": row.get("m name", row.get("M Name", row.get("M name", ""))),
+                            "M #": row.get("m #", row.get("M #", row.get("M value", et_measurement_value(row)))),
+                            "R #": row.get("r #", row.get("R #", "")),
+                            "Tag": row.get("tag", row.get("Tag", "")),
+                            "Family": row.get("family", row.get("Family", "")),
+                            f"Input @ {start_hour:02d}:00": input_value_at_start,
+                            f"Diff @ {start_hour:02d}:00": output - input_value_at_start,
+                            "Input @ Arrival": input_at_arrival,
+                            "Diff @ Arrival": output - input_at_arrival
                             if input_at_arrival is not None else None,
-                            "Input @ Report":
-                            input_at_report,
-                            "Diff @ Report":
-                            output - input_at_report
+                            "Input @ Report": input_at_report,
+                            "Diff @ Report": output - input_at_report
                             if input_at_report is not None else None,
-                            "Output":
-                            output
+                            "Output": output
                         })
 
     return new_data_rows
@@ -715,155 +672,164 @@ def process_feed(df,
 # ✅ Apply Excel highlighting using xlsxwriter formatting
 def apply_excel_highlighting(workbook, worksheet, df, is_custom_ranges=False):
     """Apply highlighting to Excel export using xlsxwriter formatting"""
-    
-    # Define formats
+
+    # Formats
     header_format = workbook.add_format({
-        'bold': True,
-        'text_wrap': True,
-        'valign': 'top',
-        'fg_color': '#D7E4BC',
-        'border': 1
+        'bold': True, 'text_wrap': True, 'valign': 'top',
+        'fg_color': '#D7E4BC', 'border': 1
     })
-    
+
+    # Date formats (normal + Day[0] yellow)
+    date_fmt = workbook.add_format({'num_format': 'mm/dd/yyyy hh:mm'})
+    day_zero_format = workbook.add_format({'fg_color': '#FFFF00'})
+    day_zero_bold_format = workbook.add_format({'fg_color': '#FFFF00', 'bold': True})
+    day_zero_date_fmt = workbook.add_format({'fg_color': '#FFFF00', 'num_format': 'mm/dd/yyyy hh:mm'})
+
     # Origin color formats
     spain_saturn_format = workbook.add_format({'fg_color': '#39FF14'})  # Neon Green
-    jupiter_format = workbook.add_format({'fg_color': '#d1ecf1'})  # Light blue
-    kepler_format = workbook.add_format({'fg_color': '#ff4d00'})  # Red Orange
+    jupiter_format = workbook.add_format({'fg_color': '#d1ecf1'})       # Light blue
+    kepler_format = workbook.add_format({'fg_color': '#ff4d00'})        # Red Orange
     trinidad_tobago_format = workbook.add_format({'fg_color': '#f0cb59'})  # Gold
-    wasp_format = workbook.add_format({'fg_color': '#C0C0C0'})  # Light Gray
-    macedonia_format = workbook.add_format({'fg_color': '#e022d7'})  # Magenta
-    
-    # Day [0] format
-    day_zero_format = workbook.add_format({'fg_color': '#FFFF00'})  # Yellow
-    day_zero_bold_format = workbook.add_format({'fg_color': '#FFFF00', 'bold': True})  # Yellow + Bold
-    
-    # M# value formats
-    m0_format = workbook.add_format({'fg_color': '#E6E6FA', 'bold': True})  # Lavender
+    wasp_format = workbook.add_format({'fg_color': '#C0C0C0'})          # Light Gray
+    macedonia_format = workbook.add_format({'fg_color': '#e022d7'})     # Magenta
+
+    # M# formats
+    m0_format = workbook.add_format({'fg_color': '#E6E6FA', 'bold': True})   # Lavender
     m40_format = workbook.add_format({'fg_color': '#D3D3D3', 'bold': True})  # Light gray
     m54_format = workbook.add_format({'fg_color': '#ADD8E6', 'bold': True})  # Light blue
-    
-    # Zone formats (always define, used conditionally)
-    zone_high_0to6_format = workbook.add_format({'fg_color': '#ff0000'})  # Bright red
-    zone_high_6to12_format = workbook.add_format({'fg_color': '#ff6666'})  # Medium red
-    zone_high_12to18_format = workbook.add_format({'fg_color': '#ffaaaa'})  # Light red
-    zone_high_18to24_format = workbook.add_format({'fg_color': '#ffdd44'})  # Light orange
-    zone_low_0to6_format = workbook.add_format({'fg_color': '#4444ff'})  # Bright blue
-    zone_low_6to12_format = workbook.add_format({'fg_color': '#7777ff'})  # Medium blue
-    zone_low_12to18_format = workbook.add_format({'fg_color': '#aaaaff'})  # Light blue
-    zone_low_18to24_format = workbook.add_format({'fg_color': '#dddddd'})  # Gray
-    
-    # Apply header formatting
+
+    # Zone formats (custom ranges only)
+    zone_high_0to6_format = workbook.add_format({'fg_color': '#ff0000'})
+    zone_high_6to12_format = workbook.add_format({'fg_color': '#ff6666'})
+    zone_high_12to18_format = workbook.add_format({'fg_color': '#ffaaaa'})
+    zone_high_18to24_format = workbook.add_format({'fg_color': '#ffdd44'})
+    zone_low_0to6_format  = workbook.add_format({'fg_color': '#4444ff'})
+    zone_low_6to12_format = workbook.add_format({'fg_color': '#7777ff'})
+    zone_low_12to18_format = workbook.add_format({'fg_color': '#aaaaff'})
+    zone_low_18to24_format = workbook.add_format({'fg_color': '#dddddd'})
+
+    # Header row
     for col_num, value in enumerate(df.columns.values):
         worksheet.write(0, col_num, value, header_format)
-    
-    # Apply row formatting
-    for row_idx, (index, row) in enumerate(df.iterrows(), start=1):
-        # Origin highlighting
+
+    # 👉 Make the whole Arrival column a real Excel date/time
+    arrival_col_idx = df.columns.get_loc('Arrival') if 'Arrival' in df.columns else None
+    if arrival_col_idx is not None:
+        # width ~ 19 fits "mm/dd/yyyy hh:mm"
+        worksheet.set_column(arrival_col_idx, arrival_col_idx, 19, date_fmt)
+
+    # Helper: safe datetime conversion for write_datetime
+    def _as_pydt(x):
+        if pd.isna(x):
+            return None
+        if isinstance(x, dt.datetime):
+            return x
+        try:
+            return pd.to_datetime(x).to_pydatetime()
+        except Exception:
+            return None
+
+    # Row formatting
+    for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
+        # ----- Origin highlighting -----
         if 'Origin' in df.columns:
             origin_col = df.columns.get_loc('Origin')
             origin = str(row.get('Origin', '')).lower()
-            origin_format = None
-            
+            origin_fmt = None
             if origin in ['spain', 'saturn']:
-                origin_format = spain_saturn_format
+                origin_fmt = spain_saturn_format
             elif origin == 'jupiter':
-                origin_format = jupiter_format
+                origin_fmt = jupiter_format
             elif origin in ['kepler-62', 'kepler-44']:
-                origin_format = kepler_format
+                origin_fmt = kepler_format
             elif origin in ['trinidad', 'tobago']:
-                origin_format = trinidad_tobago_format
+                origin_fmt = trinidad_tobago_format
             elif 'wasp' in origin:
-                origin_format = wasp_format
+                origin_fmt = wasp_format
             elif 'macedonia' in origin:
-                origin_format = macedonia_format
-            
-            if origin_format:
-                value = row['Origin']
-                if pd.isna(value):
-                    value = ''
-                worksheet.write(row_idx, origin_col, value, origin_format)
-        
-        # Day [0] highlighting
+                origin_fmt = macedonia_format
+            if origin_fmt:
+                val = row['Origin']
+                worksheet.write(row_idx, origin_col, '' if pd.isna(val) else val, origin_fmt)
+
+        # ----- Day [0] highlighting (special-case Arrival to preserve date typing) -----
         day_val = str(row.get('Day', '')).strip().lower()
         if day_val == '[0]':
-            # Highlight Day column with bold
+            # Bold Day cell
             if 'Day' in df.columns:
                 day_col = df.columns.get_loc('Day')
-                value = row['Day']
-                if pd.isna(value):
-                    value = ''
-                worksheet.write(row_idx, day_col, value, day_zero_bold_format)
-            
-            # Highlight other columns (excluding Origin, M Name, M #)
+                worksheet.write(row_idx, day_col, '' if pd.isna(row['Day']) else row['Day'], day_zero_bold_format)
+
             for col_name in df.columns:
-                if col_name not in ['Origin', 'M Name', 'M #', 'Day']:
-                    col_idx = df.columns.get_loc(col_name)
-                    # Handle NaN/INF values for Excel compatibility
-                    value = row[col_name]
-                    if pd.isna(value) or (isinstance(value, float) and (np.isinf(value) or np.isnan(value))):
-                        value = ''  # Replace NaN/INF with empty string
-                    worksheet.write(row_idx, col_idx, value, day_zero_format)
-        
-        # M# value highlighting
+                if col_name in ['Origin', 'M Name', 'M #', 'Day', 'Arrival']:
+                    continue  # handled separately or intentionally skipped
+
+                col_idx = df.columns.get_loc(col_name)
+                val = row[col_name]
+                if pd.isna(val) or (isinstance(val, float) and (np.isinf(val) or np.isnan(val))):
+                    val = ''
+                worksheet.write(row_idx, col_idx, val, day_zero_format)
+
+            # ✅ Handle Arrival as a true Excel date with yellow fill
+            if arrival_col_idx is not None:
+                # Prefer an explicit Arrival_datetime column if present
+                arr_dt = None
+                if 'Arrival_datetime' in df.columns and pd.notna(row.get('Arrival_datetime')):
+                    arr_dt = _as_pydt(row['Arrival_datetime'])
+                if arr_dt is None:
+                    arr_dt = _as_pydt(row.get('Arrival'))
+                if arr_dt is not None:
+                    worksheet.write_datetime(row_idx, arrival_col_idx, arr_dt, day_zero_date_fmt)
+                else:
+                    # Fallback: write as text (rare)
+                    worksheet.write(row_idx, arrival_col_idx, row.get('Arrival', ''), day_zero_date_fmt)
+
+        # ----- M# highlighting -----
         if 'M #' in df.columns:
             try:
                 m_val = int(row.get('M #', -999))
-                m_format = None
-                
+                m_fmt = None
                 if m_val == 0:
-                    m_format = m0_format
+                    m_fmt = m0_format
                 elif abs(m_val) == 40:
-                    m_format = m40_format
+                    m_fmt = m40_format
                 elif abs(m_val) == 54:
-                    m_format = m54_format
-                
-                if m_format:
+                    m_fmt = m54_format
+                if m_fmt:
                     m_col = df.columns.get_loc('M #')
                     m_value = row['M #']
-                    if pd.isna(m_value) or (isinstance(m_value, float) and (np.isinf(m_value) or np.isnan(m_value))):
-                        m_value = ''
-                    worksheet.write(row_idx, m_col, m_value, m_format)
-                    
+                    worksheet.write(row_idx, m_col, '' if pd.isna(m_value) else m_value, m_fmt)
                     if 'M Name' in df.columns:
                         m_name_col = df.columns.get_loc('M Name')
                         m_name_value = row['M Name']
-                        if pd.isna(m_name_value):
-                            m_name_value = ''
-                        worksheet.write(row_idx, m_name_col, m_name_value, m_format)
-            except:
+                        worksheet.write(row_idx, m_name_col, '' if pd.isna(m_name_value) else m_name_value, m_fmt)
+            except Exception:
                 pass
-        
-        # Zone highlighting for custom ranges
+
+        # ----- Zone highlighting (custom ranges only) -----
         if is_custom_ranges and 'Zone' in df.columns and 'Range' in df.columns:
             zone_val = str(row.get('Zone', ''))
             range_val = str(row.get('Range', ''))
             zone_col = df.columns.get_loc('Zone')
-            zone_format = None
-            
+            zone_fmt = None
             if 'High' in range_val:
-                if zone_val == '0 to 6':
-                    zone_format = zone_high_0to6_format
-                elif zone_val == '6 to 12':
-                    zone_format = zone_high_6to12_format
-                elif zone_val == '12 to 18':
-                    zone_format = zone_high_12to18_format
-                elif zone_val == '18 to 24':
-                    zone_format = zone_high_18to24_format
+                zone_fmt = {
+                    '0 to 6': zone_high_0to6_format,
+                    '6 to 12': zone_high_6to12_format,
+                    '12 to 18': zone_high_12to18_format,
+                    '18 to 24': zone_high_18to24_format
+                }.get(zone_val)
             elif 'Low' in range_val:
-                if zone_val == '0 to 6':
-                    zone_format = zone_low_0to6_format
-                elif zone_val == '6 to 12':
-                    zone_format = zone_low_6to12_format
-                elif zone_val == '12 to 18':
-                    zone_format = zone_low_12to18_format
-                elif zone_val == '18 to 24':
-                    zone_format = zone_low_18to24_format
-            
-            if zone_format:
-                zone_value = row['Zone']
-                if pd.isna(zone_value):
-                    zone_value = ''
-                worksheet.write(row_idx, zone_col, zone_value, zone_format)
+                zone_fmt = {
+                    '0 to 6': zone_low_0to6_format,
+                    '6 to 12': zone_low_6to12_format,
+                    '12 to 18': zone_low_12to18_format,
+                    '18 to 24': zone_low_18to24_format
+                }.get(zone_val)
+            if zone_fmt:
+                z = row['Zone']
+                worksheet.write(row_idx, zone_col, '' if pd.isna(z) else z, zone_fmt)
+
 
 # ✅ Enhanced highlighting for traveler reports with updated colors and restored M# highlighting
 def highlight_traveler_report(df):
@@ -1028,4 +994,5 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
 
