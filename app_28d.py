@@ -195,7 +195,7 @@ if report_type == "Full Range":
         full_range_value = st.number_input(
             "Full Range Value (±)",
             min_value=1,
-            value=1100,
+            value=250,
             key="global_full_range"
         )
     with col2:
@@ -281,7 +281,7 @@ if bypass_traveler_file:
                         st.info("No Group 1a entries found in bypass report for Model G detection")
                     else:
                         try:
-                            from models_g_updated import run_model_g_detection as _g
+                            from models.models_g import run_model_g_detection as _g
                         except ImportError:
                             try:
                                 from model_g import run_model_g_detection as _g
