@@ -130,7 +130,7 @@ def render_unified_export(traveler_reports, report_time):
 
 # 🔌 Streamlit interface (UI + orchestration)
 st.set_page_config(layout="wide")
-st.header("🧬 Data Processor + Model A/B/C/G Detector with fast mode. v28e")
+st.header("🧬 Data Processor + Model A/B/C/G Detector with fast mode. v28e2")
 
 # 📤 Uploads
 small_feed_file = st.file_uploader("Upload small feed", type="csv")
@@ -294,7 +294,7 @@ if bypass_traveler_file:
                         st.info("No Group 1a entries found in bypass report for Model G detection")
                     else:
                         try:
-                            from models.models_g import run_model_g_detection as _g
+                            from models.models_g08 import run_model_g_detection as _g
                         except ImportError:
                             try:
                                 from model_g import run_model_g_detection as _g
