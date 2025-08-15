@@ -20,7 +20,7 @@ from a_helpers import (
 
 # Model imports - work in your environment, fallbacks for this environment
 try:
-    from models.models_g import run_model_g_detection
+    from models.models_g08 import run_model_g_detection
 except ImportError:
     try:
         from models.models_g import run_model_g_detection
@@ -294,7 +294,7 @@ if bypass_traveler_file:
                         st.info("No Group 1a entries found in bypass report for Model G detection")
                     else:
                         try:
-                            from models.models_g import run_model_g_detection as _g
+                            from models.models_g08 import run_model_g_detection as _g
                         except ImportError:
                             try:
                                 from model_g import run_model_g_detection as _g
