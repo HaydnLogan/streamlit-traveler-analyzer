@@ -11,7 +11,7 @@ from custom_range_calculator import apply_custom_ranges_advanced, apply_full_ran
 
 # Configure pandas to handle large datasets
 pd.set_option("styler.render.max_elements", 2000000)
-
+fmana
 # Import functions - these paths are confirmed working
 from a_helpers import (
     clean_timestamp, process_feed, get_input_at_day_start, apply_excel_highlighting,
@@ -292,7 +292,12 @@ if bypass_traveler_file:
                             except ImportError:
                                 from model_g_detector import run_model_g_detection as _g
 
-                        g_results = _g(grp_1b_df, report_time, key_suffix="_bypass")
+                        g_results = run_model_g_detection(
+                            final_df_filtered,
+                            proximity_threshold=0.10,
+                            report_time=report_time,
+                            key_suffix="_main",
+                        )
                         if isinstance(g_results, dict) and 'success' in g_results:
                             if g_results['success']:
                                 summary = g_results['summary']
@@ -639,7 +644,12 @@ elif small_feed_file and big_feed_file and measurement_file:
         if run_g_models:
             st.markdown("---")
             try:
-                g_results = run_model_g_detection(final_df_filtered, report_time, key_suffix="_main")
+                g_results = run_model_g_detection(
+                    final_df_filtered,
+                    proximity_threshold=0.10,
+                    report_time=report_time,
+                    key_suffix="_main",
+                )
                 if isinstance(g_results, dict) and 'success' in g_results:
                     if g_results['success']:
                         summary = g_results['summary']
