@@ -121,7 +121,7 @@ def generate_master_traveler_list(data, measurements, small_df, report_time, sta
                     # Format arrival time
                     try:
                         day_abbrev = arrival_time.strftime('%a')
-                        arrival_excel = arrival_time.strftime('%d-%b-%Y %H:%M')
+                        arrival_excel = arrival_time.strftime('%Y-%m-%d %H:%M')
                     except:
                         day_abbrev = ""
                         arrival_excel = str(arrival_time)
@@ -575,7 +575,7 @@ def process_feed(df,
                     day_abbrev = arrival_time.strftime(
                         '%a')  # Mon, Tue, Wed, etc.
                     arrival_excel = arrival_time.strftime(
-                        '%m/%d/%Y %H:%M')  # Excel-friendly format
+                        '%Y-%m-%d %H:%M')  # Excel-friendly format
                 except:
                     day_abbrev = ""
                     arrival_excel = str(arrival_time)
@@ -638,7 +638,7 @@ def process_feed(df,
                             day_abbrev = arrival_time.strftime(
                                 '%a')  # Mon, Tue, Wed, etc.
                             arrival_excel = arrival_time.strftime(
-                                '%m/%d/%Y %H:%M')  # Excel-friendly format
+                                '%Y-%m-%d %H:%M')  # Excel-friendly format
                         except:
                             day_abbrev = ""
                             arrival_excel = str(arrival_time)
@@ -994,5 +994,6 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
 
 
