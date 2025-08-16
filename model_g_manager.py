@@ -19,6 +19,22 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
         st.warning("⚠️ No data available for Model G detection")
         return {}
     
+    # 🔧 normalize types once
+    norm = df.copy()
+    if "Arrival_datetime" in norm.columns:
+        norm["Arrival_datetime"] = pd.to_datetime(norm["Arrival_datetime"], errors="coerce")
+    elif "Arrival" in norm.columns:
+        norm["Arrival_datetime"] = pd.to_datetime(norm["Arrival"], errors="coerce", infer_datetime_format=True)
+    for col in ("Output", "M #"):
+        if col in norm.columns:
+            norm[col] = pd.to_numeric(norm[col], errors="coerce")
+
+    with st.expander("G.05 & G.06 Detection", expanded=True):
+        g05_g06_results = run_g05_g06_detection(norm, proximity_threshold)
+        ...
+    with st.expander("G.08 Detection", expanded=True):
+        g08_results = run_g08_detection(norm, proximity_threshold)
+    
     st.write("### 🔍 Model G Detection Results")
     
     # Initialize consolidated results
