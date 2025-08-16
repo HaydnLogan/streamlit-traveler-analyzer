@@ -680,10 +680,10 @@ def apply_excel_highlighting(workbook, worksheet, df, is_custom_ranges=False):
     })
 
     # Date formats (normal + Day[0] yellow)
-    date_fmt = workbook.add_format({'num_format': 'mm/dd/yyyy hh:mm'})
+    date_fmt = workbook.add_format({'num_format': 'yyyy-mm-dd hh:mm'})
     day_zero_format = workbook.add_format({'fg_color': '#FFFF00'})
     day_zero_bold_format = workbook.add_format({'fg_color': '#FFFF00', 'bold': True})
-    day_zero_date_fmt = workbook.add_format({'fg_color': '#FFFF00', 'num_format': 'mm/dd/yyyy hh:mm'})
+    day_zero_date_fmt = workbook.add_format({'fg_color': '#FFFF00', 'num_format': 'yyyy-mm-dd hh:mm'})
 
     # Origin color formats
     spain_saturn_format = workbook.add_format({'fg_color': '#39FF14'})  # Neon Green
@@ -994,6 +994,7 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
 
 
 
