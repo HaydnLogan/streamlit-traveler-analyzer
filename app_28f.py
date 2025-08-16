@@ -11,7 +11,7 @@ from custom_range_calculator import apply_custom_ranges_advanced, apply_full_ran
 
 # Configure pandas to handle large datasets
 pd.set_option("styler.render.max_elements", 2000000)
-fmana
+
 # Import functions - these paths are confirmed working
 from a_helpers import (
     clean_timestamp, process_feed, get_input_at_day_start, apply_excel_highlighting,
