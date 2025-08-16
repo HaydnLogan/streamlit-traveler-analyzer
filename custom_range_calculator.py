@@ -388,7 +388,7 @@ def find_valid_m_values(measurement_df, raw_m_low, raw_m_high, hlc_data, range_l
                         try:
                             arrival_dt = hlc_data['datetime']
                             day_abbrev = arrival_dt.strftime('%a')  # Mon, Tue, Wed, etc.
-                            arrival_excel = arrival_dt.strftime('%m/%d/%Y %H:%M')  # Excel-friendly format
+                            arrival_excel = arrival_dt.strftime('%Y-%m-%d %H:%M')  # Excel-friendly format
                             
                             # Calculate day index using proper get_day_index function
                             try:
