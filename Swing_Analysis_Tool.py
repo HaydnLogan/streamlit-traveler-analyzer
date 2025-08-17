@@ -68,82 +68,108 @@ def categorize_swing(move_size):
 def get_trading_day(timestamp, day_start_hour=18):
     """Get trading day based on start hour (default 18:00)"""
     if timestamp.hour < day_start_hour:
-        # Before 18:00, belongs to previous day's session
-        return (timestamp - dt.timedelta(days=1)).date()
-    else:
-        # After 18:00, belongs to current day's session
+        # Before 18:00, belongs to current calendar day's session
         return timestamp.date()
+    else:
+        # After 18:00, belongs to next day's session
+        return (timestamp + dt.timedelta(days=1)).date()
 
 def detect_swings(df, swing_threshold=30, drawdown_limit=25):
     """
-    Detect swings that move >= swing_threshold before drawdown_limit occurs
-    Enhanced to track from/to datetime and prices
+    Detect swings by tracking actual price flow chronologically
+    Look for moves that go >= swing_threshold before retracing >= drawdown_limit
     """
     swings = []
     
     if len(df) == 0:
         return swings
     
-    # Initialize state
-    current_swing_high = df.iloc[0]['high']
-    current_swing_low = df.iloc[0]['low'] 
-    swing_high_time = df.iloc[0]['time']
-    swing_low_time = df.iloc[0]['time']
-    looking_for_high = True
+    # Track all price extremes chronologically
+    price_points = []
     
+    # Extract high/low with timestamps for each bar
     for idx, row in df.iterrows():
-        if looking_for_high:
-            # Looking for swing high
-            if row['high'] > current_swing_high:
-                current_swing_high = row['high']
-                swing_high_time = row['time']
-            elif current_swing_high - row['low'] >= drawdown_limit:
-                # Found potential swing high
-                move_size = current_swing_high - current_swing_low
-                if move_size >= swing_threshold:
+        price_points.append({
+            'price': row['low'],
+            'time': row['time'],
+            'type': 'low',
+            'bar_idx': idx
+        })
+        price_points.append({
+            'price': row['high'], 
+            'time': row['time'],
+            'type': 'high',
+            'bar_idx': idx
+        })
+    
+    # Sort by time, then by price (lows first, then highs for same timestamp)
+    price_points.sort(key=lambda x: (x['time'], x['price'] if x['type'] == 'low' else -x['price']))
+    
+    if len(price_points) < 2:
+        return swings
+    
+    # Track swing detection state
+    current_extreme = price_points[0]
+    looking_for_opposite = 'high' if current_extreme['type'] == 'low' else 'low'
+    
+    for point in price_points[1:]:
+        if point['type'] == looking_for_opposite:
+            # Calculate potential move size
+            if current_extreme['type'] == 'low' and point['type'] == 'high':
+                move_size = point['price'] - current_extreme['price']
+                direction = 'up'
+            elif current_extreme['type'] == 'high' and point['type'] == 'low':
+                move_size = current_extreme['price'] - point['price']
+                direction = 'down'
+            else:
+                continue
+                
+            # Check if this move qualifies as a swing
+            if move_size >= swing_threshold:
+                # Now look for the drawdown confirmation
+                found_drawdown = False
+                
+                # Check subsequent points for drawdown
+                point_idx = price_points.index(point)
+                for future_point in price_points[point_idx + 1:]:
+                    if direction == 'up' and future_point['type'] == 'low':
+                        # After upswing, check for significant low
+                        drawdown = point['price'] - future_point['price']
+                        if drawdown >= drawdown_limit:
+                            found_drawdown = True
+                            break
+                    elif direction == 'down' and future_point['type'] == 'high':
+                        # After downswing, check for significant high  
+                        drawdown = future_point['price'] - point['price']
+                        if drawdown >= drawdown_limit:
+                            found_drawdown = True
+                            break
+                
+                # If we found drawdown, record this as a confirmed swing
+                if found_drawdown:
                     swings.append({
-                        'type': 'high',
-                        'swing_price': current_swing_high,
-                        'swing_time': swing_high_time,
+                        'type': point['type'],
+                        'swing_price': point['price'],
+                        'swing_time': point['time'], 
                         'move_size': move_size,
                         'category': categorize_swing(move_size),
-                        'from_price': current_swing_low,
-                        'from_time': swing_low_time,
-                        'to_price': current_swing_high,
-                        'to_time': swing_high_time,
-                        'direction': 'up'
+                        'from_price': current_extreme['price'],
+                        'from_time': current_extreme['time'],
+                        'to_price': point['price'],
+                        'to_time': point['time'],
+                        'direction': direction
                     })
-                
-                # Switch to looking for low
-                current_swing_low = row['low']
-                swing_low_time = row['time']
-                looking_for_high = False
-        else:
-            # Looking for swing low
-            if row['low'] < current_swing_low:
-                current_swing_low = row['low']
-                swing_low_time = row['time']
-            elif row['high'] - current_swing_low >= drawdown_limit:
-                # Found potential swing low
-                move_size = current_swing_high - current_swing_low
-                if move_size >= swing_threshold:
-                    swings.append({
-                        'type': 'low',
-                        'swing_price': current_swing_low,
-                        'swing_time': swing_low_time,
-                        'move_size': move_size,
-                        'category': categorize_swing(move_size),
-                        'from_price': current_swing_high,
-                        'from_time': swing_high_time,
-                        'to_price': current_swing_low,
-                        'to_time': swing_low_time,
-                        'direction': 'down'
-                    })
-                
-                # Switch to looking for high
-                current_swing_high = row['high']
-                swing_high_time = row['time']
-                looking_for_high = True
+                    
+                    # Update tracking for next swing
+                    current_extreme = point
+                    looking_for_opposite = 'low' if point['type'] == 'high' else 'high'
+            
+        elif point['type'] == current_extreme['type']:
+            # Update current extreme if this is a better extreme of same type
+            if current_extreme['type'] == 'high' and point['price'] > current_extreme['price']:
+                current_extreme = point
+            elif current_extreme['type'] == 'low' and point['price'] < current_extreme['price']:
+                current_extreme = point
     
     return swings
 
