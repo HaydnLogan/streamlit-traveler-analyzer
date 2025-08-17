@@ -7,10 +7,10 @@ import io
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-st.set_page_config(page_title="Market Swing Analysis", layout="wide")
+st.set_page_config(page_title="Market Swing Analysis 02", layout="wide")
 st.header("📈 Market Swing Analysis Tool")
 
-# File upload - now supports both CSV and Excel
+# File upload - supports both CSV and Excel
 uploaded_file = st.file_uploader("Upload OHLC file", type=['csv', 'xlsx', 'xls'])
 
 def parse_timestamp_naive(timestamp_str):
@@ -387,36 +387,101 @@ if uploaded_file is not None:
                 # Export options
                 st.subheader("💾 Export Data")
                 
-                # Excel export
+                # 1) Summary (keep true datetimes for export)
+                summary_df = pd.DataFrame(daily_stats)                         # has datetimes
+                export_summary = summary_df.drop(columns=['all_swings'], errors='ignore').copy()
+                
+                # 2) Display-only summary with strings
+                display_summary = export_summary.copy()
+                for col in ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']:
+                    if col in display_summary.columns:
+                        display_summary[col] = pd.to_datetime(display_summary[col], errors='coerce').dt.strftime('%Y-%m-%d %H:%M')
+                
+                # 3) Build detailed swings for BOTH export (datetimes) and display (strings)
+                detailed_swings_export  = []
+                detailed_swings_display = []
+                for day_stat in daily_stats:
+                    for s in day_stat.get('all_swings', []):
+                        # --- export (datetimes) ---
+                        detailed_swings_export.append({
+                            'trading_day': day_stat['trading_day'],
+                            'swing_type': s['type'],
+                            'direction': s['direction'],
+                            'from_datetime': s['from_time'],   # datetime
+                            'from_price': s['from_price'],
+                            'to_datetime': s['to_time'],       # datetime
+                            'to_price': s['to_price'],
+                            'move_size': s['move_size'],
+                            'category': s['category']
+                        })
+                        # --- display (strings) ---
+                        detailed_swings_display.append({
+                            'trading_day': day_stat['trading_day'],
+                            'swing_type': s['type'],
+                            'direction': s['direction'],
+                            'from_datetime': pd.to_datetime(s['from_time']).strftime('%Y-%m-%d %H:%M'),
+                            'from_price': s['from_price'],
+                            'to_datetime': pd.to_datetime(s['to_time']).strftime('%Y-%m-%d %H:%M'),
+                            'to_price': s['to_price'],
+                            'move_size': s['move_size'],
+                            'category': s['category']
+                        })
+                
+                detailed_df_export  = pd.DataFrame(detailed_swings_export)
+                detailed_df_display = pd.DataFrame(detailed_swings_display)
+                
+                # 4) Show display table (strings)
+                if not detailed_df_display.empty:
+                    st.dataframe(detailed_df_display, use_container_width=True)
+                
+                # 5) Single Excel writer with datetime format for ALL datetime cols
                 excel_buffer = io.BytesIO()
-                with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-                    # Daily summary
-                    export_summary = display_summary.copy()
+                with pd.ExcelWriter(
+                    excel_buffer,
+                    engine='xlsxwriter',
+                    datetime_format='yyyy-mm-dd hh:mm'  # Excel-friendly format
+                ) as writer:
+                    # ensure datetime dtype (not strings) in the export DataFrames
+                    for col in ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']:
+                        if col in export_summary.columns:
+                            export_summary[col] = pd.to_datetime(export_summary[col], errors='coerce')
+                
                     export_summary.to_excel(writer, sheet_name='Daily Analysis', index=False)
-                    
-                    # Detailed swings
-                    if detailed_swings:
-                        detailed_df.to_excel(writer, sheet_name='Detailed Swings', index=False)
+                
+                    if not detailed_df_export.empty:
+                        # ensure datetime dtype
+                        for c in ['from_datetime', 'to_datetime']:
+                            if c in detailed_df_export.columns:
+                                detailed_df_export[c] = pd.to_datetime(detailed_df_export[c], errors='coerce')
+                        detailed_df_export.to_excel(writer, sheet_name='Detailed Swings', index=False)
                 
                 excel_buffer.seek(0)
                 
-                col1, col2 = st.columns(2)
+                col1, col2, col3 = st.columns(3)
                 with col1:
                     st.download_button(
-                        label="💾 Download Excel Report",
+                        label="📘 Download Excel Report",
                         data=excel_buffer.getvalue(),
                         file_name=f"swing_analysis_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
                 
                 with col2:
-                    csv_data = display_summary.to_csv(index=False)
                     st.download_button(
-                        label="💾 Download CSV Report",
-                        data=csv_data,
-                        file_name=f"swing_analysis_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        label="📝 Download Summary CSV",
+                        data=display_summary.to_csv(index=False),
+                        file_name=f"swing_summary_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                         mime="text/csv"
                     )
+                
+                with col3:
+                    st.download_button(
+                        label="📝 Download Swings CSV",
+                        data=detailed_df_display.to_csv(index=False),
+                        file_name=f"swing_details_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv"
+                    )
+
                 
                 # Sample visualization
                 if len(daily_stats) > 0 and st.checkbox("📈 Show Trading Day Visualization"):
