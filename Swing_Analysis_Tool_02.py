@@ -548,8 +548,11 @@ if uploaded_file is not None:
                     # Show swing details for selected day
                     if sample_day['all_swings']:
                         st.subheader(f"🎯 Swing Details for {sample_date}")
-                        swing_details = detailed_df[detailed_df['trading_day'] == dt.datetime.strptime(sample_date, '%Y-%m-%d').date()]
+                        swing_details = detailed_df_export[
+                            detailed_df_export['trading_day'] == sample_day['trading_day']
+                        ]
                         st.dataframe(swing_details, use_container_width=True)
+
             
             else:
                 st.error("No data found to analyze")
