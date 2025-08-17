@@ -76,93 +76,103 @@ def get_trading_day(timestamp, day_start_hour=18):
 
 def detect_swings(df, swing_threshold=30, drawdown_limit=25):
     """
-    Detect swings by following actual price flow bar by bar
-    Track running extremes and detect when significant moves are made and then retraced
+    Detect swings by tracking actual price progression bar by bar
+    Only record moves that actually happen in chronological order
     """
     swings = []
     
     if len(df) == 0:
         return swings
     
-    # Initialize with first bar
-    first_bar = df.iloc[0]
-    running_high = first_bar['high']
-    running_low = first_bar['low']
-    running_high_time = first_bar['time']
-    running_low_time = first_bar['time']
+    # Start from the first bar's range
+    current_extreme_high = df.iloc[0]['high']
+    current_extreme_low = df.iloc[0]['low']
+    extreme_high_time = df.iloc[0]['time']
+    extreme_low_time = df.iloc[0]['time']
     
-    # Track the last swing point to avoid duplicates
-    last_swing_price = None
-    last_swing_time = None
+    # Track what we're currently measuring from
+    measuring_from = 'low'  # Start by measuring moves up from the low
     
-    # Process each bar chronologically
     for idx, row in df.iterrows():
-        current_high = row['high']
-        current_low = row['low']
-        current_time = row['time']
+        bar_high = row['high']
+        bar_low = row['low']
+        bar_time = row['time']
         
-        # Update running extremes
-        if current_high > running_high:
-            running_high = current_high
-            running_high_time = current_time
+        if measuring_from == 'low':
+            # We're tracking upward moves from the current extreme low
             
-        if current_low < running_low:
-            running_low = current_low
-            running_low_time = current_time
-        
-        # Check for swing high: significant move up followed by significant move down
-        move_up = running_high - running_low
-        if move_up >= swing_threshold:
-            # Look for drawdown from the high
-            drawdown = running_high - current_low
-            if drawdown >= drawdown_limit:
-                # Avoid duplicate swings
-                if last_swing_price != running_high or last_swing_time != running_high_time:
+            # Update our extreme low if we go lower
+            if bar_low < current_extreme_low:
+                current_extreme_low = bar_low
+                extreme_low_time = bar_time
+            
+            # Update our extreme high as we move up
+            if bar_high > current_extreme_high:
+                current_extreme_high = bar_high
+                extreme_high_time = bar_time
+            
+            # Check if we've made a significant upward move
+            upward_move = current_extreme_high - current_extreme_low
+            if upward_move >= swing_threshold:
+                # Now check for drawdown to confirm this as a swing high
+                drawdown = current_extreme_high - bar_low
+                if drawdown >= drawdown_limit:
+                    # Record the upward swing
                     swings.append({
                         'type': 'high',
-                        'swing_price': running_high,
-                        'swing_time': running_high_time,
-                        'move_size': move_up,
-                        'category': categorize_swing(move_up),
-                        'from_price': running_low,
-                        'from_time': running_low_time,
-                        'to_price': running_high,
-                        'to_time': running_high_time,
+                        'swing_price': current_extreme_high,
+                        'swing_time': extreme_high_time,
+                        'move_size': upward_move,
+                        'category': categorize_swing(upward_move),
+                        'from_price': current_extreme_low,
+                        'from_time': extreme_low_time,
+                        'to_price': current_extreme_high,
+                        'to_time': extreme_high_time,
                         'direction': 'up'
                     })
-                    last_swing_price = running_high
-                    last_swing_time = running_high_time
-                
-                # Reset for next swing - start tracking from current bar
-                running_low = current_low
-                running_low_time = current_time
+                    
+                    # Now start measuring downward moves from this high
+                    measuring_from = 'high'
+                    current_extreme_low = bar_low
+                    extreme_low_time = bar_time
         
-        # Check for swing low: significant move down followed by significant move up  
-        move_down = running_high - running_low
-        if move_down >= swing_threshold:
-            # Look for bounce from the low
-            bounce = current_high - running_low
-            if bounce >= drawdown_limit:
-                # Avoid duplicate swings
-                if last_swing_price != running_low or last_swing_time != running_low_time:
+        else:  # measuring_from == 'high'
+            # We're tracking downward moves from the current extreme high
+            
+            # Update our extreme high if we go higher
+            if bar_high > current_extreme_high:
+                current_extreme_high = bar_high
+                extreme_high_time = bar_time
+            
+            # Update our extreme low as we move down
+            if bar_low < current_extreme_low:
+                current_extreme_low = bar_low
+                extreme_low_time = bar_time
+            
+            # Check if we've made a significant downward move
+            downward_move = current_extreme_high - current_extreme_low
+            if downward_move >= swing_threshold:
+                # Now check for bounce to confirm this as a swing low
+                bounce = bar_high - current_extreme_low
+                if bounce >= drawdown_limit:
+                    # Record the downward swing
                     swings.append({
-                        'type': 'low', 
-                        'swing_price': running_low,
-                        'swing_time': running_low_time,
-                        'move_size': move_down,
-                        'category': categorize_swing(move_down),
-                        'from_price': running_high,
-                        'from_time': running_high_time,
-                        'to_price': running_low,
-                        'to_time': running_low_time,
+                        'type': 'low',
+                        'swing_price': current_extreme_low,
+                        'swing_time': extreme_low_time,
+                        'move_size': downward_move,
+                        'category': categorize_swing(downward_move),
+                        'from_price': current_extreme_high,
+                        'from_time': extreme_high_time,
+                        'to_price': current_extreme_low,
+                        'to_time': extreme_low_time,
                         'direction': 'down'
                     })
-                    last_swing_price = running_low
-                    last_swing_time = running_low_time
-                
-                # Reset for next swing - start tracking from current bar
-                running_high = current_high
-                running_high_time = current_time
+                    
+                    # Now start measuring upward moves from this low
+                    measuring_from = 'low'
+                    current_extreme_high = bar_high
+                    extreme_high_time = bar_time
     
     return swings
 
