@@ -7,8 +7,8 @@ import io
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-st.set_page_config(page_title="Market Swing Analysis 03", layout="wide")
-st.header("📈 Market Swing Analysis Tool 03")
+st.set_page_config(page_title="Market Swing Analysis 02", layout="wide")
+st.header("📈 Market Swing Analysis Tool 02")
 
 # File upload - supports both CSV and Excel
 uploaded_file = st.file_uploader("Upload OHLC file", type=['csv', 'xlsx', 'xls'])
@@ -78,7 +78,7 @@ def detect_swings(df, swing_threshold=30, drawdown_limit=25):
     """
     Detect swings by tracking actual price progression bar by bar
     Only record moves that actually happen in chronological order
-    FIXED: Eliminates duplicate from/to times and prices
+    FIXED: Eliminates duplicate from/to times and ensures chronological order
     """
     swings = []
     
@@ -123,8 +123,8 @@ def detect_swings(df, swing_threshold=30, drawdown_limit=25):
                 # Now check for drawdown to confirm this as a swing high
                 drawdown = current_extreme_high - bar_low
                 if drawdown >= drawdown_limit:
-                    # FIXED: Only record if from and to are actually different
-                    if (swing_start_time != extreme_high_time and 
+                    # FIXED: Only record if from and to are different AND chronologically correct
+                    if (swing_start_time < extreme_high_time and 
                         swing_start_price != current_extreme_high):
                         
                         # Record the upward swing
@@ -145,7 +145,7 @@ def detect_swings(df, swing_threshold=30, drawdown_limit=25):
                     measuring_from = 'high'
                     current_extreme_low = bar_low
                     extreme_low_time = bar_time
-                    # Set new starting point for next swing
+                    # Set new starting point for next swing (confirmed high becomes start)
                     swing_start_price = current_extreme_high
                     swing_start_time = extreme_high_time
         
@@ -171,8 +171,8 @@ def detect_swings(df, swing_threshold=30, drawdown_limit=25):
                 # Now check for bounce to confirm this as a swing low
                 bounce = bar_high - current_extreme_low
                 if bounce >= drawdown_limit:
-                    # FIXED: Only record if from and to are actually different
-                    if (swing_start_time != extreme_low_time and 
+                    # FIXED: Only record if from and to are different AND chronologically correct
+                    if (swing_start_time < extreme_low_time and 
                         swing_start_price != current_extreme_low):
                         
                         # Record the downward swing
@@ -193,7 +193,7 @@ def detect_swings(df, swing_threshold=30, drawdown_limit=25):
                     measuring_from = 'low'
                     current_extreme_high = bar_high
                     extreme_high_time = bar_time
-                    # Set new starting point for next swing
+                    # Set new starting point for next swing (confirmed low becomes start)
                     swing_start_price = current_extreme_low
                     swing_start_time = extreme_low_time
     
