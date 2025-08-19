@@ -7,8 +7,8 @@ import io
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-st.set_page_config(page_title="Market Swing Analysis 03", layout="wide")
-st.header("📈 Market Swing Analysis Tool 03")
+st.set_page_config(page_title="Market Swing Analysis 03b", layout="wide")
+st.header("📈 Market Swing Analysis Tool 03b")
 
 # File upload - supports both CSV and Excel
 uploaded_file = st.file_uploader("Upload OHLC file", type=['csv', 'xlsx', 'xls'])
