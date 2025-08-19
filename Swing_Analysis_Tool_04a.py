@@ -543,52 +543,37 @@ if uploaded_file is not None:
                 # Export options
                 st.subheader("💾 Export Data")
                 
-                # 1) NY Summary (keep true datetimes for export)
+                # Prepare export data
                 ny_export_summary = ny_summary.copy()
-                for col in ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']:
+                regular_export_summary = regular_summary.copy()
+                
+                # Convert string datetimes back to datetime objects for export
+                datetime_cols = ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']
+                for col in datetime_cols:
                     if col in ny_export_summary.columns:
                         ny_export_summary[col] = pd.to_datetime(ny_export_summary[col], errors='coerce')
+                    if col in regular_export_summary.columns:
+                        regular_export_summary[col] = pd.to_datetime(regular_export_summary[col], errors='coerce')
                 
-                # 2) Regular Summary (keep true datetimes for export)
-                export_summary = regular_summary.copy()
-                for col in ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']:
-                    if col in export_summary.columns:
-                        export_summary[col] = pd.to_datetime(export_summary[col], errors='coerce')
-                
-                # 3) Build detailed swings for BOTH export (datetimes) and display (strings)
+                # Build detailed swings for export
                 detailed_swings_export = []
-                detailed_swings_display = []
                 for day_stat in daily_stats:
                     for s in day_stat.get('all_swings', []):
-                        # --- export (datetimes) ---
                         detailed_swings_export.append({
                             'trading_day': day_stat['trading_day'],
                             'swing_type': s['type'],
                             'direction': s['direction'],
-                            'from_datetime': s['from_time'],   # datetime
+                            'from_datetime': s['from_time'],
                             'from_price': s['from_price'],
-                            'to_datetime': s['to_time'],       # datetime
-                            'to_price': s['to_price'],
-                            'move_size': s['move_size'],
-                            'category': s['category']
-                        })
-                        # --- display (strings) ---
-                        detailed_swings_display.append({
-                            'trading_day': day_stat['trading_day'],
-                            'swing_type': s['type'],
-                            'direction': s['direction'],
-                            'from_datetime': pd.to_datetime(s['from_time']).strftime('%Y-%m-%d %H:%M'),
-                            'from_price': s['from_price'],
-                            'to_datetime': pd.to_datetime(s['to_time']).strftime('%Y-%m-%d %H:%M'),
+                            'to_datetime': s['to_time'],
                             'to_price': s['to_price'],
                             'move_size': s['move_size'],
                             'category': s['category']
                         })
                 
                 detailed_df_export = pd.DataFrame(detailed_swings_export)
-                detailed_df_display = pd.DataFrame(detailed_swings_display)
                 
-                # 4) NY detailed swings for export
+                # NY detailed swings for export
                 detailed_ny_export = []
                 for record in detailed_ny_swings:
                     export_record = record.copy()
@@ -601,22 +586,13 @@ if uploaded_file is not None:
                 
                 detailed_ny_df_export = pd.DataFrame(detailed_ny_export)
                 
-                # 5) Single Excel writer with datetime format for ALL datetime cols
+                # Excel export
                 excel_buffer = io.BytesIO()
-                with pd.ExcelWriter(
-                    excel_buffer,
-                    engine='xlsxwriter',
-                    datetime_format='yyyy-mm-dd hh:mm'
-                ) as writer:
-                    # NY Results first
+                with pd.ExcelWriter(excel_buffer, engine='xlsxwriter', datetime_format='yyyy-mm-dd hh:mm') as writer:
                     ny_export_summary.to_excel(writer, sheet_name='Daily NY Results', index=False)
-                    
                     if not detailed_ny_df_export.empty:
                         detailed_ny_df_export.to_excel(writer, sheet_name='Detailed NY Swings', index=False)
-                    
-                    # Regular results
-                    export_summary.to_excel(writer, sheet_name='Daily Analysis', index=False)
-                    
+                    regular_export_summary.to_excel(writer, sheet_name='Daily Analysis', index=False)
                     if not detailed_df_export.empty:
                         detailed_df_export.to_excel(writer, sheet_name='Detailed Swings', index=False)
                 
@@ -642,138 +618,11 @@ if uploaded_file is not None:
                 with col3:
                     st.download_button(
                         label="📄 Download All Swings CSV",
-                        data=detailed_df_display.to_csv(index=False),
-                        file_name=f"swing_details_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                        mime="text/csv"
-                    )name='Detailed Swings', index=False)
-                
-                excel_buffer.seek(0)
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.download_button(
-                        label="📘 Download Excel Report",
-                        data=excel_buffer.getvalue(),
-                        file_name=f"swing_analysis_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                
-                with col2:
-                    st.download_button(
-                        label="📄 Download Summary CSV",
-                        data=display_summary.to_csv(index=False),
-                        file_name=f"swing_summary_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                        mime="text/csv"
-                    )
-                
-                with col3:
-                    st.download_button(
-                        label="📄 Download Swings CSV",
-                        data=detailed_df_display.to_csv(index=False),
+                        data=detailed_df.to_csv(index=False),
                         file_name=f"swing_details_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                         mime="text/csv"
                     )
-
                 
                 # Sample visualization
                 if len(daily_stats) > 0 and st.checkbox("📈 Show Trading Day Visualization"):
-                    sample_date = st.selectbox("Select Trading Day to Visualize", [str(d['trading_day']) for d in daily_stats])
-                    sample_day = next(d for d in daily_stats if str(d['trading_day']) == sample_date)
-                    
-                    # Get the day's data
-                    day_data = analysis_df[analysis_df['time'].apply(lambda x: get_trading_day(x, day_start_hour)) == sample_day['trading_day']]
-                    day_data = day_data.sort_values('time')
-                    
-                    # Create candlestick chart
-                    fig = make_subplots(rows=1, cols=1, subplot_titles=[f"Market Structure - Trading Day {sample_date}"])
-                    
-                    # Add candlestick
-                    fig.add_trace(go.Candlestick(
-                        x=day_data['time'],
-                        open=day_data['open'],
-                        high=day_data['high'],
-                        low=day_data['low'],
-                        close=day_data['close'],
-                        name="OHLC"
-                    ))
-                    
-                    # Add swing points with from/to lines
-                    for i, swing in enumerate(sample_day['all_swings']):
-                        color = 'red' if swing['type'] == 'high' else 'green'
-                        
-                        # Add swing line from start to end
-                        fig.add_trace(go.Scatter(
-                            x=[swing['from_time'], swing['to_time']],
-                            y=[swing['from_price'], swing['to_price']],
-                            mode='lines+markers',
-                            line=dict(color=color, width=2),
-                            marker=dict(color=color, size=8, symbol='diamond'),
-                            name=f"{swing['category']} {swing['direction']} ({swing['move_size']:.1f})",
-                            showlegend=True
-                        ))
-                        
-                        # Add text annotation
-                        mid_time = swing['from_time'] + (swing['to_time'] - swing['from_time']) / 2
-                        mid_price = (swing['from_price'] + swing['to_price']) / 2
-                        
-                        fig.add_annotation(
-                            x=mid_time,
-                            y=mid_price,
-                            text=f"{swing['move_size']:.1f}",
-                            showarrow=False,
-                            font=dict(color=color, size=10),
-                            bgcolor="white",
-                            bordercolor=color,
-                            borderwidth=1
-                        )
-                    
-                    fig.update_layout(
-                        title=f"Trading Day Range: {sample_day['daily_range']:.1f} ({sample_day['range_category']}) | Swings: {sample_day['total_swings']}",
-                        xaxis_title="Time",
-                        yaxis_title="Price",
-                        height=700,
-                        xaxis_rangeslider_visible=False
-                    )
-                    
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Show swing details for selected day
-                    if sample_day['all_swings']:
-                        st.subheader(f"🎯 Swing Details for {sample_date}")
-                        swing_details = detailed_df_export[
-                            detailed_df_export['trading_day'] == sample_day['trading_day']
-                        ]
-                        st.dataframe(swing_details, use_container_width=True)
-
-            
-            else:
-                st.error("No data found to analyze")
-    
-    except Exception as e:
-        st.error(f"Error processing file: {str(e)}")
-        st.text("Please ensure your file has the correct format with time, open, high, low, close columns")
-
-else:
-    st.info("👆 Upload a CSV or Excel file with OHLC data to begin analysis")
-    
-    # Show expected format
-    st.subheader("📋 Expected File Format")
-    sample_data = {
-        'time': ['2025-06-15T18:00:00-04:00', '2025-06-15T18:15:00-04:00', '2025-06-15T18:30:00-04:00'],
-        'open': [21784, 21821.25, 21835],
-        'high': [21850.75, 21842, 21851.50],
-        'low': [21722, 21815, 21798.25],
-        'close': [21821.25, 21835, 21834.75]
-    }
-    st.table(pd.DataFrame(sample_data))
-    
-    st.info("""
-    **Key Features:**
-    - ✅ **CSV and Excel Support**: Upload either file type, select Excel sheets
-    - ✅ **Naive Time Handling**: Timezone offsets are removed (e.g., -04:00 stripped)
-    - ✅ **Custom Trading Day**: Define when your trading day starts (default: 18:00)
-    - ✅ **Swing From/To Tracking**: See exact datetime and price ranges for each swing
-    - ✅ **Enhanced Visualization**: View swing movements with from/to lines
-    - ✅ **Detailed Export**: Get comprehensive Excel reports with multiple sheets
-    - 🔧 **FIXED**: Eliminates duplicate from/to times and prices - no more impossible swings!
-    """)
+                    sample_date =
