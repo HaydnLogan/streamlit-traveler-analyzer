@@ -353,7 +353,7 @@ if uploaded_file is not None:
                 
                 # Create summary DataFrame
                 summary_df = pd.DataFrame(daily_stats)
-                display_summary = summary_df.drop('all_swings', axis=1).copy()
+                display_summary = summary_df.drop(['all_swings', 'ny_swings'], axis=1).copy()
                 
                 # Format datetime columns for display
                 datetime_cols = ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']
