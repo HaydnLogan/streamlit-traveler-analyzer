@@ -226,6 +226,17 @@ def analyze_daily_data(df, day_start_hour=18):
         # Detect swings for this day
         swings = detect_swings(day_data.reset_index(drop=True))
         
+        # Get NY session swings (starting at or after 8 AM)
+        ny_session_time = dt.datetime.combine(trading_day, dt.time(8, 0))
+        ny_swings = []
+        for swing in swings:
+            swing_start = swing['from_time']
+            if swing_start.time() >= dt.time(8, 0):
+                ny_swings.append(swing)
+        
+        # Get first 3 NY swings
+        ny_swings = sorted(ny_swings, key=lambda x: x['from_time'])[:3]
+        
         # Get top 3 swings
         swing_moves = [s['move_size'] for s in swings]
         swing_moves.sort(reverse=True)
@@ -251,6 +262,10 @@ def analyze_daily_data(df, day_start_hour=18):
             'daily_low_time': low_time,
             'daily_range': daily_range,
             'range_category': categorize_range(daily_range),
+            'ny_swings_count': len(ny_swings),
+            'ny_1': ny_swings[0]['move_size'] if len(ny_swings) > 0 else 'none',
+            'ny_2': ny_swings[1]['move_size'] if len(ny_swings) > 1 else 'none',
+            'ny_3': ny_swings[2]['move_size'] if len(ny_swings) > 2 else 'none',
             'total_swings': len(swings),
             'top_1_swing': top_3_swings[0] if len(top_3_swings) > 0 else 0,
             'top_2_swing': top_3_swings[1] if len(top_3_swings) > 1 else 0,
@@ -260,7 +275,8 @@ def analyze_daily_data(df, day_start_hour=18):
             'swings_100_150': category_counts['100-150'],
             'swings_150_200': category_counts['150-200'],
             'swings_200_plus': category_counts['200+'],
-            'all_swings': swings
+            'all_swings': swings,
+            'ny_swings': ny_swings
         })
     
     return daily_stats
@@ -345,9 +361,126 @@ if uploaded_file is not None:
                     if col in display_summary.columns:
                         display_summary[col] = display_summary[col].dt.strftime('%Y-%m-%d %H:%M:%S')
                 
-                # Display results
+                # Display NY Results first
+                st.subheader("🗽 Daily NY Results")
+                ny_summary = summary_df.drop(['all_swings', 'ny_swings'], axis=1).copy()
+                
+                # Format datetime columns for display
+                datetime_cols = ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']
+                for col in datetime_cols:
+                    if col in ny_summary.columns:
+                        ny_summary[col] = ny_summary[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+                
+                st.dataframe(ny_summary, use_container_width=True)
+                
+                # Create detailed NY swings DataFrame
+                detailed_ny_swings = []
+                for day_stat in daily_stats:
+                    trading_day = day_stat['trading_day']
+                    daily_high_time = day_stat['daily_high_time']
+                    daily_low_time = day_stat['daily_low_time']
+                    daily_high = day_stat['daily_high']
+                    daily_low = day_stat['daily_low']
+                    
+                    # Collect all relevant swings with their IDs
+                    swing_records = []
+                    
+                    # Add HOD and LOD
+                    swing_records.append({
+                        'swing_id': 'HOD',
+                        'time': daily_high_time,
+                        'price': daily_high,
+                        'swing_type': 'high',
+                        'direction': 'n/a',
+                        'from_datetime': 'n/a',
+                        'from_price': 'n/a',
+                        'to_datetime': daily_high_time.strftime('%Y-%m-%d %H:%M'),
+                        'to_price': daily_high,
+                        'move_size': 'n/a',
+                        'category': 'n/a'
+                    })
+                    
+                    swing_records.append({
+                        'swing_id': 'LOD',
+                        'time': daily_low_time,
+                        'price': daily_low,
+                        'swing_type': 'low',
+                        'direction': 'n/a',
+                        'from_datetime': 'n/a',
+                        'from_price': 'n/a',
+                        'to_datetime': daily_low_time.strftime('%Y-%m-%d %H:%M'),
+                        'to_price': daily_low,
+                        'move_size': 'n/a',
+                        'category': 'n/a'
+                    })
+                    
+                    # Add NY swings with IDs
+                    ny_swings = day_stat.get('ny_swings', [])
+                    for i, ny_swing in enumerate(ny_swings):
+                        ny_id = f'NY {i+1}'
+                        
+                        # Check if this NY swing shares start/end points with HOD/LOD
+                        swing_id = ny_id
+                        
+                        # Check if NY swing start matches HOD/LOD
+                        if (ny_swing['from_price'] == daily_high and 
+                            abs((ny_swing['from_time'] - daily_high_time).total_seconds()) < 60):
+                            swing_id = f'HOD, {ny_id}'
+                        elif (ny_swing['from_price'] == daily_low and 
+                              abs((ny_swing['from_time'] - daily_low_time).total_seconds()) < 60):
+                            swing_id = f'LOD, {ny_id}'
+                        
+                        # Check if NY swing end matches HOD/LOD
+                        if (ny_swing['to_price'] == daily_high and 
+                            abs((ny_swing['to_time'] - daily_high_time).total_seconds()) < 60):
+                            if 'HOD' not in swing_id:
+                                swing_id = f'HOD, {ny_id}' if swing_id == ny_id else f'{swing_id}, HOD'
+                        elif (ny_swing['to_price'] == daily_low and 
+                              abs((ny_swing['to_time'] - daily_low_time).total_seconds()) < 60):
+                            if 'LOD' not in swing_id:
+                                swing_id = f'LOD, {ny_id}' if swing_id == ny_id else f'{swing_id}, LOD'
+                        
+                        swing_records.append({
+                            'swing_id': swing_id,
+                            'time': ny_swing['from_time'],
+                            'price': ny_swing['from_price'],
+                            'swing_type': ny_swing['type'],
+                            'direction': ny_swing['direction'],
+                            'from_datetime': ny_swing['from_time'].strftime('%Y-%m-%d %H:%M'),
+                            'from_price': ny_swing['from_price'],
+                            'to_datetime': ny_swing['to_time'].strftime('%Y-%m-%d %H:%M'),
+                            'to_price': ny_swing['to_price'],
+                            'move_size': ny_swing['move_size'],
+                            'category': ny_swing['category']
+                        })
+                    
+                    # Sort chronologically by time
+                    swing_records.sort(key=lambda x: x['time'])
+                    
+                    # Add to detailed list
+                    for record in swing_records:
+                        detailed_ny_swings.append({
+                            'trading_day': trading_day,
+                            'swing_id': record['swing_id'],
+                            'swing_type': record['swing_type'],
+                            'direction': record['direction'],
+                            'from_datetime': record['from_datetime'],
+                            'from_price': record['from_price'],
+                            'to_datetime': record['to_datetime'],
+                            'to_price': record['to_price'],
+                            'move_size': record['move_size'],
+                            'category': record['category']
+                        })
+                
+                if detailed_ny_swings:
+                    detailed_ny_df = pd.DataFrame(detailed_ny_swings)
+                    st.subheader("🎯 Detailed NY Swing Analysis")
+                    st.dataframe(detailed_ny_df, use_container_width=True)
+                
+                # Display regular Daily Analysis Results
                 st.subheader("📊 Daily Analysis Results")
-                st.dataframe(display_summary, use_container_width=True)
+                regular_summary = display_summary.drop(['ny_swings_count', 'ny_1', 'ny_2', 'ny_3'], axis=1, errors='ignore').copy()
+                st.dataframe(regular_summary, use_container_width=True)
                 
                 # Create detailed swings DataFrame
                 detailed_swings = []
@@ -375,24 +508,24 @@ if uploaded_file is not None:
                 col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
-                    avg_range = display_summary['daily_range'].mean()
+                    avg_range = regular_summary['daily_range'].mean()
                     st.metric("Avg Daily Range", f"{avg_range:.1f}")
                 
                 with col2:
-                    avg_swings = display_summary['total_swings'].mean()
+                    avg_swings = regular_summary['total_swings'].mean()
                     st.metric("Avg Swings/Day", f"{avg_swings:.1f}")
                 
                 with col3:
-                    total_days = len(display_summary)
+                    total_days = len(regular_summary)
                     st.metric("Total Trading Days", total_days)
                 
                 with col4:
-                    max_range = display_summary['daily_range'].max()
-                    st.metric("Max Daily Range", f"{max_range:.1f}")
+                    avg_ny_swings = ny_summary['ny_swings_count'].mean()
+                    st.metric("Avg NY Swings/Day", f"{avg_ny_swings:.1f}")
                 
                 # Range category distribution
                 st.subheader("📊 Range Category Distribution")
-                range_dist = display_summary['range_category'].value_counts()
+                range_dist = regular_summary['range_category'].value_counts()
                 fig_range = go.Figure(data=[go.Bar(x=range_dist.index, y=range_dist.values)])
                 fig_range.update_layout(title="Daily Range Categories", xaxis_title="Range Category", yaxis_title="Number of Days")
                 st.plotly_chart(fig_range, use_container_width=True)
@@ -400,7 +533,7 @@ if uploaded_file is not None:
                 # Swing category distribution
                 st.subheader("🎯 Swing Category Analysis")
                 swing_cols = ['swings_30_60', 'swings_60_100', 'swings_100_150', 'swings_150_200', 'swings_200_plus']
-                swing_totals = display_summary[swing_cols].sum()
+                swing_totals = regular_summary[swing_cols].sum()
                 swing_totals.index = ['30-60', '60-100', '100-150', '150-200', '200+']
                 
                 fig_swings = go.Figure(data=[go.Bar(x=swing_totals.index, y=swing_totals.values)])
@@ -410,15 +543,17 @@ if uploaded_file is not None:
                 # Export options
                 st.subheader("💾 Export Data")
                 
-                # 1) Summary (keep true datetimes for export)
-                summary_df = pd.DataFrame(daily_stats)                         # has datetimes
-                export_summary = summary_df.drop(columns=['all_swings'], errors='ignore').copy()
-                
-                # 2) Display-only summary with strings
-                display_summary = export_summary.copy()
+                # 1) NY Summary (keep true datetimes for export)
+                ny_export_summary = ny_summary.copy()
                 for col in ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']:
-                    if col in display_summary.columns:
-                        display_summary[col] = pd.to_datetime(display_summary[col], errors='coerce').dt.strftime('%Y-%m-%d %H:%M')
+                    if col in ny_export_summary.columns:
+                        ny_export_summary[col] = pd.to_datetime(ny_export_summary[col], errors='coerce')
+                
+                # 2) Regular Summary (keep true datetimes for export)
+                export_summary = regular_summary.copy()
+                for col in ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']:
+                    if col in export_summary.columns:
+                        export_summary[col] = pd.to_datetime(export_summary[col], errors='coerce')
                 
                 # 3) Build detailed swings for BOTH export (datetimes) and display (strings)
                 detailed_swings_export  = []
@@ -453,9 +588,18 @@ if uploaded_file is not None:
                 detailed_df_export  = pd.DataFrame(detailed_swings_export)
                 detailed_df_display = pd.DataFrame(detailed_swings_display)
                 
-                # 4) Show display table (strings)
-                if not detailed_df_display.empty:
-                    st.dataframe(detailed_df_display, use_container_width=True)
+                # 4) NY detailed swings for export
+                detailed_ny_export = []
+                for record in detailed_ny_swings:
+                    export_record = record.copy()
+                    # Convert string datetimes back to datetime objects for export
+                    if export_record['from_datetime'] != 'n/a':
+                        export_record['from_datetime'] = pd.to_datetime(export_record['from_datetime'])
+                    if export_record['to_datetime'] != 'n/a':
+                        export_record['to_datetime'] = pd.to_datetime(export_record['to_datetime'])
+                    detailed_ny_export.append(export_record)
+                
+                detailed_ny_df_export = pd.DataFrame(detailed_ny_export)
                 
                 # 5) Single Excel writer with datetime format for ALL datetime cols
                 excel_buffer = io.BytesIO()
@@ -464,19 +608,44 @@ if uploaded_file is not None:
                     engine='xlsxwriter',
                     datetime_format='yyyy-mm-dd hh:mm'  # Excel-friendly format
                 ) as writer:
-                    # ensure datetime dtype (not strings) in the export DataFrames
-                    for col in ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']:
-                        if col in export_summary.columns:
-                            export_summary[col] = pd.to_datetime(export_summary[col], errors='coerce')
-                
+                    # NY Results first
+                    ny_export_summary.to_excel(writer, sheet_name='Daily NY Results', index=False)
+                    
+                    if not detailed_ny_df_export.empty:
+                        detailed_ny_df_export.to_excel(writer, sheet_name='Detailed NY Swings', index=False)
+                    
+                    # Regular results
                     export_summary.to_excel(writer, sheet_name='Daily Analysis', index=False)
-                
+                    
                     if not detailed_df_export.empty:
-                        # ensure datetime dtype
-                        for c in ['from_datetime', 'to_datetime']:
-                            if c in detailed_df_export.columns:
-                                detailed_df_export[c] = pd.to_datetime(detailed_df_export[c], errors='coerce')
                         detailed_df_export.to_excel(writer, sheet_name='Detailed Swings', index=False)
+                
+                excel_buffer.seek(0)
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.download_button(
+                        label="📘 Download Excel Report",
+                        data=excel_buffer.getvalue(),
+                        file_name=f"swing_analysis_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                
+                with col2:
+                    st.download_button(
+                        label="🗽 Download NY Results CSV",
+                        data=ny_summary.to_csv(index=False),
+                        file_name=f"ny_results_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv"
+                    )
+                
+                with col3:
+                    st.download_button(
+                        label="📄 Download All Swings CSV",
+                        data=detailed_df_display.to_csv(index=False),
+                        file_name=f"swing_details_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv"
+                    )name='Detailed Swings', index=False)
                 
                 excel_buffer.seek(0)
                 
