@@ -353,7 +353,7 @@ if uploaded_file is not None:
                 
                 # Create summary DataFrame
                 summary_df = pd.DataFrame(daily_stats)
-                display_summary = summary_df.drop('all_swings', axis=1).copy()
+                display_summary = summary_df.drop(['all_swings', 'ny_swings'], axis=1).copy()
                 
                 # Format datetime columns for display
                 datetime_cols = ['session_start', 'session_end', 'daily_high_time', 'daily_low_time']
@@ -556,7 +556,7 @@ if uploaded_file is not None:
                         export_summary[col] = pd.to_datetime(export_summary[col], errors='coerce')
                 
                 # 3) Build detailed swings for BOTH export (datetimes) and display (strings)
-                detailed_swings_export  = []
+                detailed_swings_export = []
                 detailed_swings_display = []
                 for day_stat in daily_stats:
                     for s in day_stat.get('all_swings', []):
@@ -585,7 +585,7 @@ if uploaded_file is not None:
                             'category': s['category']
                         })
                 
-                detailed_df_export  = pd.DataFrame(detailed_swings_export)
+                detailed_df_export = pd.DataFrame(detailed_swings_export)
                 detailed_df_display = pd.DataFrame(detailed_swings_display)
                 
                 # 4) NY detailed swings for export
@@ -606,7 +606,7 @@ if uploaded_file is not None:
                 with pd.ExcelWriter(
                     excel_buffer,
                     engine='xlsxwriter',
-                    datetime_format='yyyy-mm-dd hh:mm'  # Excel-friendly format
+                    datetime_format='yyyy-mm-dd hh:mm'
                 ) as writer:
                     # NY Results first
                     ny_export_summary.to_excel(writer, sheet_name='Daily NY Results', index=False)
