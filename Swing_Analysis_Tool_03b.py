@@ -653,7 +653,8 @@ if uploaded_file is not None:
                         data=detailed_df_display.to_csv(index=False),
                         file_name=f"swing_details_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                         mime="text/csv"
-                    )name='Detailed Swings', index=False)
+                    )
+                    # name='Detailed Swings', index=False)
                 
                 excel_buffer.seek(0)
                 
