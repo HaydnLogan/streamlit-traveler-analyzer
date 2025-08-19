@@ -7,8 +7,8 @@ import io
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-st.set_page_config(page_title="Market Swing Analysis 03d", layout="wide")
-st.header("📈 Market Swing Analysis Tool 03d")
+st.set_page_config(page_title="Market Swing Analysis 03e", layout="wide")
+st.header("📈 Market Swing Analysis Tool 03e")
 
 # File upload - supports both CSV and Excel
 uploaded_file = st.file_uploader("Upload OHLC file", type=['csv', 'xlsx', 'xls'])
@@ -226,15 +226,15 @@ def analyze_daily_data(df, day_start_hour=18):
         # Detect swings for this day
         swings = detect_swings(day_data.reset_index(drop=True))
         
-        # Get NY session swings (starting at or after 8 AM)
-        ny_session_time = dt.datetime.combine(trading_day, dt.time(8, 0))
+        # FIXED: Get NY session swings (starting between 8 AM and 12 PM only)
         ny_swings = []
         for swing in swings:
             swing_start = swing['from_time']
-            if swing_start.time() >= dt.time(8, 0):
+            # Check if swing starts between 8 AM and 12 PM (noon)
+            if dt.time(8, 0) <= swing_start.time() <= dt.time(12, 0):
                 ny_swings.append(swing)
         
-        # Get first 3 NY swings
+        # Get first 3 NY swings (sorted by start time)
         ny_swings = sorted(ny_swings, key=lambda x: x['from_time'])[:3]
         
         # Get top 3 swings
@@ -387,30 +387,30 @@ if uploaded_file is not None:
                     for i, ny_swing in enumerate(ny_swings):
                         ny_id = f'NY {i+1}'
                         
-                        # Check if this NY swing connects to HOD/LOD
+                        # FIXED: NY always shows first, then HOD/LOD connection
                         swing_id = ny_id
                         
                         # Check if NY swing starts from HOD/LOD
                         if (ny_swing['from_price'] == daily_high and 
                             abs((ny_swing['from_time'] - daily_high_time).total_seconds()) < 60):
-                            swing_id = f'HOD→{ny_id}'
+                            swing_id = f'{ny_id}, HOD'
                         elif (ny_swing['from_price'] == daily_low and 
                               abs((ny_swing['from_time'] - daily_low_time).total_seconds()) < 60):
-                            swing_id = f'LOD→{ny_id}'
+                            swing_id = f'{ny_id}, LOD'
                         
                         # Check if NY swing ends at HOD/LOD
                         if (ny_swing['to_price'] == daily_high and 
                             abs((ny_swing['to_time'] - daily_high_time).total_seconds()) < 60):
-                            if '→' not in swing_id:
-                                swing_id = f'{ny_id}→HOD'
+                            if ', ' not in swing_id:
+                                swing_id = f'{ny_id}, HOD'
                             else:
-                                swing_id = swing_id.replace('→', f'→{ny_id}→') if swing_id.startswith('LOD') else f'{swing_id}→HOD'
+                                swing_id = swing_id + ', HOD'
                         elif (ny_swing['to_price'] == daily_low and 
                               abs((ny_swing['to_time'] - daily_low_time).total_seconds()) < 60):
-                            if '→' not in swing_id:
-                                swing_id = f'{ny_id}→LOD'
+                            if ', ' not in swing_id:
+                                swing_id = f'{ny_id}, LOD'
                             else:
-                                swing_id = swing_id.replace('→', f'→{ny_id}→') if swing_id.startswith('HOD') else f'{swing_id}→LOD'
+                                swing_id = swing_id + ', LOD'
                         
                         detailed_ny_swings.append({
                             'trading_day': trading_day,
@@ -696,5 +696,6 @@ else:
     - ✅ **Swing From/To Tracking**: See exact datetime and price ranges for each swing
     - ✅ **Enhanced Visualization**: View swing movements with from/to lines
     - ✅ **Detailed Export**: Get comprehensive Excel reports with multiple sheets
-    - 🔧 **FIXED**: Eliminates duplicate from/to times and prices - no more impossible swings!
+    - 🔧 **FIXED**: NY swings now restricted to 8 AM - 12 PM start times only!
+    - 🔧 **FIXED**: NY always shows first in detailed reports (e.g., "NY 1, LOD")
     """)
