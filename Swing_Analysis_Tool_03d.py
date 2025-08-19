@@ -373,7 +373,7 @@ if uploaded_file is not None:
                 
                 st.dataframe(ny_summary, use_container_width=True)
                 
-                # Create detailed NY swings DataFrame - ONLY actual swing movements
+                # Create detailed NY swings DataFrame - NY swings AND standalone HOD/LOD
                 detailed_ny_swings = []
                 for day_stat in daily_stats:
                     trading_day = day_stat['trading_day']
@@ -382,8 +382,11 @@ if uploaded_file is not None:
                     daily_high = day_stat['daily_high']
                     daily_low = day_stat['daily_low']
                     
-                    # Only add actual NY swings (not standalone HOD/LOD entries)
+                    # Add NY swings with HOD/LOD connections
                     ny_swings = day_stat.get('ny_swings', [])
+                    hod_covered = False
+                    lod_covered = False
+                    
                     for i, ny_swing in enumerate(ny_swings):
                         ny_id = f'NY {i+1}'
                         
@@ -394,23 +397,29 @@ if uploaded_file is not None:
                         if (ny_swing['from_price'] == daily_high and 
                             abs((ny_swing['from_time'] - daily_high_time).total_seconds()) < 60):
                             swing_id = f'{ny_id}, HOD'
+                            hod_covered = True
                         elif (ny_swing['from_price'] == daily_low and 
                               abs((ny_swing['from_time'] - daily_low_time).total_seconds()) < 60):
                             swing_id = f'{ny_id}, LOD'
+                            lod_covered = True
                         
                         # Check if NY swing ends at HOD/LOD
                         if (ny_swing['to_price'] == daily_high and 
                             abs((ny_swing['to_time'] - daily_high_time).total_seconds()) < 60):
                             if ', ' not in swing_id:
                                 swing_id = f'{ny_id}, HOD'
+                                hod_covered = True
                             else:
                                 swing_id = swing_id + ', HOD'
+                                hod_covered = True
                         elif (ny_swing['to_price'] == daily_low and 
                               abs((ny_swing['to_time'] - daily_low_time).total_seconds()) < 60):
                             if ', ' not in swing_id:
                                 swing_id = f'{ny_id}, LOD'
+                                lod_covered = True
                             else:
                                 swing_id = swing_id + ', LOD'
+                                lod_covered = True
                         
                         detailed_ny_swings.append({
                             'trading_day': trading_day,
@@ -423,6 +432,36 @@ if uploaded_file is not None:
                             'to_price': ny_swing['to_price'],
                             'move_size': ny_swing['move_size'],
                             'category': ny_swing['category']
+                        })
+                    
+                    # Add standalone HOD entry if not covered by NY swings
+                    if not hod_covered:
+                        detailed_ny_swings.append({
+                            'trading_day': trading_day,
+                            'swing_id': 'HOD',
+                            'swing_type': 'high',
+                            'direction': 'n/a',
+                            'from_datetime': 'n/a',
+                            'from_price': 'n/a',
+                            'to_datetime': daily_high_time.strftime('%Y-%m-%d %H:%M'),
+                            'to_price': daily_high,
+                            'move_size': 'n/a',
+                            'category': 'n/a'
+                        })
+                    
+                    # Add standalone LOD entry if not covered by NY swings
+                    if not lod_covered:
+                        detailed_ny_swings.append({
+                            'trading_day': trading_day,
+                            'swing_id': 'LOD',
+                            'swing_type': 'low',
+                            'direction': 'n/a',
+                            'from_datetime': 'n/a',
+                            'from_price': 'n/a',
+                            'to_datetime': daily_low_time.strftime('%Y-%m-%d %H:%M'),
+                            'to_price': daily_low,
+                            'move_size': 'n/a',
+                            'category': 'n/a'
                         })
                 
                 if detailed_ny_swings:
