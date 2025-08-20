@@ -880,24 +880,25 @@ else:
     - 🔧 **FIXED**: NY always shows first in detailed reports (e.g., "NY 1, LOD")
     - 🔧 **FIXED**: HOD/LOD entries now have proper swing information calculated!
     - 🔧 **FIXED**: HOD calculation now uses improved reference point logic!
-    """)to_price': daily_low,
-                                'move_size': round(move_size, 2),
-                                'category': category
-                            })
-                        else:
-                            # Ultimate fallback: use session start bar's open as from-point
-                            session_start_row = day_data.iloc[0]
-                            session_open = session_start_row['open']
-                            move_size = abs(session_open - daily_low)
-                            direction = 'down' if daily_low < session_open else ('up' if daily_low > session_open else 'flat')
-                            category = categorize_swing(move_size)
+    """)
+    # to_price': daily_low,
+    #                             'move_size': round(move_size, 2),
+    #                             'category': category
+    #                         })
+    #                     else:
+    #                         # Ultimate fallback: use session start bar's open as from-point
+    #                         session_start_row = day_data.iloc[0]
+    #                         session_open = session_start_row['open']
+    #                         move_size = abs(session_open - daily_low)
+    #                         direction = 'down' if daily_low < session_open else ('up' if daily_low > session_open else 'flat')
+    #                         category = categorize_swing(move_size)
                         
-                            detailed_ny_swings.append({
-                                'trading_day': trading_day,
-                                'swing_id': 'LOD',
-                                'swing_type': 'low',
-                                'direction': direction,
-                                'from_datetime': session_start_row['time'].strftime('%Y-%m-%d %H:%M'),
-                                'from_price': session_open,
-                                'to_datetime': daily_low_time.strftime('%Y-%m-%d %H:%M'),
-                                '
+    #                         detailed_ny_swings.append({
+    #                             'trading_day': trading_day,
+    #                             'swing_id': 'LOD',
+    #                             'swing_type': 'low',
+    #                             'direction': direction,
+    #                             'from_datetime': session_start_row['time'].strftime('%Y-%m-%d %H:%M'),
+    #                             'from_price': session_open,
+    #                             'to_datetime': daily_low_time.strftime('%Y-%m-%d %H:%M'),
+    #                             '
