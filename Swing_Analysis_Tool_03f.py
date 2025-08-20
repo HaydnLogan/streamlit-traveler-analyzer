@@ -96,14 +96,13 @@ def find_best_from_point_for_hod_lod(hod_lod_time, hod_lod_price, day_data, all_
     
     # Add OHLC data as candidates (with lower priority)
     for idx, row in day_data.iterrows():
-        if row['time'] < hod_lod_time:
-            # Add close price as candidate
-            candidates.append({
-                'time': row['time'],
-                'price': row['close'],
-                'type': 'close',
-                'priority': 2
-            })
+        if row['time'] <= hod_lod_time:   # allow same-bar candidates too
+            # Add open as candidate
+            candidates.append({'time': row['time'], 'price': row['open'], 'type': 'open', 'priority': 3})
+            candidates.append({'time': row['time'], 'price': row['close'], 'type': 'close', 'priority': 3})
+            # keep whatever you already had for high/low
+            candidates.append({'time': row['time'], 'price': row['high'], 'type': 'high', 'priority': 2})
+            candidates.append({'time': row['time'], 'price': row['low'],  'type': 'low',  'priority': 2})
     
     if not candidates:
         return None
