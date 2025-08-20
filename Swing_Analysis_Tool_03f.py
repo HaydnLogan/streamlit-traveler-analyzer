@@ -541,19 +541,26 @@ if uploaded_file is not None:
                                 'category': category
                             })
                         else:
-                            # Fallback if no from point found
+                            # Fallback: use session start bar's open as from-point
+                            session_start_ts = day_data['time'].min()
+                            session_open = day_data.loc[day_data['time'] == session_start_ts, 'open'].iloc[0]
+                            move_size = abs(session_open - daily_low)
+                            direction = 'down' if daily_low < session_open else ('up' if daily_low > session_open else 'flat')
+                            category = categorize_swing(move_size)
+                        
                             detailed_ny_swings.append({
                                 'trading_day': trading_day,
                                 'swing_id': 'LOD',
                                 'swing_type': 'low',
-                                'direction': 'n/a',
-                                'from_datetime': 'n/a',
-                                'from_price': 'n/a',
+                                'direction': direction,
+                                'from_datetime': session_start_ts.strftime('%Y-%m-%d %H:%M'),
+                                'from_price': session_open,
                                 'to_datetime': daily_low_time.strftime('%Y-%m-%d %H:%M'),
                                 'to_price': daily_low,
-                                'move_size': 'n/a',
-                                'category': 'n/a'
+                                'move_size': round(move_size, 2),
+                                'category': category
                             })
+
                 
                 if detailed_ny_swings:
                     detailed_ny_df = pd.DataFrame(detailed_ny_swings)
