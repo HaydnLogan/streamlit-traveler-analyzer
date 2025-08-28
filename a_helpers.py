@@ -7,6 +7,31 @@ from dateutil import parser
 EPIC_ORIGINS = {"trinidad", "tobago", "wasp-12b", "macedonia"}
 ANCHOR_ORIGINS = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
 
+def get_origin_type(origin_name):
+    """
+    Classify origin type, handling variations like [1], [2] brackets
+    Returns: 'EPC' for Epic Origins, 'Anchor' for Anchor Origins, 'Other' for others
+    """
+    if not origin_name:
+        return 'Other'
+    
+    # Normalize origin name: convert to lowercase and remove brackets
+    normalized = str(origin_name).lower().strip()
+    
+    # Remove bracket variations like [1], [2], etc.
+    if '[' in normalized and ']' in normalized:
+        normalized = normalized[:normalized.find('[')]
+    
+    # Check against Epic Origins
+    if normalized in EPIC_ORIGINS:
+        return 'EPC'
+    
+    # Check against Anchor Origins  
+    if normalized in ANCHOR_ORIGINS:
+        return 'Anchor'
+    
+    return 'Other'
+
 # Constants: M# Traveler Family Classifications 🧭 📊 🎯 ⚡ 🔢 🌈 📈 📉 🎨 🔍
 # Strength travelers (M# values of 0, 40, -40, 54, -54)
 STRENGTH_TRAVELERS = {0, 40, -40, 54, -54}
@@ -324,48 +349,82 @@ def extract_origins(columns):
 
 # ✅ Get input value for a given report_time
 def get_input_value(df, report_time):
-    # Ensure time column is datetime for comparison and handle timezone compatibility
+    # Convert to timezone-naive datetime ONLY (no UTC conversion)
     df_copy = df.copy()
-    df_copy["time"] = pd.to_datetime(df_copy["time"]).dt.tz_localize(None)  # Remove timezone info
-    report_time_naive = pd.to_datetime(report_time).tz_localize(None) if hasattr(report_time, 'tz') and report_time.tz else report_time
+    
+    # Handle datetime conversion and timezone stripping
+    if not pd.api.types.is_datetime64_any_dtype(df_copy["time"]):
+        df_copy["time"] = pd.to_datetime(df_copy["time"], utc=False)
+    
+    # Force strip all timezone info to ensure naive comparison
+    df_copy["time"] = pd.to_datetime(df_copy["time"].astype(str)).dt.tz_localize(None)
+    
+    # Ensure report time is also naive
+    report_time_naive = pd.to_datetime(str(report_time)).tz_localize(None)
     match = df_copy[df_copy["time"] == report_time_naive]
     return match.iloc[-1]["open"] if not match.empty and "open" in match.columns else None
 
 # ✅ Get input value at day start time (17:00 or 18:00) looking back from report time
 def get_input_at_day_start(df, report_time, start_hour):
     """Get input value at the most recent day start time (17:00 or 18:00) before or at report time"""
+    import streamlit as st
+
     if df is None or report_time is None:
         return None
-    
+
+    # Helper function to ensure datetime is completely naive
+    def make_naive(dt):
+        """Convert any datetime to a completely naive datetime"""
+        if dt is None:
+            return None
+
+        # Convert to pandas Timestamp if it isn't already
+        dt = pd.Timestamp(dt)
+
+        # If it has timezone info, convert to naive by removing tz info entirely
+        if dt.tz is not None:
+            # Get the naive datetime components directly, don't convert to UTC
+            dt = dt.tz_localize(None)
+
+        return dt
+
+    # Make report_time completely naive
+    report_time_naive = make_naive(report_time)
+
     # Start with the day start time on the same date as report_time
-    target_time = report_time.replace(hour=start_hour, minute=0, second=0, microsecond=0)
-    
+    target_time = report_time_naive.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+
     # If the report time is before the day start time on the same day,
     # we need to go back to the previous day's day start time
-    if report_time < target_time:
+    if report_time_naive < target_time:
         target_time = target_time - pd.Timedelta(days=1)
-    
-    # First try exact match at the target time
-    # Ensure time column is datetime for comparison
+
+    # Create a working copy and ensure all times are completely naive
     df_copy = df.copy()
-    df_copy["time"] = pd.to_datetime(df_copy["time"]).dt.tz_localize(None)  # Remove timezone info
-    target_time_naive = pd.to_datetime(target_time).tz_localize(None) if hasattr(target_time, 'tz') and target_time.tz else target_time
-    report_time_naive = pd.to_datetime(report_time).tz_localize(None) if hasattr(report_time, 'tz') and report_time.tz else report_time
-    
-    exact_match = df_copy[df_copy["time"] == target_time_naive]
+
+    # Make all times in the dataframe completely naive
+    try:
+        df_copy["time"] = df_copy["time"].apply(make_naive)
+    except Exception as e:
+        return None
+
+    # First try exact match at the target time
+    exact_match = df_copy[df_copy["time"] == target_time]
     if not exact_match.empty and "open" in exact_match.columns:
-        return exact_match.iloc[-1]["open"]
-    
+        found_value = exact_match.iloc[-1]["open"]
+        return found_value
+
     # If no exact match, find the closest time to the target time that's <= report_time
-    if "time" in df.columns and "open" in df.columns:
+    if "time" in df_copy.columns and "open" in df_copy.columns:
         # Filter to times that are <= report_time
         valid_times_df = df_copy[df_copy["time"] <= report_time_naive]
         if not valid_times_df.empty:
             valid_times_df = valid_times_df.copy()
-            valid_times_df["time_diff"] = abs(valid_times_df["time"] - target_time_naive)
+            valid_times_df["time_diff"] = abs(valid_times_df["time"] - target_time)
             closest_row = valid_times_df.loc[valid_times_df["time_diff"].idxmin()]
-            return closest_row["open"]
-    
+            found_value = closest_row["open"]
+            return found_value
+
     return None
 
 # ✅ Backward compatibility wrapper for get_input_at_18
@@ -994,6 +1053,7 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
 
 
 
