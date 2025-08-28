@@ -1,4 +1,5 @@
-# v28g - Model G now split into multiple files, but the Model G toggles DO NOT WORK! Only the 🔍 Debug G.08 Detection toggle works. 
+# v28g - Full Range inclusive helper integrated; Full Range runs first.
+# Model G now split into multiple files.
 
 import streamlit as st
 import pandas as pd
@@ -145,6 +146,18 @@ if run_g_models:
     run_g05_g06 = st.sidebar.checkbox("   • G.05 & G.06 (Proximity Groups)", value=False, help="Standard proximity-based grouping detection")
     run_g08 = st.sidebar.checkbox("   • G.08 (x0Pd.w Patterns)", value=False, help="x0Pd.w descending pattern detection")
     run_g09 = st.sidebar.checkbox("   • G.09 (Flip Endings)", value=False, help="Descending patterns with flip endings")
+    run_g10 = st.sidebar.checkbox("   • G.10 (Pair Detection)", value=False, help="Pair detection with neighbor scoring (GR, x0, x1, Fogz, Zero, Premium, DD)")
+    
+    # G.10 Group toggles (if G.10 is enabled)
+    if run_g10:
+        st.sidebar.markdown("**🔘 G.10 Group Controls:**")
+        g10_group_0 = st.sidebar.checkbox("      ○ Group 0", value=True, help="Enable Group 0 detection")
+        g10_group_1 = st.sidebar.checkbox("      ○ Group 1", value=True, help="Enable Group 1 detection")
+        g10_group_2 = st.sidebar.checkbox("      ○ Group 2", value=True, help="Enable Group 2 detection")
+        g10_group_3 = st.sidebar.checkbox("      ○ Group 3", value=False, help="Enable Group 3 detection")
+        g10_group_4 = st.sidebar.checkbox("      ○ Group 4", value=False, help="Enable Group 4 detection")
+    else:
+        g10_group_0 = g10_group_1 = g10_group_2 = g10_group_3 = g10_group_4 = False
     
     # Debug options
     debug_g08 = st.sidebar.checkbox("🔍 Debug G.08 Detection", value=False, help="Show detailed G.08 detection debug information")
@@ -157,6 +170,8 @@ else:
     run_g05_g06 = False
     run_g08 = False
     run_g09 = False
+    run_g10 = False
+    g10_group_0 = g10_group_1 = g10_group_2 = g10_group_3 = g10_group_4 = False
     debug_g08 = False
     st.session_state['debug_g08'] = False
 run_g_on_custom = st.sidebar.checkbox("🎯 Run Model G on Custom Ranges", value=False)
@@ -287,6 +302,7 @@ if bypass_traveler_file:
         if run_g_models:
             st.markdown("---")
             st.markdown("### 🟢 Model G Detection on Bypass Report")
+            st.info(f"Running G models with settings: G.05/06={run_g05_g06}, G.08={run_g08}, G.09={run_g09}, G.10={run_g10}")
             try:
                 from a_helpers import GROUP_1B_TRAVELERS
                 if 'M #' in final_df_filtered.columns:
@@ -303,11 +319,21 @@ if bypass_traveler_file:
                             except ImportError:
                                 from model_g_detector import run_model_g_detection as _g
 
+                        # Pass the toggle parameters to the detection function
                         g_results = run_model_g_detection(
                             final_df_filtered,
                             proximity_threshold=0.10,
                             report_time=report_time,
-                            key_suffix="_main",
+                            key_suffix="_bypass",
+                            run_g05_g06=run_g05_g06,
+                            run_g08=run_g08,
+                            run_g09=run_g09,
+                            run_g10=run_g10,
+                            g10_group_0=g10_group_0,
+                            g10_group_1=g10_group_1,
+                            g10_group_2=g10_group_2,
+                            g10_group_3=g10_group_3,
+                            g10_group_4=g10_group_4,
                         )
                         if isinstance(g_results, dict) and 'success' in g_results:
                             if g_results['success']:
@@ -323,6 +349,8 @@ if bypass_traveler_file:
                                     st.info("No Model G sequences detected in bypass report Grp 1b data")
                             else:
                                 st.error(f"Model G detection error: {g_results['error']}")
+                        else:
+                            st.error("Model G detection returned unexpected format")
                 else:
                     st.warning("No 'M #' column found in bypass report - cannot run Model G detection")
             except ImportError as e:
@@ -437,6 +465,12 @@ elif small_feed_file and big_feed_file and measurement_file:
         input_value_at_start = get_input_at_day_start(small_df, report_time, day_start_hour)
         if input_value_at_start is not None:
             st.info(f"Input @ {day_start_hour:02d}:00: {input_value_at_start}")
+        else:
+            st.warning("⚠️ Could not determine Input @ Day Start - will use manual input or fallback logic")
+            
+        # DEBUG: Show what the Full Range center will be
+        if use_full_range and input_value_at_start is not None:
+            st.success(f"🎯 FULL RANGE CENTER: Using {input_value_at_start} ± {full_range_value} = [{input_value_at_start - full_range_value:.1f} to {input_value_at_start + full_range_value:.1f}]")
 
         import time
         start_time = time.time()
@@ -649,11 +683,13 @@ elif small_feed_file and big_feed_file and measurement_file:
             if 'Arrival_datetime' in final_df_filtered.columns:
                 final_df_filtered = final_df_filtered[final_df_filtered['Arrival_datetime'] <= report_time]
             elif 'Arrival' in final_df_filtered.columns:
-                tmp_dt = pd.to_datetime(final_df_filtered['Arrival'], errors='coerce', infer_datetime_format=True)
+                tmp_dt = pd.to_datetime(final_df_filtered['Arrival'], errors='coerce')
                 final_df_filtered = final_df_filtered[tmp_dt <= report_time]
 
         if run_g_models:
             st.markdown("---")
+            st.markdown("### 🟢 Model G Detection Results")
+            st.info(f"Running G models with settings: G.05/06={run_g05_g06}, G.08={run_g08}, G.09={run_g09}, G.10={run_g10}")
             try:
                 # Pass individual G model toggles to the detection function
                 g_results = run_model_g_detection(
@@ -664,6 +700,12 @@ elif small_feed_file and big_feed_file and measurement_file:
                     run_g05_g06=run_g05_g06,
                     run_g08=run_g08,
                     run_g09=run_g09,
+                    run_g10=run_g10,
+                    g10_group_0=g10_group_0,
+                    g10_group_1=g10_group_1,
+                    g10_group_2=g10_group_2,
+                    g10_group_3=g10_group_3,
+                    g10_group_4=g10_group_4
                 )
                 if isinstance(g_results, dict) and 'success' in g_results:
                     if g_results['success']:
@@ -679,6 +721,8 @@ elif small_feed_file and big_feed_file and measurement_file:
                             st.info("No Model G sequences detected matching criteria")
                     else:
                         st.error(f"Model G detection error: {g_results['error']}")
+                else:
+                    st.error("Model G detection returned unexpected format")
             except Exception as e:
                 st.error(f"Model G detection error: {str(e)}")
                 st.info("Make sure model_g_manager.py exists and contains run_model_g_detection function")
