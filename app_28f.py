@@ -14,7 +14,7 @@ pd.set_option("styler.render.max_elements", 2000000)
 
 # Import functions - these paths are confirmed working
 from a_helpers import (
-    clean_timestamp, process_feed, get_input_at_day_start, apply_excel_highlighting,
+    clean_timestamp, process_feed_optimized, get_input_at_day_start, apply_excel_highlighting,
     get_input_value, highlight_traveler_report, get_input_at_time, highlight_custom_traveler_report, generate_master_traveler_list,
     GROUP_1A_TRAVELERS, GROUP_1B_TRAVELERS, GROUP_2A_TRAVELERS, GROUP_2B_TRAVELERS,
 )
@@ -544,7 +544,7 @@ elif small_feed_file and big_feed_file and measurement_file:
             # Big feed
             if len(big_df) > 0:
                 big_df['time'] = big_df['time'].apply(clean_timestamp)
-                big_data = process_feed(
+                big_data = process_feed_optimized(
                     big_df, "Big", report_time, scope_type, scope_value,
                     day_start_hour, master_measurements_df, input_value_at_start, small_df,
                     use_full_range=False, full_range_value=0
@@ -554,7 +554,7 @@ elif small_feed_file and big_feed_file and measurement_file:
             # Small feed
             if len(small_df) > 0:
                 small_df['time'] = small_df['time'].apply(clean_timestamp)
-                small_data = process_feed(
+                small_data = process_feed_optimized(
                     small_df, "Small", report_time, scope_type, scope_value,
                     day_start_hour, master_measurements_df, input_value_at_start, small_df,
                     use_full_range=False, full_range_value=0
