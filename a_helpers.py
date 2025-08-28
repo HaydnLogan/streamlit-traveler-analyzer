@@ -347,6 +347,53 @@ def extract_origins(columns):
             origins.setdefault(core, []).append(col)
     return {origin: cols for origin, cols in origins.items() if len(cols) == 3}
 
+def get_input_values_batch(small_df, large_df, report_time, start_hour=18):
+    """
+    Efficiently calculate input values for both small and large feeds at once.
+    This eliminates the need to search DataFrames repeatedly for each measurement.
+    
+    Returns: tuple of (small_input_at_start, large_input_at_start, small_input_at_report, large_input_at_report)
+    """
+    
+    def get_single_input_value(df, target_time):
+        """Helper to get input value from a single DataFrame at target time"""
+        if df is None or target_time is None:
+            return None
+            
+        # Ensure time column is datetime and timezone-naive
+        df_copy = df.copy()
+        df_copy["time"] = pd.to_datetime(df_copy["time"]).dt.tz_localize(None)
+        target_time_naive = pd.to_datetime(target_time).tz_localize(None) if hasattr(target_time, 'tz') and target_time.tz else pd.to_datetime(target_time)
+        
+        # First try exact match
+        exact_match = df_copy[df_copy["time"] == target_time_naive]
+        if not exact_match.empty and "open" in exact_match.columns:
+            return exact_match.iloc[-1]["open"]
+        
+        # If no exact match, find closest time
+        if "time" in df_copy.columns and "open" in df_copy.columns:
+            df_copy["time_diff"] = abs(df_copy["time"] - target_time_naive)
+            closest_row = df_copy.loc[df_copy["time_diff"].idxmin()]
+            return closest_row["open"]
+        
+        return None
+    
+    # Calculate start time (18:00 on the day before report time if report is before 18:00)
+    report_time_naive = pd.to_datetime(report_time).tz_localize(None) if hasattr(report_time, 'tz') and report_time.tz else pd.to_datetime(report_time)
+    start_time = report_time_naive.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    
+    # If report time is before start_hour on the same day, go back to previous day
+    if report_time_naive.hour < start_hour:
+        start_time = start_time - pd.Timedelta(days=1)
+    
+    # Get all four values in one pass
+    small_input_at_start = get_single_input_value(small_df, start_time)
+    large_input_at_start = get_single_input_value(large_df, start_time)
+    small_input_at_report = get_single_input_value(small_df, report_time)
+    large_input_at_report = get_single_input_value(large_df, report_time)
+    
+    return small_input_at_start, large_input_at_start, small_input_at_report, large_input_at_report
+
 # ✅ Get input value for a given report_time
 def get_input_value(df, report_time):
     # Convert to timezone-naive datetime ONLY (no UTC conversion)
@@ -545,6 +592,180 @@ def get_measurement_value(row, possible_columns=None):
             return val
     
     return 0  # Default fallback
+
+# Update process_feed function to use the batch calculation  ***************
+def process_feed_optimized(df,
+                          feed_type,
+                          report_time,
+                          scope_type,
+                          scope_value,
+                          start_hour,
+                          measurements,
+                          small_df,
+                          large_df,
+                          use_full_range=False,
+                          full_range_value=24):
+    """
+    Optimized version of process_feed that calculates input values once upfront
+    """
+    
+    # PERFORMANCE OPTIMIZATION: Calculate all input values once upfront
+    small_input_at_start, large_input_at_start, small_input_at_report, large_input_at_report = get_input_values_batch(
+        small_df, large_df, report_time, start_hour
+    )
+    
+    # Determine which input values to use based on feed type
+    if feed_type.lower() == 'small':
+        input_value_at_start = small_input_at_start
+        input_value_at_report = small_input_at_report
+    else:  # large feed
+        input_value_at_start = large_input_at_start
+        input_value_at_report = large_input_at_report
+    
+    # Clean and prepare DataFrame
+    df.columns = df.columns.str.strip().str.lower()
+    df["time"] = df["time"].apply(clean_timestamp)
+    df = df.iloc[::-1]  # reverse chronological
+
+    if report_time:
+        if scope_type == "Rows":
+            try:
+                start_index = df[df["time"] == report_time].index[0]
+                df = df.iloc[start_index:start_index + scope_value]
+            except:
+                pass
+        else:
+            cutoff = report_time - pd.Timedelta(days=scope_value)
+            df = df[df["time"] >= cutoff]
+
+    origins = extract_origins(df.columns)
+    new_data_rows = []
+
+    for origin, cols in origins.items():
+        relevant_rows = df[["time", "open"] + cols].dropna()
+        origin_name = origin.lower()
+        is_special = any(tag in origin_name for tag in ["wasp", "macedonia"])
+
+        if is_special:
+            report_row = relevant_rows[relevant_rows["time"] == report_time]
+            if report_row.empty:
+                continue
+            current = report_row.iloc[0]
+            bracket_number = 0
+            if "[" in origin_name and "]" in origin_name:
+                try:
+                    bracket_number = int(origin_name.split("[")[-1].replace("]", ""))
+                except:
+                    pass
+            
+            if "wasp" in origin_name:
+                arrival_time = get_weekly_anchor(report_time, max(1, bracket_number), start_hour)
+            elif "macedonia" in origin_name:
+                arrival_time = get_monthly_anchor(report_time, max(1, bracket_number), start_hour)
+            else:
+                arrival_time = report_time
+            
+            H, L, C = current[cols[0]], current[cols[1]], current[cols[2]]
+
+            # Calculate input at arrival time (still need this one per origin)
+            input_at_arrival = get_input_at_time(small_df if feed_type.lower() == 'small' else large_df, arrival_time)
+
+            for _, row in measurements.iterrows():
+                m_value = get_measurement_value(row)
+                output = calculate_pivot(H, L, C, m_value)
+
+                # OPTIMIZATION: Skip processing if using full range and output is outside range
+                if use_full_range and input_value_at_start is not None:
+                    high_limit = input_value_at_start + full_range_value
+                    low_limit = input_value_at_start - full_range_value
+                    if output < low_limit or output > high_limit:
+                        continue
+
+                day = get_day_index(arrival_time, report_time, start_hour)
+
+                try:
+                    day_abbrev = arrival_time.strftime('%a')
+                    arrival_excel = arrival_time.strftime('%Y-%m-%d %H:%M')
+                except:
+                    day_abbrev = ""
+                    arrival_excel = str(arrival_time)
+
+                new_data_rows.append({
+                    "Feed": feed_type,
+                    "ddd": day_abbrev,
+                    "Arrival": arrival_excel,
+                    "Arrival_datetime": arrival_time,
+                    "Day": day,
+                    "Origin": origin,
+                    "M Name": row.get("m name", row.get("M Name", row.get("M name", ""))),
+                    "M #": row.get("m #", row.get("M #", row.get("M value", get_measurement_value(row)))),
+                    "R #": row.get("r #", row.get("R #", "")),
+                    "Tag": row.get("tag", row.get("Tag", "")),
+                    "Family": row.get("family", row.get("Family", "")),
+                    f"Input @ {start_hour:02d}:00": input_value_at_start,
+                    f"Diff @ {start_hour:02d}:00": output - input_value_at_start if input_value_at_start is not None else None,
+                    "Input @ Arrival": input_at_arrival,
+                    "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
+                    "Input @ Report": input_value_at_report,
+                    "Diff @ Report": output - input_value_at_report if input_value_at_report is not None else None,
+                    "Output": output
+                })
+        else:
+            # Process regular (non-special) origins
+            for i in range(len(relevant_rows) - 1):
+                current = relevant_rows.iloc[i]
+                above = relevant_rows.iloc[i + 1]
+                changed = any(current[col] != above[col] for col in cols)
+                
+                if changed:
+                    arrival_time = current["time"]
+                    H, L, C = current[cols[0]], current[cols[1]], current[cols[2]]
+
+                    # Calculate input at arrival time (still need this one per data point)
+                    input_at_arrival = get_input_at_time(small_df if feed_type.lower() == 'small' else large_df, arrival_time)
+
+                    for _, row in measurements.iterrows():
+                        m_value = get_measurement_value(row)
+                        output = calculate_pivot(H, L, C, m_value)
+
+                        # OPTIMIZATION: Skip processing if using full range and output is outside range
+                        if use_full_range and input_value_at_start is not None:
+                            high_limit = input_value_at_start + full_range_value
+                            low_limit = input_value_at_start - full_range_value
+                            if output < low_limit or output > high_limit:
+                                continue
+
+                        day = get_day_index(arrival_time, report_time, start_hour)
+
+                        try:
+                            day_abbrev = arrival_time.strftime('%a')
+                            arrival_excel = arrival_time.strftime('%Y-%m-%d %H:%M')
+                        except:
+                            day_abbrev = ""
+                            arrival_excel = str(arrival_time)
+
+                        new_data_rows.append({
+                            "Feed": feed_type,
+                            "ddd": day_abbrev,
+                            "Arrival": arrival_excel,
+                            "Arrival_datetime": arrival_time,
+                            "Day": day,
+                            "Origin": origin,
+                            "M Name": row.get("m name", row.get("M Name", row.get("M name", ""))),
+                            "M #": row.get("m #", row.get("M #", row.get("M value", get_measurement_value(row)))),
+                            "R #": row.get("r #", row.get("R #", "")),
+                            "Tag": row.get("tag", row.get("Tag", "")),
+                            "Family": row.get("family", row.get("Family", "")),
+                            f"Input @ {start_hour:02d}:00": input_value_at_start,
+                            f"Diff @ {start_hour:02d}:00": output - input_value_at_start if input_value_at_start is not None else None,
+                            "Input @ Arrival": input_at_arrival,
+                            "Diff @ Arrival": output - input_at_arrival if input_at_arrival is not None else None,
+                            "Input @ Report": input_value_at_report,
+                            "Diff @ Report": output - input_value_at_report if input_value_at_report is not None else None,
+                            "Output": output
+                        })
+
+    return new_data_rows
 
 # ✅ Main feed processor - UPDATED with new columns and flexible measurement column handling
 def process_feed(df,
@@ -1053,6 +1274,7 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
 
 
 
