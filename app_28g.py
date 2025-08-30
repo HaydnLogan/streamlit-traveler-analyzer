@@ -225,7 +225,7 @@ if report_type == "Full Range":
         full_range_value = st.number_input(
             "Full Range Value (±)",
             min_value=1,
-            value=1100,
+            value=300,
             key="global_full_range"
         )
     with col2:
