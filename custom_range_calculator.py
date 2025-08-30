@@ -843,18 +843,10 @@ def apply_custom_ranges_advanced(df, small_df, report_time, high1, high2, low1, 
         st.error(f"Traceback: {traceback.format_exc()}")
         return pd.DataFrame()
 
-def process_full_range_advanced(
-    measurement_df: pd.DataFrame,
-    small_df: pd.DataFrame,
-    report_time: dt.datetime,
-    center: float,
-    window_radius: float,
-    scope_days: int = 20,
-    big_df: pd.DataFrame = None,
-    run_model_g: bool = False,
-):
+def process_full_range_advanced(measurement_df, small_df, report_time, center, window_radius, scope_days=20, big_df=None, run_model_g=False):
     """
     Advanced Full Range processing with batch optimization.
+    Fixed version with robust datetime handling.
     """
     try:
         lo = center - window_radius
@@ -897,10 +889,14 @@ def process_full_range_advanced(
         for hlc_df, data_source in data_sources:
             for origin in origins:
 
-                # Special handling (same as custom path)
+                # Special handling (same as custom path but with safe datetime)
                 if (origin.lower() == 'wasp-12b' or origin.lower() == 'wasp' or
                     'wasp-12b[1]' in origin.lower() or 'wasp-12b[2]' in origin.lower()):
-                    report_dt = pd.to_datetime(report_time) if isinstance(report_time, str) else report_time
+                    
+                    report_dt = safe_to_datetime(report_time)
+                    if pd.isna(report_dt):
+                        continue
+                        
                     days_since_sunday = report_dt.weekday() + 1
                     if days_since_sunday == 7:
                         days_since_sunday = 0
@@ -912,8 +908,7 @@ def process_full_range_advanced(
                         wasp_dt = wasp_dt - timedelta(weeks=2)
                     
                     wasp_dt = wasp_dt.replace(hour=18, minute=0, second=0, microsecond=0)
-                    if hasattr(wasp_dt, 'tz') and wasp_dt.tz is not None:
-                        wasp_dt = wasp_dt.replace(tzinfo=None)
+                    wasp_dt = ensure_timezone_naive(wasp_dt)
 
                     cur = find_most_current_data(hlc_df, report_time, origin, scope_days)
                     if cur:
@@ -927,7 +922,10 @@ def process_full_range_advanced(
                       'macedonia[1]' in origin.lower() or 'macedonia[2]' in origin.lower() or
                       origin.lower().startswith('macedonia')):
                     
-                    report_dt = pd.to_datetime(report_time) if isinstance(report_time, str) else report_time
+                    report_dt = safe_to_datetime(report_time)
+                    if pd.isna(report_dt):
+                        continue
+                        
                     macedonia_datetime = report_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
                     
                     if '[1]' in origin:
@@ -942,8 +940,7 @@ def process_full_range_advanced(
                         else:
                             macedonia_datetime = macedonia_datetime.replace(month=target_month)
                     
-                    if hasattr(macedonia_datetime, 'tz') and macedonia_datetime.tz is not None:
-                        macedonia_datetime = macedonia_datetime.replace(tzinfo=None)
+                    macedonia_datetime = ensure_timezone_naive(macedonia_datetime)
                     
                     cur = find_most_current_data(hlc_df, report_time, origin, scope_days)
                     if cur:
