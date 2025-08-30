@@ -9,65 +9,136 @@ import streamlit as st
 from datetime import datetime, timedelta
 import numpy as np
 
+def safe_to_datetime(series_or_value, errors='coerce'):
+    """
+    Safely convert to datetime with proper error handling
+    """
+    try:
+        if isinstance(series_or_value, pd.Series):
+            # First convert to string to handle mixed types
+            str_series = series_or_value.astype(str)
+            # Clean timezone info using string operations
+            clean_series = str_series.str.replace(r'[+-]\d{2}:?\d{2}$', '', regex=True)
+            clean_series = clean_series.str.replace('T', ' ')
+            return pd.to_datetime(clean_series, errors=errors)
+        else:
+            # Single value
+            if pd.isna(series_or_value):
+                return pd.NaT
+            str_value = str(series_or_value)
+            # Clean timezone info
+            import re
+            clean_value = re.sub(r'[+-]\d{2}:?\d{2}$', '', str_value)
+            clean_value = clean_value.replace('T', ' ')
+            return pd.to_datetime(clean_value, errors=errors)
+    except Exception as e:
+        st.warning(f"Datetime conversion error: {e}")
+        if isinstance(series_or_value, pd.Series):
+            return pd.Series([pd.NaT] * len(series_or_value))
+        else:
+            return pd.NaT
+
+def ensure_timezone_naive(dt_value):
+    """
+    Ensure datetime is timezone naive
+    """
+    try:
+        if pd.isna(dt_value):
+            return dt_value
+        
+        if isinstance(dt_value, pd.Series):
+            # For series, check if it's datetime type first
+            if not pd.api.types.is_datetime64_any_dtype(dt_value):
+                dt_value = safe_to_datetime(dt_value)
+            
+            # Only use .dt accessor if we have datetime type
+            if pd.api.types.is_datetime64_any_dtype(dt_value):
+                return dt_value.dt.tz_localize(None) if dt_value.dt.tz is not None else dt_value
+            else:
+                return dt_value
+        else:
+            # Single value
+            if hasattr(dt_value, 'tz') and dt_value.tz is not None:
+                return dt_value.replace(tzinfo=None)
+            return dt_value
+    except Exception as e:
+        st.warning(f"Timezone conversion error: {e}")
+        return dt_value
+
 def get_input_values_batch(small_df, big_df, report_time, start_hour=18):
     """
     Efficiently calculate input values for both small and big feeds at once.
-    This eliminates the need to search DataFrames repeatedly for each measurement.
-    
-    Returns: tuple of (small_input_at_start, big_input_at_start, small_input_at_report, big_input_at_report)
+    Fixed version with robust datetime handling.
     """
     def get_single_input_value(df, target_time):
         """Helper to get input value from a single DataFrame at target time"""
-        if df is None or target_time is None:
+        if df is None or target_time is None or df.empty:
             return None
         
-        # Ensure time column is datetime and timezone-naive
-        df_copy = df.copy()
-        if 'time' in df_copy.columns:
-            df_copy["time"] = pd.to_datetime(df_copy["time"]).dt.tz_localize(None)
-        else:
-            return None
+        try:
+            # Ensure we have required columns
+            if 'time' not in df.columns or 'open' not in df.columns:
+                return None
             
-        target_time_naive = pd.to_datetime(target_time).tz_localize(None) if hasattr(target_time, 'tz') and target_time.tz else pd.to_datetime(target_time)
-        
-        # First try exact match
-        exact_match = df_copy[df_copy["time"] == target_time_naive]
-        if not exact_match.empty and "open" in exact_match.columns:
-            return exact_match.iloc[-1]["open"]
-        
-        # If no exact match, find closest time
-        if "time" in df_copy.columns and "open" in df_copy.columns:
+            # Make a copy to avoid modifying original
+            df_copy = df.copy()
+            
+            # Safe datetime conversion
+            df_copy["time"] = safe_to_datetime(df_copy["time"])
+            
+            # Check if conversion was successful
+            if not pd.api.types.is_datetime64_any_dtype(df_copy["time"]):
+                st.warning("Could not convert time column to datetime")
+                return None
+            
+            # Remove timezone info safely
+            df_copy["time"] = ensure_timezone_naive(df_copy["time"])
+            target_time_naive = ensure_timezone_naive(pd.to_datetime(target_time))
+            
+            # First try exact match
+            exact_match = df_copy[df_copy["time"] == target_time_naive]
+            if not exact_match.empty:
+                return exact_match.iloc[-1]["open"]
+            
+            # If no exact match, find closest time
             df_copy["time_diff"] = abs(df_copy["time"] - target_time_naive)
             closest_row = df_copy.loc[df_copy["time_diff"].idxmin()]
             return closest_row["open"]
+            
+        except Exception as e:
+            st.warning(f"Error getting input value: {e}")
+            return None
+    
+    try:
+        # Calculate start time
+        report_time_naive = ensure_timezone_naive(pd.to_datetime(report_time))
+        start_time = report_time_naive.replace(hour=start_hour, minute=0, second=0, microsecond=0)
         
-        return None
-
-    # Calculate start time (18:00 on the day before report time if report is before 18:00)
-    report_time_naive = pd.to_datetime(report_time).tz_localize(None) if hasattr(report_time, 'tz') and report_time.tz else pd.to_datetime(report_time)
-    start_time = report_time_naive.replace(hour=start_hour, minute=0, second=0, microsecond=0)
-    
-    # If report time is before start_hour on the same day, go back to previous day
-    if report_time_naive.hour < start_hour:
-        start_time = start_time - pd.Timedelta(days=1)
-    
-    # Get all four values in one pass
-    small_input_at_start = get_single_input_value(small_df, start_time)
-    big_input_at_start = get_single_input_value(big_df, start_time)
-    small_input_at_report = get_single_input_value(small_df, report_time)
-    big_input_at_report = get_single_input_value(big_df, report_time)
-    
-    return small_input_at_start, big_input_at_start, small_input_at_report, big_input_at_report
+        # If report time is before start_hour on the same day, go back to previous day
+        if report_time_naive.hour < start_hour:
+            start_time = start_time - pd.Timedelta(days=1)
+        
+        # Get all four values in one pass
+        small_input_at_start = get_single_input_value(small_df, start_time)
+        big_input_at_start = get_single_input_value(big_df, start_time)
+        small_input_at_report = get_single_input_value(small_df, report_time)
+        big_input_at_report = get_single_input_value(big_df, report_time)
+        
+        return small_input_at_start, big_input_at_start, small_input_at_report, big_input_at_report
+        
+    except Exception as e:
+        st.error(f"Error in batch input calculation: {e}")
+        return None, None, None, None
 
 def find_new_data_changes(small_df, report_time, origin_name, scope_days=20):
     """
     Find the first time new data appears for an origin by detecting changes in H/L/C values.
-    Starts from the bottom (most recent) and works backwards to find when data changed.
+    Fixed version with robust datetime handling.
     """
     try:
-        # Convert report_time to pandas datetime if needed
+        # Convert report_time safely
         if isinstance(report_time, str):
-            report_time = pd.to_datetime(report_time)
+            report_time = safe_to_datetime(report_time)
 
         # Look for columns ending with H, L, C for this origin
         h_col = f"{origin_name} H"
@@ -89,27 +160,23 @@ def find_new_data_changes(small_df, report_time, origin_name, scope_days=20):
         if not all(col in small_df.columns for col in [h_col, l_col, c_col]):
             return []
 
-        # Simple timezone stripping - no conversion
+        # Safe datetime conversion for the dataframe
         small_df_copy = small_df.copy()
         if 'time' in small_df_copy.columns:
-            time_strings = small_df_copy['time'].astype(str)
-            clean_times = time_strings.str.replace(r'[+-]\d{2}:?\d{2}$', '', regex=True)
-            clean_times = clean_times.str.replace('T', ' ')
-            small_df_copy['time_dt'] = pd.to_datetime(clean_times, errors='coerce')
+            small_df_copy['time_dt'] = safe_to_datetime(small_df_copy['time'])
         else:
-            small_df_copy['time_dt'] = pd.to_datetime(small_df_copy.iloc[:, 0], errors='coerce')
+            small_df_copy['time_dt'] = safe_to_datetime(small_df_copy.iloc[:, 0])
 
         # Ensure report_time is timezone-naive datetime
-        if isinstance(report_time, str):
-            clean_report_time = report_time.replace('T', ' ')
-            clean_report_time = pd.Series([clean_report_time]).str.replace(r'[+-]\d{2}:?\d{2}$', '', regex=True).iloc[0]
-            report_time = pd.to_datetime(clean_report_time)
-        elif hasattr(report_time, 'tz') and report_time.tz is not None:
-            report_time = report_time.replace(tzinfo=None)
+        report_time = ensure_timezone_naive(safe_to_datetime(report_time))
 
         # Get data within scope and at or before report time
         scope_start = report_time - timedelta(days=scope_days)
+        
+        # Filter data safely
+        valid_time_mask = pd.notna(small_df_copy['time_dt'])
         scoped_df = small_df_copy[
+            valid_time_mask &
             (small_df_copy['time_dt'] >= scope_start) & 
             (small_df_copy['time_dt'] <= report_time)
         ].copy()
@@ -157,16 +224,19 @@ def find_new_data_changes(small_df, report_time, origin_name, scope_days=20):
 
     except Exception as e:
         st.error(f"Error finding new data changes for {origin_name}: {e}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return []
 
 def find_most_current_data(small_df, report_time, origin_name, scope_days=20):
     """
     Find the most current data for an origin at report time.
+    Fixed version with robust datetime handling.
     """
     try:
-        # Convert report_time to pandas datetime if needed
+        # Convert report_time safely
         if isinstance(report_time, str):
-            report_time = pd.to_datetime(report_time)
+            report_time = safe_to_datetime(report_time)
 
         # Look for columns ending with H, L, C for this origin
         h_col = f"{origin_name} H"
@@ -188,27 +258,27 @@ def find_most_current_data(small_df, report_time, origin_name, scope_days=20):
         if not all(col in small_df.columns for col in [h_col, l_col, c_col]):
             return None
 
-        # Simple timezone stripping - no conversion
+        # Safe datetime conversion for the dataframe
         small_df_copy = small_df.copy()
         if 'time' in small_df_copy.columns:
-            time_strings = small_df_copy['time'].astype(str)
-            clean_times = time_strings.str.replace(r'[+-]\d{2}:?\d{2}$', '', regex=True)
-            clean_times = clean_times.str.replace('T', ' ')
-            small_df_copy['time_dt'] = pd.to_datetime(clean_times, errors='coerce')
+            small_df_copy['time_dt'] = safe_to_datetime(small_df_copy['time'])
         else:
-            small_df_copy['time_dt'] = pd.to_datetime(small_df_copy.iloc[:, 0], errors='coerce')
+            small_df_copy['time_dt'] = safe_to_datetime(small_df_copy.iloc[:, 0])
 
         # Ensure report_time is timezone-naive datetime
-        if isinstance(report_time, str):
-            clean_report_time = report_time.replace('T', ' ')
-            clean_report_time = pd.Series([clean_report_time]).str.replace(r'[+-]\d{2}:?\d{2}$', '', regex=True).iloc[0]
-            report_time = pd.to_datetime(clean_report_time)
-        elif hasattr(report_time, 'tz') and report_time.tz is not None:
-            report_time = report_time.replace(tzinfo=None)
+        report_time = ensure_timezone_naive(safe_to_datetime(report_time))
 
         # Priority 1: Look for data from the same day as report_time
         report_date = report_time.date()
-        same_day_df = small_df_copy[small_df_copy['time_dt'].dt.date == report_date].copy()
+        
+        # Filter for same day safely
+        valid_time_mask = pd.notna(small_df_copy['time_dt'])
+        if not valid_time_mask.any():
+            return None
+            
+        # Only apply .dt.date on datetime columns
+        same_day_mask = valid_time_mask & (small_df_copy['time_dt'].dt.date == report_date)
+        same_day_df = small_df_copy[same_day_mask].copy()
 
         if not same_day_df.empty:
             # Sort by time descending to get most recent first
@@ -234,6 +304,7 @@ def find_most_current_data(small_df, report_time, origin_name, scope_days=20):
         # Priority 2: If no same-day data, look within scope_days (as fallback)
         scope_start = report_time - timedelta(days=scope_days)
         scoped_df = small_df_copy[
+            valid_time_mask &
             (small_df_copy['time_dt'] >= scope_start) & 
             (small_df_copy['time_dt'] <= report_time)
         ].copy()
@@ -263,6 +334,8 @@ def find_most_current_data(small_df, report_time, origin_name, scope_days=20):
 
     except Exception as e:
         st.error(f"Error finding current data for {origin_name}: {e}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 def calculate_raw_m_values(hlc_data, range_low, range_high):
