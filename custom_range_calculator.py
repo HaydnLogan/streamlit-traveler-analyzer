@@ -40,7 +40,7 @@ def safe_to_datetime(series_or_value, errors='coerce'):
 
 def ensure_timezone_naive(dt_value):
     """
-    Ensure datetime is timezone naive
+    Ensure datetime is timezone naive - FIXED VERSION
     """
     try:
         if pd.isna(dt_value):
@@ -53,7 +53,16 @@ def ensure_timezone_naive(dt_value):
             
             # Only use .dt accessor if we have datetime type
             if pd.api.types.is_datetime64_any_dtype(dt_value):
-                return dt_value.dt.tz_localize(None) if dt_value.dt.tz is not None else dt_value
+                # Check if ANY values have timezone info (avoid ambiguous truth value)
+                try:
+                    # Use .dt.tz to check timezone info
+                    if dt_value.dt.tz is not None:
+                        return dt_value.dt.tz_localize(None)
+                    else:
+                        return dt_value
+                except:
+                    # If timezone check fails, just return as-is
+                    return dt_value
             else:
                 return dt_value
         else:
@@ -68,7 +77,7 @@ def ensure_timezone_naive(dt_value):
 def get_input_values_batch(small_df, big_df, report_time, start_hour=18):
     """
     Efficiently calculate input values for both small and big feeds at once.
-    Fixed version with robust datetime handling.
+    FIXED VERSION with proper Series handling.
     """
     def get_single_input_value(df, target_time):
         """Helper to get input value from a single DataFrame at target time"""
@@ -91,9 +100,17 @@ def get_input_values_batch(small_df, big_df, report_time, start_hour=18):
                 st.warning("Could not convert time column to datetime")
                 return None
             
-            # Remove timezone info safely
+            # Remove timezone info safely - NO BOOLEAN CHECK ON SERIES
             df_copy["time"] = ensure_timezone_naive(df_copy["time"])
-            target_time_naive = ensure_timezone_naive(pd.to_datetime(target_time))
+            
+            # Convert target_time safely
+            if isinstance(target_time, pd.Series):
+                # If somehow we get a Series, take the first value
+                target_time = target_time.iloc[0] if not target_time.empty else None
+                if target_time is None:
+                    return None
+            
+            target_time_naive = ensure_timezone_naive(safe_to_datetime(target_time))
             
             # First try exact match
             exact_match = df_copy[df_copy["time"] == target_time_naive]
@@ -110,8 +127,14 @@ def get_input_values_batch(small_df, big_df, report_time, start_hour=18):
             return None
     
     try:
-        # Calculate start time
-        report_time_naive = ensure_timezone_naive(pd.to_datetime(report_time))
+        # Calculate start time - handle report_time properly
+        if isinstance(report_time, pd.Series):
+            report_time = report_time.iloc[0] if not report_time.empty else None
+        
+        if report_time is None:
+            return None, None, None, None
+            
+        report_time_naive = ensure_timezone_naive(safe_to_datetime(report_time))
         start_time = report_time_naive.replace(hour=start_hour, minute=0, second=0, microsecond=0)
         
         # If report time is before start_hour on the same day, go back to previous day
@@ -128,17 +151,25 @@ def get_input_values_batch(small_df, big_df, report_time, start_hour=18):
         
     except Exception as e:
         st.error(f"Error in batch input calculation: {e}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return None, None, None, None
+
 
 def find_new_data_changes(small_df, report_time, origin_name, scope_days=20):
     """
     Find the first time new data appears for an origin by detecting changes in H/L/C values.
-    Fixed version with robust datetime handling.
+    FIXED VERSION with proper Series handling.
     """
     try:
-        # Convert report_time safely
-        if isinstance(report_time, str):
-            report_time = safe_to_datetime(report_time)
+        # Convert report_time safely - handle Series case
+        if isinstance(report_time, pd.Series):
+            report_time = report_time.iloc[0] if not report_time.empty else None
+        
+        if report_time is None:
+            return []
+            
+        report_time = safe_to_datetime(report_time)
 
         # Look for columns ending with H, L, C for this origin
         h_col = f"{origin_name} H"
@@ -168,18 +199,18 @@ def find_new_data_changes(small_df, report_time, origin_name, scope_days=20):
             small_df_copy['time_dt'] = safe_to_datetime(small_df_copy.iloc[:, 0])
 
         # Ensure report_time is timezone-naive datetime
-        report_time = ensure_timezone_naive(safe_to_datetime(report_time))
+        report_time = ensure_timezone_naive(report_time)
 
         # Get data within scope and at or before report time
         scope_start = report_time - timedelta(days=scope_days)
         
-        # Filter data safely
-        valid_time_mask = pd.notna(small_df_copy['time_dt'])
-        scoped_df = small_df_copy[
-            valid_time_mask &
-            (small_df_copy['time_dt'] >= scope_start) & 
-            (small_df_copy['time_dt'] <= report_time)
-        ].copy()
+        # Filter data safely - use .notna() instead of boolean operations
+        valid_time_mask = small_df_copy['time_dt'].notna()
+        time_in_range_mask = (small_df_copy['time_dt'] >= scope_start) & (small_df_copy['time_dt'] <= report_time)
+        
+        # Combine masks properly
+        combined_mask = valid_time_mask & time_in_range_mask
+        scoped_df = small_df_copy[combined_mask].copy()
 
         if scoped_df.empty:
             return []
@@ -231,12 +262,17 @@ def find_new_data_changes(small_df, report_time, origin_name, scope_days=20):
 def find_most_current_data(small_df, report_time, origin_name, scope_days=20):
     """
     Find the most current data for an origin at report time.
-    Fixed version with robust datetime handling.
+    FIXED VERSION with proper Series handling.
     """
     try:
-        # Convert report_time safely
-        if isinstance(report_time, str):
-            report_time = safe_to_datetime(report_time)
+        # Convert report_time safely - handle Series case
+        if isinstance(report_time, pd.Series):
+            report_time = report_time.iloc[0] if not report_time.empty else None
+        
+        if report_time is None:
+            return None
+            
+        report_time = safe_to_datetime(report_time)
 
         # Look for columns ending with H, L, C for this origin
         h_col = f"{origin_name} H"
@@ -266,17 +302,17 @@ def find_most_current_data(small_df, report_time, origin_name, scope_days=20):
             small_df_copy['time_dt'] = safe_to_datetime(small_df_copy.iloc[:, 0])
 
         # Ensure report_time is timezone-naive datetime
-        report_time = ensure_timezone_naive(safe_to_datetime(report_time))
+        report_time = ensure_timezone_naive(report_time)
 
         # Priority 1: Look for data from the same day as report_time
         report_date = report_time.date()
         
-        # Filter for same day safely
-        valid_time_mask = pd.notna(small_df_copy['time_dt'])
+        # Filter for same day safely - use .notna() and proper masking
+        valid_time_mask = small_df_copy['time_dt'].notna()
         if not valid_time_mask.any():
             return None
             
-        # Only apply .dt.date on datetime columns
+        # Only apply .dt.date on datetime columns - use vectorized comparison
         same_day_mask = valid_time_mask & (small_df_copy['time_dt'].dt.date == report_date)
         same_day_df = small_df_copy[same_day_mask].copy()
 
@@ -303,11 +339,10 @@ def find_most_current_data(small_df, report_time, origin_name, scope_days=20):
 
         # Priority 2: If no same-day data, look within scope_days (as fallback)
         scope_start = report_time - timedelta(days=scope_days)
-        scoped_df = small_df_copy[
-            valid_time_mask &
-            (small_df_copy['time_dt'] >= scope_start) & 
-            (small_df_copy['time_dt'] <= report_time)
-        ].copy()
+        
+        # Use proper masking
+        time_range_mask = valid_time_mask & (small_df_copy['time_dt'] >= scope_start) & (small_df_copy['time_dt'] <= report_time)
+        scoped_df = small_df_copy[time_range_mask].copy()
 
         if scoped_df.empty:
             return None
@@ -337,7 +372,7 @@ def find_most_current_data(small_df, report_time, origin_name, scope_days=20):
         import traceback
         st.error(f"Traceback: {traceback.format_exc()}")
         return None
-
+        
 def calculate_raw_m_values(hlc_data, range_low, range_high):
     """
     Calculate raw M values for a price range.
