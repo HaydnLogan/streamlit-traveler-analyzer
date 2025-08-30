@@ -544,197 +544,211 @@ def find_valid_m_values(measurement_df, raw_m_low, raw_m_high, hlc_data, range_l
 def process_custom_ranges_advanced(measurement_df, small_df, report_time, custom_ranges, scope_days=20, big_df=None, run_model_g=False):
     """
     Process custom ranges using advanced H/L/C calculation method with batch optimization.
+    Fixed version with robust datetime handling.
     """
     all_valid_entries = []
     processing_summary = []
 
-    # PERFORMANCE OPTIMIZATION: Calculate batch input values once upfront
-    st.info("Calculating batch input values for performance optimization...")
-    batch_inputs = get_input_values_batch(small_df, big_df, report_time, 18)
-    small_input_at_start, big_input_at_start, small_input_at_report, big_input_at_report = batch_inputs
-    
-    st.info(f"Batch inputs calculated - Small @ 18:00: {small_input_at_start}, Big @ 18:00: {big_input_at_start}")
+    try:
+        # PERFORMANCE OPTIMIZATION: Calculate batch input values once upfront
+        st.info("Calculating batch input values for performance optimization...")
+        batch_inputs = get_input_values_batch(small_df, big_df, report_time, 18)
+        small_input_at_start, big_input_at_start, small_input_at_report, big_input_at_report = batch_inputs
+        
+        st.info(f"Batch inputs calculated - Small @ 18:00: {small_input_at_start}, Big @ 18:00: {big_input_at_start}")
 
-    # Process both Big and Small feeds if available
-    data_sources = []
-    if small_df is not None and not small_df.empty:
-        data_sources.append((small_df.copy(), "Small CSV"))
-    if big_df is not None and not big_df.empty:
-        data_sources.append((big_df.copy(), "Big CSV"))
+        # Process both Big and Small feeds if available
+        data_sources = []
+        if small_df is not None and not small_df.empty:
+            data_sources.append((small_df.copy(), "Small CSV"))
+        if big_df is not None and not big_df.empty:
+            data_sources.append((big_df.copy(), "Big CSV"))
 
-    # Get all unique origins from both data sources
-    all_origins = set()
-    for hlc_df, data_source in data_sources:
-        for col in hlc_df.columns:
-            if col.endswith(' H'):
-                origin_name = col[:-2]
-                all_origins.add(origin_name)
-
-    # Add variants
-    wasp_variants = ['WASP-12b[1]', 'WASP-12b[2]']
-    macedonia_variants = ['Macedonia[1]', 'Macedonia[2]']
-    for variant in wasp_variants + macedonia_variants:
-        all_origins.add(variant)
-
-    origins = list(all_origins)
-    st.info(f"Processing origins: {', '.join(origins)}")
-
-    # Process each custom range
-    for range_name, range_config in custom_ranges.items():
-        if not range_config.get('enabled', False):
-            continue
-
-        range_value = range_config.get('value', 0)
-        if range_value == 0:
-            continue
-
-        # Determine range bounds
-        if range_name.startswith('High'):
-            range_low = range_value - 24
-            range_high = range_value
-            is_high_range = True
-        else:
-            range_low = range_value
-            range_high = range_value + 24
-            is_high_range = False
-
-        st.markdown(f"### Processing {range_name}: {range_low:.3f} to {range_high:.3f}")
-
-        range_entries = []
-
-        # Process each data source for this range
+        # Get all unique origins from both data sources
+        all_origins = set()
         for hlc_df, data_source in data_sources:
-            st.markdown(f"#### {data_source} Feed")
+            for col in hlc_df.columns:
+                if col.endswith(' H'):
+                    origin_name = col[:-2]
+                    all_origins.add(origin_name)
 
-            # Process each origin for this data source
-            for origin in origins:
-                # Handle special origins (same logic as before)
-                if (origin.lower() == 'wasp-12b' or origin.lower() == 'wasp' or 
-                    'wasp-12b[1]' in origin.lower() or 'wasp-12b[2]' in origin.lower()):
-                    
-                    report_dt = pd.to_datetime(report_time) if isinstance(report_time, str) else report_time
-                    days_since_sunday = report_dt.weekday() + 1
-                    if days_since_sunday == 7:
-                        days_since_sunday = 0
+        # Add variants
+        wasp_variants = ['WASP-12b[1]', 'WASP-12b[2]']
+        macedonia_variants = ['Macedonia[1]', 'Macedonia[2]']
+        for variant in wasp_variants + macedonia_variants:
+            all_origins.add(variant)
 
-                    wasp_datetime = report_dt - timedelta(days=days_since_sunday)
-                    
-                    if '[1]' in origin:
-                        wasp_datetime = wasp_datetime - timedelta(weeks=1)
-                    elif '[2]' in origin:
-                        wasp_datetime = wasp_datetime - timedelta(weeks=2)
-                    
-                    wasp_datetime = wasp_datetime.replace(hour=18, minute=0, second=0, microsecond=0)
-                    if hasattr(wasp_datetime, 'tz') and wasp_datetime.tz is not None:
-                        wasp_datetime = wasp_datetime.replace(tzinfo=None)
+        origins = list(all_origins)
+        st.info(f"Processing origins: {', '.join(origins)}")
 
-                    hlc_data_single = find_most_current_data(hlc_df, report_time, origin, scope_days)
-                    if hlc_data_single:
-                        hlc_data_single['datetime'] = wasp_datetime
-                        hlc_data_single['origin'] = f"{origin}"
-                        hlc_data_list = [hlc_data_single]
-                    else:
-                        hlc_data_list = []
+        # Process each custom range
+        for range_name, range_config in custom_ranges.items():
+            if not range_config.get('enabled', False):
+                continue
 
-                elif (origin.lower() == 'macedonia' or 
-                      'macedonia[1]' in origin.lower() or 'macedonia[2]' in origin.lower() or
-                      origin.lower().startswith('macedonia')):
-                    
-                    report_dt = pd.to_datetime(report_time) if isinstance(report_time, str) else report_time
-                    macedonia_datetime = report_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-                    
-                    if '[1]' in origin:
-                        if macedonia_datetime.month == 1:
-                            macedonia_datetime = macedonia_datetime.replace(year=macedonia_datetime.year - 1, month=12)
+            range_value = range_config.get('value', 0)
+            if range_value == 0:
+                continue
+
+            # Determine range bounds
+            if range_name.startswith('High'):
+                range_low = range_value - 24
+                range_high = range_value
+                is_high_range = True
+            else:
+                range_low = range_value
+                range_high = range_value + 24
+                is_high_range = False
+
+            st.markdown(f"### Processing {range_name}: {range_low:.3f} to {range_high:.3f}")
+
+            range_entries = []
+
+            # Process each data source for this range
+            for hlc_df, data_source in data_sources:
+                st.markdown(f"#### {data_source} Feed")
+
+                # Process each origin for this data source
+                for origin in origins:
+                    # Handle special origins (same logic as before)
+                    if (origin.lower() == 'wasp-12b' or origin.lower() == 'wasp' or 
+                        'wasp-12b[1]' in origin.lower() or 'wasp-12b[2]' in origin.lower()):
+                        
+                        report_dt = safe_to_datetime(report_time)
+                        if pd.isna(report_dt):
+                            continue
+                            
+                        days_since_sunday = report_dt.weekday() + 1
+                        if days_since_sunday == 7:
+                            days_since_sunday = 0
+
+                        wasp_datetime = report_dt - timedelta(days=days_since_sunday)
+                        
+                        if '[1]' in origin:
+                            wasp_datetime = wasp_datetime - timedelta(weeks=1)
+                        elif '[2]' in origin:
+                            wasp_datetime = wasp_datetime - timedelta(weeks=2)
+                        
+                        wasp_datetime = wasp_datetime.replace(hour=18, minute=0, second=0, microsecond=0)
+                        wasp_datetime = ensure_timezone_naive(wasp_datetime)
+
+                        hlc_data_single = find_most_current_data(hlc_df, report_time, origin, scope_days)
+                        if hlc_data_single:
+                            hlc_data_single['datetime'] = wasp_datetime
+                            hlc_data_single['origin'] = f"{origin}"
+                            hlc_data_list = [hlc_data_single]
                         else:
-                            macedonia_datetime = macedonia_datetime.replace(month=macedonia_datetime.month - 1)
-                    elif '[2]' in origin:
-                        target_month = macedonia_datetime.month - 2
-                        if target_month <= 0:
-                            macedonia_datetime = macedonia_datetime.replace(year=macedonia_datetime.year - 1, month=target_month + 12)
+                            hlc_data_list = []
+
+                    elif (origin.lower() == 'macedonia' or 
+                          'macedonia[1]' in origin.lower() or 'macedonia[2]' in origin.lower() or
+                          origin.lower().startswith('macedonia')):
+                        
+                        report_dt = safe_to_datetime(report_time)
+                        if pd.isna(report_dt):
+                            continue
+                            
+                        macedonia_datetime = report_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                        
+                        if '[1]' in origin:
+                            if macedonia_datetime.month == 1:
+                                macedonia_datetime = macedonia_datetime.replace(year=macedonia_datetime.year - 1, month=12)
+                            else:
+                                macedonia_datetime = macedonia_datetime.replace(month=macedonia_datetime.month - 1)
+                        elif '[2]' in origin:
+                            target_month = macedonia_datetime.month - 2
+                            if target_month <= 0:
+                                macedonia_datetime = macedonia_datetime.replace(year=macedonia_datetime.year - 1, month=target_month + 12)
+                            else:
+                                macedonia_datetime = macedonia_datetime.replace(month=target_month)
+                        
+                        macedonia_datetime = ensure_timezone_naive(macedonia_datetime)
+                        
+                        hlc_data_single = find_most_current_data(hlc_df, report_time, origin, scope_days)
+                        if hlc_data_single:
+                            hlc_data_single['datetime'] = macedonia_datetime
+                            hlc_data_single['origin'] = f"{origin}"
+                            hlc_data_list = [hlc_data_single]
                         else:
-                            macedonia_datetime = macedonia_datetime.replace(month=target_month)
-                    
-                    if hasattr(macedonia_datetime, 'tz') and macedonia_datetime.tz is not None:
-                        macedonia_datetime = macedonia_datetime.replace(tzinfo=None)
-                    
-                    hlc_data_single = find_most_current_data(hlc_df, report_time, origin, scope_days)
-                    if hlc_data_single:
-                        hlc_data_single['datetime'] = macedonia_datetime
-                        hlc_data_single['origin'] = f"{origin}"
-                        hlc_data_list = [hlc_data_single]
+                            hlc_data_list = []
+
                     else:
-                        hlc_data_list = []
+                        # Regular origins - GET NEW DATA CHANGES ONLY
+                        hlc_data_list = find_new_data_changes(hlc_df, report_time, origin, scope_days)
 
-                else:
-                    # Regular origins - GET NEW DATA CHANGES ONLY
-                    hlc_data_list = find_new_data_changes(hlc_df, report_time, origin, scope_days)
-
-                if not hlc_data_list:
-                    continue
-
-                # Process each datetime entry for this origin
-                for hlc_data in hlc_data_list:
-                    # Calculate raw M values
-                    raw_m_calc = calculate_raw_m_values(hlc_data, range_low, range_high)
-                    if not raw_m_calc:
+                    if not hlc_data_list:
                         continue
 
-                    # Combine hlc_data with calculation results
-                    enhanced_hlc_data = hlc_data.copy()
-                    enhanced_hlc_data.update(raw_m_calc)
+                    # Process each datetime entry for this origin
+                    for hlc_data in hlc_data_list:
+                        # Calculate raw M values
+                        raw_m_calc = calculate_raw_m_values(hlc_data, range_low, range_high)
+                        if not raw_m_calc:
+                            continue
 
-                    # Find valid M values with batch inputs for performance
-                    validation_results = find_valid_m_values(
-                        measurement_df, 
-                        raw_m_calc['raw_m_low'], 
-                        raw_m_calc['raw_m_high'],
-                        enhanced_hlc_data,
-                        range_low, 
-                        range_high, 
-                        is_high_range,
-                        data_source,
-                        report_time,
-                        small_df,
-                        batch_inputs  # Pass batch inputs for performance
-                    )
+                        # Combine hlc_data with calculation results
+                        enhanced_hlc_data = hlc_data.copy()
+                        enhanced_hlc_data.update(raw_m_calc)
 
-                    valid_entries = validation_results['valid_entries']
-                    valid_m_list = validation_results['valid_m_list']
+                        # Find valid M values with batch inputs for performance
+                        validation_results = find_valid_m_values(
+                            measurement_df, 
+                            raw_m_calc['raw_m_low'], 
+                            raw_m_calc['raw_m_high'],
+                            enhanced_hlc_data,
+                            range_low, 
+                            range_high, 
+                            is_high_range,
+                            data_source,
+                            report_time,
+                            small_df,
+                            batch_inputs  # Pass batch inputs for performance
+                        )
 
-                    range_entries.extend(valid_entries)
+                        valid_entries = validation_results['valid_entries']
+                        valid_m_list = validation_results['valid_m_list']
 
-                    # Add to processing summary
-                    if hasattr(hlc_data['datetime'], 'strftime'):
-                        datetime_str = hlc_data['datetime'].strftime('%m/%d/%Y %H:%M')
-                    else:
-                        datetime_str = str(hlc_data['datetime'])
+                        range_entries.extend(valid_entries)
 
-                    valid_m_count = len(valid_entries) if valid_entries else 0
-                    valid_list_str = ', '.join([f'{m:.1f}' if isinstance(m, float) else str(m) for m in valid_m_list]) if valid_m_list else 'None'
+                        # Add to processing summary
+                        if hasattr(hlc_data['datetime'], 'strftime'):
+                            datetime_str = hlc_data['datetime'].strftime('%m/%d/%Y %H:%M')
+                        else:
+                            datetime_str = str(hlc_data['datetime'])
 
-                    processing_summary.append({
-                        'Range': f"{range_low:.1f}-{range_high:.1f}",
-                        'Feed': data_source.replace(' CSV', ''),
-                        'DateTime': datetime_str,
-                        'Origin': origin,
-                        'H': hlc_data['H'],
-                        'L': hlc_data['L'], 
-                        'C': hlc_data['C'],
-                        'Raw M Low': raw_m_calc['raw_m_low'] if raw_m_calc else 0,
-                        'Raw M High': raw_m_calc['raw_m_high'] if raw_m_calc else 0,
-                        'Valid M Values': valid_m_count,
-                        'Valid list': valid_list_str
-                    })
+                        valid_m_count = len(valid_entries) if valid_entries else 0
+                        valid_list_str = ', '.join([f'{m:.1f}' if isinstance(m, float) else str(m) for m in valid_m_list]) if valid_m_list else 'None'
 
-        all_valid_entries.extend(range_entries)
-        st.info(f"{range_name}: Found {len(range_entries)} valid entries")
+                        processing_summary.append({
+                            'Range': f"{range_low:.1f}-{range_high:.1f}",
+                            'Feed': data_source.replace(' CSV', ''),
+                            'DateTime': datetime_str,
+                            'Origin': origin,
+                            'H': hlc_data['H'],
+                            'L': hlc_data['L'], 
+                            'C': hlc_data['C'],
+                            'Raw M Low': raw_m_calc['raw_m_low'] if raw_m_calc else 0,
+                            'Raw M High': raw_m_calc['raw_m_high'] if raw_m_calc else 0,
+                            'Valid M Values': valid_m_count,
+                            'Valid list': valid_list_str
+                        })
 
-    # Display processing summary
-    if processing_summary:
-        st.markdown("### Processing Summary")
-        summary_df = pd.DataFrame(processing_summary)
-        st.dataframe(summary_df, use_container_width=True)
+            all_valid_entries.extend(range_entries)
+            st.info(f"{range_name}: Found {len(range_entries)} valid entries")
+
+        # Display processing summary
+        if processing_summary:
+            st.markdown("### Processing Summary")
+            summary_df = pd.DataFrame(processing_summary)
+            st.dataframe(summary_df, use_container_width=True)
+
+        return all_valid_entries
+
+    except Exception as e:
+        st.error(f"Error in process_custom_ranges_advanced: {e}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
+        return []
 
     # Run Model G detection on Grp 1a data if enabled
     if all_valid_entries and run_model_g:
@@ -786,6 +800,48 @@ def process_custom_ranges_advanced(measurement_df, small_df, report_time, custom
             st.error(f"Model G detection error: {str(e)}")
 
     return all_valid_entries
+
+def apply_custom_ranges_advanced(df, small_df, report_time, high1, high2, low1, low2, use_high1, use_high2, use_low1, use_low2, big_df=None, run_model_g=False):
+    """
+    Apply advanced custom ranges to dataframe with batch optimization.
+    Fixed version with robust datetime handling.
+    """
+    try:
+        st.info("Advanced Custom Range Processing with Batch Optimization Started")
+        
+        # Prepare custom ranges configuration
+        custom_ranges = {}
+
+        if use_high1 and high1 > 0:
+            custom_ranges['High 1'] = {'enabled': True, 'value': high1}
+        if use_high2 and high2 > 0:
+            custom_ranges['High 2'] = {'enabled': True, 'value': high2}
+        if use_low1 and low1 > 0:
+            custom_ranges['Low 1'] = {'enabled': True, 'value': low1}
+        if use_low2 and low2 > 0:
+            custom_ranges['Low 2'] = {'enabled': True, 'value': low2}
+
+        if not custom_ranges:
+            return pd.DataFrame()
+
+        # Process ranges using advanced method with batch optimization
+        valid_entries = process_custom_ranges_advanced(df, small_df, report_time, custom_ranges, big_df=big_df, run_model_g=run_model_g)
+
+        if not valid_entries:
+            st.warning("No valid entries found using advanced custom range calculation")
+            return pd.DataFrame()
+
+        # Convert to dataframe
+        filtered_df = pd.DataFrame(valid_entries)
+
+        # Range and Zone columns are already calculated in find_valid_m_values
+        return filtered_df
+        
+    except Exception as e:
+        st.error(f"Error in apply_custom_ranges_advanced: {e}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
+        return pd.DataFrame()
 
 def process_full_range_advanced(
     measurement_df: pd.DataFrame,
@@ -961,119 +1017,89 @@ def process_full_range_advanced(
         st.error(f"Error in process_full_range_advanced: {e}")
         return []
 
-def apply_custom_ranges_advanced(df, small_df, report_time, high1, high2, low1, low2, use_high1, use_high2, use_low1, use_low2, big_df=None, run_model_g=False):
-    """
-    Apply advanced custom ranges to dataframe with batch optimization.
-    """
-    st.info("Advanced Custom Range Processing with Batch Optimization Started")
-    
-    # Prepare custom ranges configuration
-    custom_ranges = {}
 
-    if use_high1 and high1 > 0:
-        custom_ranges['High 1'] = {'enabled': True, 'value': high1}
-    if use_high2 and high2 > 0:
-        custom_ranges['High 2'] = {'enabled': True, 'value': high2}
-    if use_low1 and low1 > 0:
-        custom_ranges['Low 1'] = {'enabled': True, 'value': low1}
-    if use_low2 and low2 > 0:
-        custom_ranges['Low 2'] = {'enabled': True, 'value': low2}
-
-    if not custom_ranges:
-        return df
-
-    # Process ranges using advanced method with batch optimization
-    valid_entries = process_custom_ranges_advanced(df, small_df, report_time, custom_ranges, big_df=big_df, run_model_g=run_model_g)
-
-    if not valid_entries:
-        st.warning("No valid entries found using advanced custom range calculation")
-        return pd.DataFrame()
-
-    # Convert to dataframe
-    filtered_df = pd.DataFrame(valid_entries)
-
-    # Range and Zone columns are already calculated in find_valid_m_values
-    return filtered_df
-
-def apply_full_range_advanced(
-    df: pd.DataFrame,
-    small_df: pd.DataFrame,
-    report_time: dt.datetime,
-    window_radius: float,
-    day_start_hour: int = 18,
-    input_value_at_start: float = None,
-    big_df: pd.DataFrame = None,
-    run_model_g: bool = False,
-):
+def apply_full_range_advanced(df, small_df, report_time, window_radius, day_start_hour=18, input_value_at_start=None, big_df=None, run_model_g=False):
     """
     Apply the advanced Full Range flow with batch optimization.
+    Fixed version with robust datetime handling.
     """
-    # Determine center
-    center = None
-    if input_value_at_start is not None and not pd.isna(input_value_at_start):
-        center = float(input_value_at_start)
-    else:
-        # Derive from small_df
-        try:
-            from a_helpers import clean_timestamp
-            sdf = small_df.copy()
-            if 'time' in sdf.columns:
-                sdf['time'] = sdf['time'].apply(clean_timestamp)
-                if report_time is not None:
-                    sdf = sdf[sdf['time'] <= report_time]
+    try:
+        # Determine center
+        center = None
+        if input_value_at_start is not None and not pd.isna(input_value_at_start):
+            center = float(input_value_at_start)
+        else:
+            # Derive from small_df
+            try:
+                sdf = small_df.copy()
+                if 'time' in sdf.columns:
+                    sdf['time'] = safe_to_datetime(sdf['time'])
+                    if report_time is not None:
+                        report_time_safe = safe_to_datetime(report_time)
+                        if not pd.isna(report_time_safe):
+                            sdf = sdf[sdf['time'] <= report_time_safe]
 
-            if not sdf.empty:
-                base = dt.datetime(report_time.year, report_time.month, report_time.day, day_start_hour, 0, 0)
-                if report_time < base:
-                    base = base - dt.timedelta(days=1)
+                if not sdf.empty:
+                    report_time_safe = safe_to_datetime(report_time)
+                    if not pd.isna(report_time_safe):
+                        base = dt.datetime(report_time_safe.year, report_time_safe.month, report_time_safe.day, day_start_hour, 0, 0)
+                        if report_time_safe < base:
+                            base = base - dt.timedelta(days=1)
 
-                center_row = sdf[sdf['time'] == base]
-                if not center_row.empty:
-                    center_row = center_row.iloc[-1]
-                else:
-                    center_row = sdf.iloc[-1]
+                        center_row = sdf[sdf['time'] == base]
+                        if not center_row.empty:
+                            center_row = center_row.iloc[-1]
+                        else:
+                            center_row = sdf.iloc[-1]
 
-                for cand in ('Open', 'open', 'close'):
-                    if cand in center_row.index:
-                        center = pd.to_numeric(pd.Series([center_row[cand]]), errors='coerce').iloc[0]
-                        break
-        except Exception:
-            center = None
+                        for cand in ('Open', 'open', 'close'):
+                            if cand in center_row.index:
+                                center = pd.to_numeric(pd.Series([center_row[cand]]), errors='coerce').iloc[0]
+                                break
+            except Exception as e:
+                st.warning(f"Error deriving center from small_df: {e}")
+                center = None
 
-    if center is None or pd.isna(center):
-        st.error("Full Range (Advanced): could not determine center. Provide input @ day start or ensure small feed has time/Open/close.")
+        if center is None or pd.isna(center):
+            st.error("Full Range (Advanced): could not determine center. Provide input @ day start or ensure small feed has time/Open/close.")
+            return pd.DataFrame()
+
+        # Process using the fixed process_full_range_advanced function
+        valid_entries = process_full_range_advanced(
+            measurement_df=df,
+            small_df=small_df,
+            report_time=report_time,
+            center=center,
+            window_radius=window_radius,
+            scope_days=20,
+            big_df=big_df,
+            run_model_g=run_model_g
+        )
+
+        if not valid_entries:
+            st.warning("Full Range (Advanced): no valid entries found.")
+            return pd.DataFrame()
+
+        # Convert to DF and drop Range/Zone if present (Full Range doesn't need these)
+        out_df = pd.DataFrame(valid_entries)
+        out_df = out_df.drop(columns=['Range', 'Zone'], errors='ignore')
+
+        # Order columns consistently
+        preferred_cols = [
+            'Feed','ddd','Arrival','Day','Origin',
+            'M Name','M #','M Value','R #','Tag','Family',
+            'Input @ 18:00','Diff @ 18:00','Input @ Arrival','Diff @ Arrival',
+            'Input @ Report','Diff @ Report','Output'
+        ]
+        ordered = [c for c in preferred_cols if c in out_df.columns]
+        remaining = [c for c in out_df.columns if c not in ordered]
+        out_df = out_df[ordered + remaining]
+
+        st.success(f"Full Range (Advanced): {len(out_df)} entries processed with batch optimization")
+        return out_df
+        
+    except Exception as e:
+        st.error(f"Error in apply_full_range_advanced: {e}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return pd.DataFrame()
-
-    # Process
-    valid_entries = process_full_range_advanced(
-        measurement_df=df,
-        small_df=small_df,
-        report_time=report_time,
-        center=center,
-        window_radius=window_radius,
-        scope_days=20,
-        big_df=big_df,
-        run_model_g=run_model_g
-    )
-
-    if not valid_entries:
-        st.warning("Full Range (Advanced): no valid entries found.")
-        return pd.DataFrame()
-
-    # Convert to DF and drop Range/Zone if present (Full Range doesn't need these)
-    out_df = pd.DataFrame(valid_entries)
-    out_df = out_df.drop(columns=['Range', 'Zone'], errors='ignore')
-
-    # Order columns consistently
-    preferred_cols = [
-        'Feed','ddd','Arrival','Day','Origin',
-        'M Name','M #','M Value','R #','Tag','Family',
-        'Input @ 18:00','Diff @ 18:00','Input @ Arrival','Diff @ Arrival',
-        'Input @ Report','Diff @ Report','Output'
-    ]
-    ordered = [c for c in preferred_cols if c in out_df.columns]
-    remaining = [c for c in out_df.columns if c not in ordered]
-    out_df = out_df[ordered + remaining]
-
-    st.success(f"Full Range (Advanced): {len(out_df)} entries processed with batch optimization")
-    return out_df
