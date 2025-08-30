@@ -949,6 +949,7 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
                         hlc_data_list = [cur]
                     else:
                         hlc_data_list = []
+                        
                 else:
                     # Regular origins: NEW DATA CHANGES
                     hlc_data_list = find_new_data_changes(hlc_df, report_time, origin, scope_days)
@@ -984,10 +985,13 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
                     all_valid_entries.extend(valid_entries)
 
                     # Optional processing summary
-                    if hasattr(hlc_data['datetime'], 'strftime'):
-                        dt_str = hlc_data['datetime'].strftime('%m/%d/%Y %H:%M')
-                    else:
-                        dt_str = str(hlc_data['datetime'])
+                    try:
+                        if hasattr(hlc_data['datetime'], 'strftime'):
+                            dt_str = hlc_data['datetime'].strftime('%m/%d/%Y %H:%M')
+                        else:
+                            dt_str = str(hlc_data['datetime'])
+                    except:
+                        dt_str = str(hlc_data.get('datetime', ''))
 
                     processing_summary.append({
                         'Range': f"{lo:.1f}-{hi:.1f}",
@@ -1012,6 +1016,8 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
 
     except Exception as e:
         st.error(f"Error in process_full_range_advanced: {e}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return []
 
 
