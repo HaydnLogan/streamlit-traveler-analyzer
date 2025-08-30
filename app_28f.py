@@ -530,63 +530,63 @@ elif small_feed_file and big_feed_file and measurement_file:
 
                 st.success("✅ Advanced custom range processing complete.")
 
-        # ---------- 3) MASTER TRAVELER LIST fallback ----------
-        else:
-            st.markdown("---")
-            st.markdown("### 🚀 Master Traveler List (Fallback)")
+        # # ---------- 3) MASTER TRAVELER LIST fallback ----------
+        # else:
+        #     st.markdown("---")
+        #     st.markdown("### 🚀 Master Traveler List (Fallback)")
 
-            # Build master list from the first measurement tab
-            master_tab_name = available_tabs[0]
-            master_measurements_df = pd.read_excel(measurement_file, sheet_name=master_tab_name)
+        #     # Build master list from the first measurement tab
+        #     master_tab_name = available_tabs[0]
+        #     master_measurements_df = pd.read_excel(measurement_file, sheet_name=master_tab_name)
 
-            all_traveler_data = []
+        #     all_traveler_data = []
 
-            # Big feed
-            if len(big_df) > 0:
-                big_df['time'] = big_df['time'].apply(clean_timestamp)
-                big_data = process_feed_optimized(
-                    big_df, "Big", report_time, scope_type, scope_value,
-                    day_start_hour, master_measurements_df, input_value_at_start, small_df,
-                    use_full_range=False, full_range_value=0
-                )
-                all_traveler_data.extend(big_data)
+        #     # Big feed
+        #     if len(big_df) > 0:
+        #         big_df['time'] = big_df['time'].apply(clean_timestamp)
+        #         big_data = process_feed_optimized(
+        #             big_df, "Big", report_time, scope_type, scope_value,
+        #             day_start_hour, master_measurements_df, input_value_at_start, small_df,
+        #             use_full_range=False, full_range_value=0
+        #         )
+        #         all_traveler_data.extend(big_data)
 
-            # Small feed
-            if len(small_df) > 0:
-                small_df['time'] = small_df['time'].apply(clean_timestamp)
-                small_data = process_feed_optimized(
-                    small_df, "Small", report_time, scope_type, scope_value,
-                    day_start_hour, master_measurements_df, input_value_at_start, small_df,
-                    use_full_range=False, full_range_value=0
-                )
-                all_traveler_data.extend(small_data)
+        #     # Small feed
+        #     if len(small_df) > 0:
+        #         small_df['time'] = small_df['time'].apply(clean_timestamp)
+        #         small_data = process_feed_optimized(
+        #             small_df, "Small", report_time, scope_type, scope_value,
+        #             day_start_hour, master_measurements_df, input_value_at_start, small_df,
+        #             use_full_range=False, full_range_value=0
+        #         )
+        #         all_traveler_data.extend(small_data)
 
-            if not all_traveler_data:
-                st.error("Failed to generate master traveler list")
-                traveler_reports = {}
-            else:
-                master_df = pd.DataFrame(all_traveler_data)
+        #     if not all_traveler_data:
+        #         st.error("Failed to generate master traveler list")
+        #         traveler_reports = {}
+        #     else:
+        #         master_df = pd.DataFrame(all_traveler_data)
 
-                traveler_reports = {
-                    "Grp 1a": master_df[master_df['M #'].isin(GROUP_1A_TRAVELERS)].copy(),
-                    "Grp 1b": master_df[master_df['M #'].isin(GROUP_1B_TRAVELERS)].copy(),
-                    "Grp 2a": master_df[master_df['M #'].isin(GROUP_2A_TRAVELERS)].copy(),
-                    "Grp 2b": master_df[master_df['M #'].isin(GROUP_2B_TRAVELERS)].copy(),
-                }
+        #         traveler_reports = {
+        #             "Grp 1a": master_df[master_df['M #'].isin(GROUP_1A_TRAVELERS)].copy(),
+        #             "Grp 1b": master_df[master_df['M #'].isin(GROUP_1B_TRAVELERS)].copy(),
+        #             "Grp 2a": master_df[master_df['M #'].isin(GROUP_2A_TRAVELERS)].copy(),
+        #             "Grp 2b": master_df[master_df['M #'].isin(GROUP_2B_TRAVELERS)].copy(),
+        #         }
 
-                for gname, gdf in traveler_reports.items():
-                    if not gdf.empty and {'Output', 'Arrival'}.issubset(gdf.columns):
-                        traveler_reports[gname] = gdf.sort_values(['Output', 'Arrival'], ascending=[False, True])
+        #         for gname, gdf in traveler_reports.items():
+        #             if not gdf.empty and {'Output', 'Arrival'}.issubset(gdf.columns):
+        #                 traveler_reports[gname] = gdf.sort_values(['Output', 'Arrival'], ascending=[False, True])
 
-                if not minimal_display:
-                    for gname, gdf in traveler_reports.items():
-                        if not gdf.empty:
-                            st.markdown(f"#### 📋 {gname}")
-                            st.info(f"{len(gdf)} entries")
-                            if not fast_mode:
-                                st.dataframe(gdf, use_container_width=True)
+        #         if not minimal_display:
+        #             for gname, gdf in traveler_reports.items():
+        #                 if not gdf.empty:
+        #                     st.markdown(f"#### 📋 {gname}")
+        #                     st.info(f"{len(gdf)} entries")
+        #                     if not fast_mode:
+        #                         st.dataframe(gdf, use_container_width=True)
 
-                st.success("✅ Master list created and filtered.")
+        #         st.success("✅ Master list created and filtered.")
 
         # ---------- Unified Export (for whichever path produced traveler_reports) ----------
         processing_time = time.time() - start_time
