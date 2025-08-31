@@ -38,41 +38,38 @@ def safe_to_datetime(series_or_value, errors='coerce'):
         else:
             return pd.NaT
 
-def ensure_timezone_naive(dt_value):
+def ensure_timezone_naive(x):
     """
-    Ensure datetime is timezone naive - FIXED VERSION
+    Return a tz-naive datetime/Series. Handles Series or scalars safely.
     """
     try:
-        if pd.isna(dt_value):
-            return dt_value
-        
-        if isinstance(dt_value, pd.Series):
-            # For series, check if it's datetime type first
-            if not pd.api.types.is_datetime64_any_dtype(dt_value):
-                dt_value = safe_to_datetime(dt_value)
-            
-            # Only use .dt accessor if we have datetime type
-            if pd.api.types.is_datetime64_any_dtype(dt_value):
-                # Check if ANY values have timezone info (avoid ambiguous truth value)
-                try:
-                    # Use .dt.tz to check timezone info
-                    if dt_value.dt.tz is not None:
-                        return dt_value.dt.tz_localize(None)
-                    else:
-                        return dt_value
-                except:
-                    # If timezone check fails, just return as-is
-                    return dt_value
-            else:
-                return dt_value
-        else:
-            # Single value
-            if hasattr(dt_value, 'tz') and dt_value.tz is not None:
-                return dt_value.replace(tzinfo=None)
-            return dt_value
+        # 1) Series path (vectorized)
+        if isinstance(x, pd.Series):
+            # Ensure datetime dtype
+            if not pd.api.types.is_datetime64_any_dtype(x):
+                x = safe_to_datetime(x)
+            # If tz-aware dtype, drop timezone
+            if pd.api.types.is_datetime64tz_dtype(x):
+                return x.dt.tz_localize(None)
+            return x  # already tz-naive (or not datetime, but then upstream will coerce)
+
+        # 2) Scalar path
+        if x is None:
+            return x
+
+        # Parse to pandas Timestamp when needed
+        ts = x if isinstance(x, pd.Timestamp) else safe_to_datetime(x)
+        if isinstance(ts, pd.Timestamp):
+            # Drop tz if present
+            if ts.tz is not None:
+                return ts.tz_localize(None)
+            return ts
+
+        # Fallback: return the parsed value
+        return ts
     except Exception as e:
         st.warning(f"Timezone conversion error: {e}")
-        return dt_value
+        return x
 
 def get_input_values_batch(small_df, big_df, report_time, start_hour=18):
     """
@@ -111,6 +108,8 @@ def get_input_values_batch(small_df, big_df, report_time, start_hour=18):
                     return None
             
             target_time_naive = ensure_timezone_naive(safe_to_datetime(target_time))
+            if pd.isna(target_time_naive):
+                return None  # couldn't parse a valid timestamp for this lookup
             
             # First try exact match
             exact_match = df_copy[df_copy["time"] == target_time_naive]
