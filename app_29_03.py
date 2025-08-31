@@ -115,7 +115,7 @@ def render_unified_export(traveler_reports, report_time):
 
 # Streamlit interface (UI + orchestration)
 st.set_page_config(layout="wide")
-st.header("Data Processor + Model A/B/C/G Detector with Batch Optimization v28g_optimized_v2")
+st.header("Data Processor + Model A/B/C/G Detector with Batch Optimization v28g_optimized_v3")
 
 # Uploads
 small_feed_file = st.file_uploader("Upload small feed", type="csv")
