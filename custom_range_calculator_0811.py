@@ -9,6 +9,151 @@ import streamlit as st
 from datetime import datetime, timedelta
 import numpy as np
 
+def safe_to_datetime(series_or_value, errors='coerce'):
+    """
+    Safely convert to datetime with proper error handling
+    """
+    try:
+        if isinstance(series_or_value, pd.Series):
+            # First convert to string to handle mixed types
+            str_series = series_or_value.astype(str)
+            # Clean timezone info using string operations
+            clean_series = str_series.str.replace(r'[+-]\d{2}:?\d{2}$', '', regex=True)
+            clean_series = clean_series.str.replace('T', ' ')
+            return pd.to_datetime(clean_series, errors=errors)
+        else:
+            # Single value
+            if pd.isna(series_or_value):
+                return pd.NaT
+            str_value = str(series_or_value)
+            # Clean timezone info
+            import re
+            clean_value = re.sub(r'[+-]\d{2}:?\d{2}$', '', str_value)
+            clean_value = clean_value.replace('T', ' ')
+            return pd.to_datetime(clean_value, errors=errors)
+    except Exception as e:
+        st.warning(f"Datetime conversion error: {e}")
+        if isinstance(series_or_value, pd.Series):
+            return pd.Series([pd.NaT] * len(series_or_value))
+        else:
+            return pd.NaT
+
+def ensure_timezone_naive(x):
+    """
+    Return a tz-naive datetime/Series. Handles Series or scalars safely.
+    """
+    try:
+        # 1) Series path (vectorized)
+        if isinstance(x, pd.Series):
+            # Ensure datetime dtype
+            if not pd.api.types.is_datetime64_any_dtype(x):
+                x = safe_to_datetime(x)
+            # If tz-aware dtype, drop timezone
+            if pd.api.types.is_datetime64tz_dtype(x):
+                return x.dt.tz_localize(None)
+            return x  # already tz-naive (or not datetime, but then upstream will coerce)
+
+        # 2) Scalar path
+        if x is None:
+            return x
+
+        # Parse to pandas Timestamp when needed
+        ts = x if isinstance(x, pd.Timestamp) else safe_to_datetime(x)
+        if isinstance(ts, pd.Timestamp):
+            # Drop tz if present
+            if ts.tz is not None:
+                return ts.tz_localize(None)
+            return ts
+
+        # Fallback: return the parsed value
+        return ts
+    except Exception as e:
+        st.warning(f"Timezone conversion error: {e}")
+        return x
+
+def get_input_values_batch(small_df, big_df, report_time, start_hour=18):
+    """
+    Efficiently calculate input values for both small and big feeds at once.
+    FIXED VERSION with proper Series handling.
+    """
+    def get_single_input_value(df, target_time):
+        """Helper to get input value from a single DataFrame at target time"""
+        if df is None or target_time is None or df.empty:
+            return None
+        
+        try:
+            # Ensure we have required columns
+            if 'time' not in df.columns or 'open' not in df.columns:
+                return None
+            
+            # Make a copy to avoid modifying original
+            df_copy = df.copy()
+            
+            # Safe datetime conversion
+            df_copy["time"] = safe_to_datetime(df_copy["time"])
+            
+            # Check if conversion was successful
+            if not pd.api.types.is_datetime64_any_dtype(df_copy["time"]):
+                st.warning("Could not convert time column to datetime")
+                return None
+            
+            # Remove timezone info safely - NO BOOLEAN CHECK ON SERIES
+            df_copy["time"] = ensure_timezone_naive(df_copy["time"])
+            
+            # Convert target_time safely
+            if isinstance(target_time, pd.Series):
+                # If somehow we get a Series, take the first value
+                target_time = target_time.iloc[0] if not target_time.empty else None
+                if target_time is None:
+                    return None
+            
+            target_time_naive = ensure_timezone_naive(safe_to_datetime(target_time))
+            if pd.isna(target_time_naive):
+                return None  # couldn't parse a valid timestamp for this lookup
+            
+            # First try exact match
+            exact_match = df_copy[df_copy["time"] == target_time_naive]
+            if not exact_match.empty:
+                return exact_match.iloc[-1]["open"]
+            
+            # If no exact match, find closest time
+            df_copy["time_diff"] = abs(df_copy["time"] - target_time_naive)
+            closest_row = df_copy.loc[df_copy["time_diff"].idxmin()]
+            return closest_row["open"]
+            
+        except Exception as e:
+            st.warning(f"Error getting input value: {e}")
+            return None
+    
+    try:
+        # Calculate start time - handle report_time properly
+        if isinstance(report_time, pd.Series):
+            report_time = report_time.iloc[0] if not report_time.empty else None
+        
+        if report_time is None:
+            return None, None, None, None
+            
+        report_time_naive = ensure_timezone_naive(safe_to_datetime(report_time))
+        start_time = report_time_naive.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+        
+        # If report time is before start_hour on the same day, go back to previous day
+        if report_time_naive.hour < start_hour:
+            start_time = start_time - pd.Timedelta(days=1)
+        
+        # Get all four values in one pass
+        small_input_at_start = get_single_input_value(small_df, start_time)
+        big_input_at_start = get_single_input_value(big_df, start_time)
+        small_input_at_report = get_single_input_value(small_df, report_time)
+        big_input_at_report = get_single_input_value(big_df, report_time)
+        
+        return small_input_at_start, big_input_at_start, small_input_at_report, big_input_at_report
+        
+    except Exception as e:
+        st.error(f"Error in batch input calculation: {e}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
+        return None, None, None, None
+
 def find_new_data_changes(small_df, report_time, origin_name, scope_days=20):
     """
     Find the first time new data appears for an origin by detecting changes in H/L/C values.
