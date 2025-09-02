@@ -118,6 +118,108 @@ def ensure_time_dt(df: pd.DataFrame) -> pd.DataFrame:
     out['time_dt'] = pd.to_datetime(s, errors='coerce')
     return out
 
+# --- Feed label mapping ---
+def _map_feed_type(data_source: str) -> str:
+    s = (data_source or "").strip().lower()
+    if s in ("sm", "small", "s", "small feed"): return "Small"
+    if s in ("bg", "big", "b", "big feed"):     return "Big"
+    return data_source or "Small"
+
+# --- Which column holds the M values in measurement_df? (flexible detection) ---
+_M_VALUE_CANDIDATES = [
+    "M #", "M", "M value", "M Value", "M_Value", "M_value", "m value", "m_value"
+]
+def _detect_m_value_col(measurement_df):
+    for c in _M_VALUE_CANDIDATES:
+        if c in measurement_df.columns:
+            return c
+    return None
+
+# --- Day index like [0], [-1], [+1] using day-start anchors ---
+def _compute_day_index_series(arrival_series, report_time, day_start_hour: int):
+    rpt = safe_to_datetime(report_time)
+    if not isinstance(rpt, pd.Timestamp):
+        return pd.Series(["[0]"] * len(arrival_series), index=arrival_series.index)
+    rpt_anchor = day_start_anchor(rpt, day_start_hour)
+    arr = safe_to_datetime(arrival_series)
+    arr_anchor = arr.apply(lambda x: day_start_anchor(x, day_start_hour) if isinstance(x, pd.Timestamp) else pd.NaT)
+    d = (arr_anchor - rpt_anchor).dt.days.fillna(0).astype(int)
+    # Format like [0], [-1], [+2]
+    return d.map(lambda k: "[0]" if k == 0 else (f"[{k}]" if k < 0 else f"[+{k}]"))
+
+# --- Vectorized "open at/before" for many arrival timestamps (fast) ---
+import numpy as np
+def _open_at_or_before_many(prepped_df, when_series):
+    """
+    prepped_df: DataFrame with ascending 'time_dt' and 'Open'
+    when_series: Series of datetimes (tz-naive)
+    Returns numpy array of floats/np.nan
+    """
+    if prepped_df is None or len(prepped_df) == 0 or when_series is None or len(when_series) == 0:
+        return np.array([np.nan] * len(when_series)) if hasattr(when_series, "__len__") else np.array([])
+    times = prepped_df["time_dt"].to_numpy()
+    vals  = prepped_df["Open"].to_numpy()
+    w = safe_to_datetime(when_series).to_numpy()
+    idx = np.searchsorted(times, w, side="right") - 1
+    idx[idx < 0] = -1
+    out = np.where(idx == -1, np.nan, vals[idx])
+    return out
+
+# --- Fill Input @ Arrival (vectorized by feed) and compute all Diff columns ---
+def _apply_input_at_arrival_and_diffs(result_df, small_df, big_df, report_time, day_start_hour: int):
+    if result_df is None or len(result_df) == 0:
+        return result_df
+
+    # Ensure Arrival is datetime
+    result_df["Arrival"] = safe_to_datetime(result_df["Arrival"])
+
+    # Preps for feeds
+    sm_p = _prep_feed_df(small_df) if isinstance(small_df, pd.DataFrame) else None
+    bg_p = _prep_feed_df(big_df)   if isinstance(big_df, pd.DataFrame)   else None
+
+    # Make sure columns exist
+    for c in ["Input @ Arrival", "Input @ 18:00", "Input @ Report"]:
+        if c not in result_df.columns:
+            result_df[c] = np.nan
+
+    # Masks by feed
+    f = result_df.get("Feed")
+    f_lower = f.astype(str).str.lower()
+    sm_mask = f_lower.isin(["small","sm","s","small feed"])
+    bg_mask = f_lower.isin(["big","bg","b","big feed"])
+
+    # Vectorized per feed
+    if sm_mask.any():
+        result_df.loc[sm_mask, "Input @ Arrival"] = _open_at_or_before_many(sm_p, result_df.loc[sm_mask, "Arrival"])
+    if bg_mask.any():
+        result_df.loc[bg_mask, "Input @ Arrival"] = _open_at_or_before_many(bg_p, result_df.loc[bg_mask, "Arrival"])
+
+    # Compute Diff columns (Output must exist)
+    if "Output" in result_df.columns:
+        result_df["Diff @ 18:00"]  = result_df["Output"] - pd.to_numeric(result_df["Input @ 18:00"], errors="coerce")
+        result_df["Diff @ Arrival"] = result_df["Output"] - pd.to_numeric(result_df["Input @ Arrival"], errors="coerce")
+        result_df["Diff @ Report"] = result_df["Output"] - pd.to_numeric(result_df["Input @ Report"], errors="coerce")
+
+    # ddd and Day
+    result_df["ddd"] = result_df["Arrival"].dt.strftime("%a")
+    result_df["Day"] = _compute_day_index_series(result_df["Arrival"], report_time, day_start_hour)
+
+    return result_df
+
+# --- Final column order enforcement ---
+_DESIRED_COLS = [
+    "Feed", "ddd", "Arrival", "Day", "Origin", "M Name", "M #", "R #", "Tag", "Family",
+    "Input @ 18:00", "Diff @ 18:00", "Input @ Arrival", "Diff @ Arrival",
+    "Input @ Report", "Diff @ Report", "Output"
+]
+def _finalize_columns_order(df):
+    # Ensure all exist
+    for c in _DESIRED_COLS:
+        if c not in df.columns:
+            df[c] = np.nan
+    return df[_DESIRED_COLS]
+
+
 
 # -----------------------------------------
 # Feed "Open" lookup and constant pasting
@@ -358,31 +460,67 @@ def calculate_raw_m_values(hlc_data, range_low, range_high):
 def find_valid_m_values(
     measurement_df, raw_m_low, raw_m_high, hlc_data,
     range_low, range_high, is_high_range=False,
-    data_source="Unknown", report_time=None, small_df=None, batch_inputs=None
+    data_source="Unknown", report_time=None, small_df=None, batch_inputs=None,
+    day_start_hour: int = 18
 ):
     """
-    Filter measurement_df by raw-m window and origin's HLC into final rows.
-    Returns a DataFrame subset with Output computed and basic columns populated.
+    Filter measurement_df by raw-m window and origin's HLC into final rows,
+    producing the Traveler Report schema you requested.
     """
     if measurement_df is None or measurement_df.empty:
         return pd.DataFrame()
 
-    m_col = 'M #' if 'M #' in measurement_df.columns else 'M'
-    if m_col not in measurement_df.columns:
+    m_col = _detect_m_value_col(measurement_df)
+    if m_col is None:
         return pd.DataFrame()
 
-    mask = measurement_df[m_col].astype(float).between(raw_m_low, raw_m_high, inclusive='both')
+    # Filter by numeric m within bounds
+    m_series = pd.to_numeric(measurement_df[m_col], errors="coerce")
+    mask = m_series.between(raw_m_low, raw_m_high, inclusive="both")
     subset = measurement_df.loc[mask].copy()
     if subset.empty:
         return subset
 
-    subset['Output Low Requested'] = range_low
-    subset['Output High Requested'] = range_high
-    subset['Origin'] = hlc_data['origin']
-    subset['Arrival'] = hlc_data['datetime']
-    subset['Output'] = hlc_data['avg'] + subset[m_col].astype(float) * hlc_data['spread']
-    subset['Feed'] = data_source  # expected 'sm' or 'bg' by caller
-    return subset
+    # Derive fields
+    feed_type = _map_feed_type(data_source)
+    arrival_dt = hlc_data["datetime"]
+    origin     = hlc_data["origin"]
+    avg        = hlc_data["avg"]
+    spread     = hlc_data["spread"]
+
+    # Coerce helpful columns if present
+    m_name_col = next((c for c in ["M Name", "m name", "M_Name"] if c in subset.columns), None)
+    m_num_col  = next((c for c in ["M #", "M"] if c in subset.columns), None)
+    r_num_col  = next((c for c in ["R #", "r #"] if c in subset.columns), None)
+    tag_col    = next((c for c in ["Tag", "tag"] if c in subset.columns), None)
+    fam_col    = next((c for c in ["Family", "family"] if c in subset.columns), None)
+
+    # Build output rows
+    out = pd.DataFrame({
+        "Feed": feed_type,
+        "ddd": "",  # filled later
+        "Arrival": arrival_dt,
+        "Day": "",  # filled later
+        "Origin": origin,
+        "M Name": subset[m_name_col] if m_name_col else subset[m_col].astype(str).map(lambda x: f"M{x}"),
+        "M #": subset[m_num_col] if m_num_col else subset[m_col],
+        "R #": subset[r_num_col] if r_num_col else "",
+        "Tag": subset[tag_col] if tag_col else "",
+        "Family": subset[fam_col] if fam_col else "",
+        "Input @ 18:00": np.nan,   # filled later (constant by feed)
+        "Diff @ 18:00":  np.nan,   # filled later
+        "Input @ Arrival": np.nan, # filled later (per row)
+        "Diff @ Arrival":  np.nan, # filled later
+        "Input @ Report": np.nan,  # filled later (constant by feed)
+        "Diff @ Report":  np.nan,  # filled later
+        "Output": avg + pd.to_numeric(subset[m_col], errors="coerce") * spread,
+    })
+
+    # Ensure Arrival is datetime for later steps
+    out["Arrival"] = safe_to_datetime(out["Arrival"])
+
+    return out
+
 
 
 # -----------------------------
@@ -483,6 +621,10 @@ def process_custom_ranges_advanced(
 
     out = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
     out = _apply_inputs_columns_and_debug(out, small_df, big_df, rpt_dt, day_start_hour, show_debug=True)
+    # NEW: per-row Input @ Arrival + Diff columns + ddd/Day
+    out = _apply_input_at_arrival_and_diffs(out, small_df, big_df, rpt_dt, day_start_hour)
+    # NEW: enforce final column order
+    out = _finalize_columns_order(out)
     return out
 
 
@@ -587,6 +729,10 @@ def process_full_range_advanced(
 
     out = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
     out = _apply_inputs_columns_and_debug(out, small_df, big_df, rpt_dt, day_start_hour, show_debug=True)
+    # NEW: per-row Input @ Arrival + Diff columns + ddd/Day
+    out = _apply_input_at_arrival_and_diffs(out, small_df, big_df, rpt_dt, day_start_hour)
+    # NEW: enforce final column order
+    out = _finalize_columns_order(out)  
     return out
 
 
