@@ -130,7 +130,7 @@ def render_unified_export(traveler_reports, report_time):
 
 # 🔌 Streamlit interface (UI + orchestration)
 st.set_page_config(layout="wide")
-st.header("🧬 Data Processor + Model A/B/C/G Detector with fast mode. v28e3")
+st.header("🧬 Data Processor + Model A/B/C/G Detector with fast mode. v28e3 fast")
 
 # 📤 Uploads
 small_feed_file = st.file_uploader("Upload small feed", type="csv")
