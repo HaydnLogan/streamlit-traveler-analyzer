@@ -1,5 +1,5 @@
 
-\"\"\"
+"""
 Custom Range Calculator (revised)
 - Fixes ambiguous Series truth checks in datetime handling
 - Always includes WASP-12b (weekly) and Macedonia (monthly) with correct synthetic Arrival timestamps
@@ -7,7 +7,7 @@ Custom Range Calculator (revised)
 - Adds a compact debug line for the four input values (small/big at day-start and report)
 - Keeps existing function names/signatures used by the app. `apply_custom_ranges_advanced` keeps its original signature;
   `apply_full_range_advanced` keeps `day_start_hour` (default 18). If the app passes 17:00 in full range, it will honor it.
-\"\"\"
+"""
 
 import pandas as pd
 import numpy as np
@@ -139,8 +139,8 @@ def _apply_inputs_columns_and_debug(
     if show_debug:
         try:
             st.info(
-                f\"🔎 INPUT DEBUG — Small: Open@{day_start_hour:02d}:00={sm18} | Open@report={smrp} | "
-                f\"Big: Open@{day_start_hour:02d}:00={bg18} | Open@report={bgrp}\"
+                f"🔎 INPUT DEBUG — Small: Open@{day_start_hour:02d}:00={sm18} | Open@report={smrp} | "
+                f"Big: Open@{day_start_hour:02d}:00={bg18} | Open@report={bgrp}" 
             )
         except Exception:
             pass
