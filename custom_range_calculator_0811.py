@@ -448,7 +448,7 @@ def calculate_raw_m_values(hlc_data, range_low, range_high):
         st.error(f"Error calculating raw M values: {e}")
         return None
 
-def find_valid_m_values(measurement_df, raw_m_low, raw_m_high, hlc_data, range_low, range_high, is_high_range=False, data_source="Unknown", report_time=None, small_df=None, batch_inputs=None):
+def find_valid_m_values(measurement_df, raw_m_low, raw_m_high, hlc_data, range_low, range_high, is_high_range=False, data_source="Unknown", report_time=None, small_df=None, big_df=None, batch_inputs=None):
     """
     Find valid M values from measurement file within the raw M range.
     FIXED VERSION - Uses proper input values from batch calculation.
@@ -562,8 +562,9 @@ def find_valid_m_values(measurement_df, raw_m_low, raw_m_high, hlc_data, range_l
                         # FIXED: Calculate input at arrival using correct CSV
                         if feed_type == "Small" and small_df is not None:
                             input_arrival = get_input_at_time(small_df, arrival_dt)
+                        elif feed_type == "Big" and big_df is not None:
+                            input_arrival = get_input_at_time(big_df, arrival_dt)
                         else:
-                            # For Big feed, would need big_df but we don't have it in this function signature
                             # Fall back to small_df for now
                             input_arrival = get_input_at_time(small_df, arrival_dt) if small_df is not None else 0
 
@@ -759,6 +760,7 @@ def process_custom_ranges_advanced(measurement_df, small_df, report_time, custom
                             data_source,
                             report_time,
                             small_df,
+                            big_df,  # Pass big_df as well
                             batch_inputs  # Pass batch inputs for performance
                         )
 
@@ -980,6 +982,7 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
                         data_source=data_source,
                         report_time=report_time,
                         small_df=small_df,
+                        big_df=big_df,  # Pass big_df as well
                         batch_inputs=batch_inputs  # Pass batch inputs for performance
                     )
 
