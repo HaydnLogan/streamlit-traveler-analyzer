@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 # ---------------------------------------------------------------------
 
 def safe_to_datetime(x, errors='coerce'):
-    \"\"\"Safely convert a Series or scalar to pandas datetime (tz-naive).\"\"\"
+    """ Safely convert a Series or scalar to pandas datetime (tz-naive)."""
     try:
         ts = pd.to_datetime(x, errors=errors)
         if isinstance(ts, pd.Series):
@@ -34,7 +34,7 @@ def safe_to_datetime(x, errors='coerce'):
         return pd.NaT if not isinstance(x, pd.Series) else pd.Series([pd.NaT]*len(x))
 
 def ensure_timezone_naive(x):
-    \"\"\"Return tz-naive datetime/Series. Handles Series first, scalars second.\"\"\"
+    """ Return tz-naive datetime/Series. Handles Series first, scalars second. """
     try:
         if isinstance(x, pd.Series):
             if not pd.api.types.is_datetime64_any_dtype(x):
@@ -60,7 +60,7 @@ def _day_start_anchor(report_dt: datetime, start_hour: int) -> datetime:
     return a if report_dt >= a else (a - timedelta(days=1))
 
 def _sunday_start(ts: datetime, start_hour: int) -> datetime:
-    \"\"\"Most-recent Sunday at selected start hour (17 or 18).\"\"\"
+    """ Most-recent Sunday at selected start hour (17 or 18). """
     anchor = _day_start_anchor(ts, start_hour)
     # Monday=0..Sunday=6 -> distance back to Sunday
     days_back = (anchor.weekday() + 1) % 7
@@ -90,7 +90,7 @@ def _to_naive_dt_series(series):
     return s
 
 def _prep_feed_df(feed_df):
-    \"\"\"Prepare DataFrame with time_dt (tz-naive, sorted asc) and Open (float).\"\"\"
+    """ Prepare DataFrame with time_dt (tz-naive, sorted asc) and Open (float). """
     if feed_df is None or len(feed_df) == 0:
         return None
     if 'time' not in feed_df.columns or 'Open' not in feed_df.columns:
@@ -131,7 +131,7 @@ def _compute_feed_inputs(small_df, big_df, report_time, day_start_hour):
 def _apply_inputs_columns_and_debug(
     result_df, small_df, big_df, report_time, day_start_hour=18, show_debug=True
 ):
-    \"\"\"Paste constant 'Input @ 18:00' and 'Input @ Report' values by feed.\"\"\"
+    """ Paste constant 'Input @ 18:00' and 'Input @ Report' values by feed. """
     if result_df is None or len(result_df) == 0:
         return result_df
     sm18, smrp, bg18, bgrp = _compute_feed_inputs(small_df, big_df, report_time, day_start_hour)
@@ -182,10 +182,10 @@ def _ensure_time_dt(df):
     return out
 
 def find_new_data_changes(small_df, report_time, origin_name, scope_days=20):
-    \"\"\"Detect rows where origin's H/L/C changed (first appearance of new data).\"\"\"
+    """ Detect rows where origin's H/L/C changed (first appearance of new data). """
     if small_df is None or origin_name is None:
         return []
-    h_col, l_col, c_col = f\"{origin_name} H\", f\"{origin_name} L\", f\"{origin_name} C\"
+    h_col, l_col, c_col = f"{origin_name} H", f"{origin_name} L", f"{origin_name} C"
     if not all(col in small_df.columns for col in [h_col, l_col, c_col]):
         return []
 
@@ -216,14 +216,14 @@ def find_new_data_changes(small_df, report_time, origin_name, scope_days=20):
     return changes[::-1]  # newest last
 
 def find_most_current_data(small_df, report_time, origin_name, scope_days=20):
-    \"\"\"Return the latest H/L/C available at/before report_time for origin.\"\"\"
+    """ Return the latest H/L/C available at/before report_time for origin. """
     rows = find_new_data_changes(small_df, report_time, origin_name, scope_days)
     if not rows:
         return None
     return rows[-1]
 
 def calculate_raw_m_values(hlc_data, range_low, range_high):
-    \"\"\"Compute raw-m bounds given desired output range (inclusive).\"\"\"
+    """ Compute raw-m bounds given desired output range (inclusive). """
     spread = hlc_data.get('spread', 0.0)
     avg = hlc_data.get('avg', None)
     if spread is None or avg is None or spread == 0:
@@ -235,9 +235,9 @@ def calculate_raw_m_values(hlc_data, range_low, range_high):
 def find_valid_m_values(
     measurement_df, raw_m_low, raw_m_high, hlc_data,
     range_low, range_high, is_high_range=False,
-    data_source=\"Unknown\", report_time=None, small_df=None, batch_inputs=None
+    data_source= "Unknown", report_time=None, small_df=None, batch_inputs=None
 ):
-    \"\"\"Filter measurement_df by raw-m window and origin's HLC into final rows.\"\"\"
+    """ Filter measurement_df by raw-m window and origin's HLC into final rows. """
     if measurement_df is None or measurement_df.empty:
         return pd.DataFrame()
 
