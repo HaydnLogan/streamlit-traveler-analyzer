@@ -1,6 +1,8 @@
 """
 Custom Range Calculator for Market Data Analysis
 Implements sophisticated range calculation based on H/L/C data from small CSV files.
+This 0810 produces data fast! 500 point spread in under 10 seconds, but there is incorrect data! :-(
+Macedonia[-1], Macedonia[-2], Wasp-12b[-1], Wasp-12b[-2] are all missing and Macedonia[0] prints the wrong date.
 """
 
 import datetime as dt
