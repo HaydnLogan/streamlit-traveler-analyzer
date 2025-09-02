@@ -174,11 +174,27 @@ def _apply_inputs_columns_and_debug(
 
 def _ensure_time_dt(df):
     out = df.copy()
-    if 'time' in out.columns:
-        s = out['time'].astype(str).str.replace(r'[+-]\d{2}:?\d{2}$', '', regex=True).str.replace('T',' ')
-        out['time_dt'] = pd.to_datetime(s, errors='coerce')
-    else:
+    if 'time' not in out.columns:
         out['time_dt'] = pd.NaT
+        return out
+
+    t = out['time']
+
+    # Fast path: already datetime
+    if pd.api.types.is_datetime64_any_dtype(t):
+        out['time_dt'] = t.dt.tz_localize(None) if pd.api.types.is_datetime64tz_dtype(t) else t
+        return out
+
+    # String path: clean, then parse
+    s = t.astype(str).str.strip()
+    # remove trailing 'Z' (UTC designator)
+    s = s.str.replace('Z', '', regex=False)
+    # remove terminal numeric TZ offsets like -04:00 or -0400
+    s = s.str.replace(r'([+-]\d{2}):?(\d{2})$', '', regex=True)
+    # normalize ISO 'T' to space
+    s = s.str.replace('T', ' ', regex=False)
+
+    out['time_dt'] = pd.to_datetime(s, errors='coerce')
     return out
 
 def find_new_data_changes(small_df, report_time, origin_name, scope_days=20):
