@@ -123,22 +123,59 @@ def ensure_time_dt(df: pd.DataFrame) -> pd.DataFrame:
 # Feed "Open" lookup and constant pasting
 # -----------------------------------------
 
-def _prep_feed_df(feed_df: pd.DataFrame):
+# Put near the top of the calculator (once)
+_TIME_CANDIDATES = [
+    "time","Time","timestamp","Timestamp","datetime","Datetime",
+    "date","Date","ts","Ts"
+]
+_OPEN_CANDIDATES = [
+    "open","Open","OPEN","o","O","Open Price","open_price","openPrice","close_open"  # include 'open'
+]
+
+def _pick_col(df, candidates):
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
+
+def _prep_feed_df(feed_df):
     """
     Prepare a compact df with time_dt (tz-naive, sorted asc) and Open (float).
-    Returns None if required columns are missing.
+    Works with lowercase 'time'/'open' as in your CSVs.
     """
     if feed_df is None or len(feed_df) == 0:
         return None
-    if 'time' not in feed_df.columns or 'Open' not in feed_df.columns:
+
+    tcol = _pick_col(feed_df, _TIME_CANDIDATES)
+    ocol = _pick_col(feed_df, _OPEN_CANDIDATES)
+    if tcol is None or ocol is None:
+        try:
+            import streamlit as st
+            st.warning(f"Input prep: couldn't find time/open. cols={list(feed_df.columns)} picked time={tcol} open={ocol}")
+        except Exception:
+            pass
         return None
-    out = feed_df[['time', 'Open']].copy()
-    out = ensure_time_dt(out)
-    out = out.dropna(subset=['time_dt'])
-    out['Open'] = pd.to_numeric(out['Open'], errors='coerce')
-    out = out.dropna(subset=['Open'])
-    out = out.sort_values('time_dt', kind='mergesort')
-    return out[['time_dt', 'Open']]
+
+    out = feed_df[[tcol, ocol]].copy()
+    out = out.rename(columns={tcol: "time", ocol: "open"})  # keep lowercase to match your files
+
+    # robust tz-naive parsing
+    out = ensure_time_dt(out)              # creates time_dt from 'time'
+    out = out.dropna(subset=["time_dt"])
+    out["open"] = pd.to_numeric(out["open"], errors="coerce")
+    out = out.dropna(subset=["open"])
+    out = out.sort_values("time_dt", kind="mergesort")
+
+    # final shape used elsewhere
+    out = out.rename(columns={"open": "Open"})
+    try:
+        import streamlit as st
+        if len(out):
+            st.info(f"Feed prep: time='{tcol}', open='{ocol}'. Range {out['time_dt'].iloc[0]} → {out['time_dt'].iloc[-1]} ({len(out)} rows)")
+    except Exception:
+        pass
+    return out[["time_dt", "Open"]]
+
 
 
 def _open_at_or_before_fast(prepped: pd.DataFrame, when_dt: datetime):
@@ -159,17 +196,49 @@ def _compute_feed_inputs(small_df, big_df, report_time, day_start_hour):
     """Compute the four constants: small@start, small@report, big@start, big@report."""
     rpt_dt = safe_to_datetime(report_time)
     if isinstance(rpt_dt, pd.Series) or pd.isna(rpt_dt):
+        try:
+            import streamlit as st
+            st.warning(f"Report time not parseable: {report_time}")
+        except Exception:
+            pass
         return (None, None, None, None)
+
     start_dt = day_start_anchor(rpt_dt, day_start_hour)
 
-    sm_p = _prep_feed_df(small_df) if small_df is not None else None
-    bg_p = _prep_feed_df(big_df)   if big_df is not None   else None
+    sm_p = _prep_feed_df(small_df) if isinstance(small_df, pd.DataFrame) else None
+    bg_p = _prep_feed_df(big_df)   if isinstance(big_df, pd.DataFrame)   else None
 
     sm18 = _open_at_or_before_fast(sm_p, start_dt)
     smrp = _open_at_or_before_fast(sm_p, rpt_dt)
     bg18 = _open_at_or_before_fast(bg_p, start_dt)
     bgrp = _open_at_or_before_fast(bg_p, rpt_dt)
+
+    # Rich debug so you can sanity-check anchors vs feed ranges
+    try:
+        import streamlit as st
+        st.info(
+            f"INPUT DEBUG — anchors: start={start_dt} | report={rpt_dt}  •  "
+            f"Small: Open@{day_start_hour:02d}:00={sm18} | Open@report={smrp}  •  "
+            f"Big: Open@{day_start_hour:02d}:00={bg18} | Open@report={bgrp}"
+        )
+        if sm_p is None:
+            st.warning("Small feed: prep returned None (missing 'time'/'open'?)")
+        else:
+            st.info(f"Small feed range: {sm_p['time_dt'].min()} → {sm_p['time_dt'].max()}")
+            if sm18 is None or smrp is None:
+                st.warning("Small feed: no Open at/before one or both anchors (anchors outside range?)")
+        if big_df is not None:
+            if bg_p is None:
+                st.warning("Big feed: prep returned None (missing 'time'/'open'?)")
+            else:
+                st.info(f"Big feed range: {bg_p['time_dt'].min()} → {bg_p['time_dt'].max()}")
+                if bg18 is None or bgrp is None:
+                    st.warning("Big feed: no Open at/before one or both anchors (anchors outside range?)")
+    except Exception:
+        pass
+
     return (sm18, smrp, bg18, bgrp)
+
 
 
 def _apply_inputs_columns_and_debug(result_df, small_df, big_df, report_time, day_start_hour=18, show_debug=True):
