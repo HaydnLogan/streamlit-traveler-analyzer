@@ -175,7 +175,7 @@ def _apply_inputs_columns_and_debug(
 def _ensure_time_dt(df):
     out = df.copy()
     if 'time' in out.columns:
-        s = out['time'].astype(str).str.replace(r'[+-]\\d{2}:?\\d{2}$', '', regex=True).str.replace('T',' ')
+        s = out['time'].astype(str).str.replace(r'[+-]\d{2}:?\d{2}$', '', regex=True).str.replace('T',' ')
         out['time_dt'] = pd.to_datetime(s, errors='coerce')
     else:
         out['time_dt'] = pd.NaT
