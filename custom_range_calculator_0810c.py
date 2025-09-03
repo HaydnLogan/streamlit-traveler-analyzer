@@ -127,7 +127,7 @@ def get_wasp_macedonia_data(hlc_df, report_time, origin_name, start_hour=18):
         st.error(f"Error getting WASP/Macedonia data for {origin_name}: {e}")
         return None
 
-def process_custom_ranges_fixed(measurement_df, small_df, big_df, report_time, custom_ranges, start_hour=18):
+def process_custom_ranges_advanced(measurement_df, small_df, big_df, report_time, custom_ranges, start_hour=18):
     """
     Process custom ranges with FIXED WASP and Macedonia handling
     """
@@ -310,7 +310,7 @@ def process_custom_ranges_fixed(measurement_df, small_df, big_df, report_time, c
         return all_valid_entries
         
     except Exception as e:
-        st.error(f"Error in process_custom_ranges_fixed: {e}")
+        st.error(f"Error in process_custom_ranges_advanced: {e}")
         return []
 
 def get_input_at_time(df, target_time):
@@ -436,7 +436,7 @@ def apply_custom_ranges_advanced(df, small_df, report_time, high1, high2, low1, 
             return pd.DataFrame()
 
         # Use fixed processing
-        valid_entries = process_custom_ranges_fixed(df, small_df, big_df, report_time, custom_ranges, 18)
+        valid_entries = process_custom_ranges_advanced(df, small_df, big_df, report_time, custom_ranges, 18)
 
         if not valid_entries:
             st.warning("No valid entries found")
@@ -449,4 +449,228 @@ def apply_custom_ranges_advanced(df, small_df, report_time, high1, high2, low1, 
         
     except Exception as e:
         st.error(f"Error in apply_custom_ranges_advanced: {e}")
+        return pd.DataFrame()
+
+def process_full_range_advanced(measurement_df, small_df, big_df, report_time, center, window_radius, start_hour=18):
+    """
+    Process full range with FIXED WASP and Macedonia handling
+    """
+    all_valid_entries = []
+    
+    try:
+        lo = center - window_radius
+        hi = center + window_radius
+        st.info(f"Full Range window: [{lo:.1f}, {hi:.1f}] around center={center}")
+        
+        # Pre-calculate batch inputs for performance
+        small_input_at_start = get_input_at_time(small_df, get_start_time(report_time, start_hour))
+        big_input_at_start = get_input_at_time(big_df, get_start_time(report_time, start_hour))
+        small_input_at_report = get_input_at_time(small_df, report_time)
+        big_input_at_report = get_input_at_time(big_df, report_time)
+        
+        # Process both data sources
+        data_sources = []
+        if small_df is not None and not small_df.empty:
+            data_sources.append((small_df.copy(), "Small CSV"))
+        if big_df is not None and not big_df.empty:
+            data_sources.append((big_df.copy(), "Big CSV"))
+        
+        # Get all origins including WASP and Macedonia variants
+        all_origins = set()
+        for hlc_df, _ in data_sources:
+            for col in hlc_df.columns:
+                if col.endswith(' H'):
+                    origin_name = col[:-2]
+                    all_origins.add(origin_name)
+        
+        # FIXED: Add all WASP and Macedonia variants explicitly
+        wasp_macedonia_origins = [
+            'WASP-12b', 'WASP-12b[1]', 'WASP-12b[2]',
+            'Macedonia', 'Macedonia[1]', 'Macedonia[2]'
+        ]
+        for variant in wasp_macedonia_origins:
+            all_origins.add(variant)
+        
+        origins = list(all_origins)
+        st.info(f"Processing origins: {', '.join(sorted(origins))}")
+        
+        # Get M value column
+        m_value_col = None
+        for col in ['M value', 'M Value', 'M_Value', 'M_value', 'm value', 'm_value']:
+            if col in measurement_df.columns:
+                m_value_col = col
+                break
+        
+        if m_value_col is None:
+            st.error("No M value column found in measurement data")
+            return []
+        
+        # Process each data source
+        for hlc_df, data_source in data_sources:
+            
+            # Process each origin
+            for origin in origins:
+                
+                # FIXED: Special handling for WASP and Macedonia
+                if origin.lower().startswith('wasp-12b') or origin.lower().startswith('macedonia'):
+                    hlc_data = get_wasp_macedonia_data(hlc_df, report_time, origin, start_hour)
+                    hlc_data_list = [hlc_data] if hlc_data else []
+                else:
+                    # Regular origins: use find_new_data_changes
+                    hlc_data_list = find_new_data_changes(hlc_df, report_time, origin, 20)
+                
+                if not hlc_data_list:
+                    continue
+                
+                # Process each H/L/C data entry
+                for hlc_data in hlc_data_list:
+                    # Calculate raw M values
+                    H, L, C = hlc_data['H'], hlc_data['L'], hlc_data['C']
+                    avg = (H + L + C) / 3
+                    spread = H - L
+                    
+                    if spread == 0:
+                        continue
+                    
+                    raw_m_low = (lo - avg) / spread
+                    raw_m_high = (hi - avg) / spread
+                    
+                    # Find valid M values
+                    m_values = pd.to_numeric(measurement_df[m_value_col], errors='coerce').dropna()
+                    valid_m_mask = (m_values >= raw_m_low) & (m_values <= raw_m_high)
+                    valid_m_vals = m_values[valid_m_mask].unique()
+                    
+                    # Process each valid M value
+                    for m_val in valid_m_vals:
+                        output = avg + m_val * spread
+                        
+                        # Get matching measurement rows
+                        matching_rows = measurement_df[measurement_df[m_value_col] == m_val]
+                        
+                        for _, row in matching_rows.iterrows():
+                            # Format arrival datetime
+                            arrival_dt = hlc_data['datetime']
+                            try:
+                                day_abbrev = arrival_dt.strftime('%a')
+                                arrival_excel = arrival_dt.strftime('%Y-%m-%d %H:%M')
+                                
+                                # Calculate day index
+                                try:
+                                    from a_helpers import get_day_index
+                                    day_index = get_day_index(arrival_dt, report_time, start_hour)
+                                except:
+                                    day_index = "[0]"
+                            except:
+                                day_abbrev = ""
+                                arrival_excel = ""
+                                day_index = "[0]"
+                            
+                            # Get input values based on feed type
+                            feed_type = "Small" if data_source == "Small CSV" else "Big"
+                            if feed_type == "Small":
+                                input_18 = small_input_at_start if small_input_at_start is not None else 0
+                                input_report = small_input_at_report if small_input_at_report is not None else 0
+                                input_arrival = get_input_at_time(small_df, arrival_dt)
+                            else:
+                                input_18 = big_input_at_start if big_input_at_start is not None else 0
+                                input_report = big_input_at_report if big_input_at_report is not None else 0
+                                input_arrival = get_input_at_time(big_df, arrival_dt)
+                            
+                            if input_arrival is None:
+                                input_arrival = 0
+                            
+                            all_valid_entries.append({
+                                'Feed': feed_type,
+                                'ddd': day_abbrev,
+                                'Arrival': arrival_excel,
+                                'Day': day_index,
+                                'Origin': hlc_data['origin'],
+                                'M Name': row.get('M Name', row.get('m name', f"M{m_val}")),
+                                'M #': row.get('M #', row.get('m #', m_val)),
+                                'M Value': m_val,
+                                'R #': row.get('R #', row.get('r #', '')),
+                                'Tag': row.get('Tag', row.get('tag', '')),
+                                'Family': row.get('Family', row.get('family', '')),
+                                'Input @ 18:00': input_18,
+                                'Diff @ 18:00': output - input_18,
+                                'Input @ Arrival': input_arrival,
+                                'Diff @ Arrival': output - input_arrival,
+                                'Input @ Report': input_report,
+                                'Diff @ Report': output - input_report,
+                                'Output': output
+                            })
+        
+        return all_valid_entries
+        
+    except Exception as e:
+        st.error(f"Error in process_full_range_advanced: {e}")
+        return []
+
+def apply_full_range_advanced(df, small_df, report_time, window_radius, day_start_hour=18, input_value_at_start=None, big_df=None, run_model_g=False):
+    """
+    Apply full range with FIXED WASP and Macedonia handling
+    """
+    try:
+        st.info("Full Range Processing with FIXED WASP/Macedonia handling started")
+        
+        # Determine center
+        center = input_value_at_start
+        if center is None or pd.isna(center):
+            try:
+                from a_helpers import clean_timestamp
+                sdf = small_df.copy()
+                sdf['time'] = sdf['time'].apply(clean_timestamp)
+                sdf = sdf[sdf['time'] <= report_time]
+
+                if not sdf.empty:
+                    base = dt.datetime(report_time.year, report_time.month, report_time.day, day_start_hour, 0, 0)
+                    if report_time < base:
+                        base = base - dt.timedelta(days=1)
+
+                    center_row = sdf[sdf['time'] == base]
+                    if not center_row.empty:
+                        center_row = center_row.iloc[-1]
+                    else:
+                        center_row = sdf.iloc[-1]
+
+                    for col in ['Open', 'open', 'close']:
+                        if col in center_row.index and pd.notna(center_row[col]):
+                            center = float(center_row[col])
+                            break
+            except:
+                center = None
+
+        if center is None:
+            st.error("Cannot determine center for Full Range")
+            return pd.DataFrame()
+
+        # Use fixed processing
+        valid_entries = process_full_range_advanced(df, small_df, big_df, report_time, center, window_radius, day_start_hour)
+
+        if not valid_entries:
+            st.warning("No valid entries found")
+            return pd.DataFrame()
+
+        # Convert to DataFrame and clean up
+        out_df = pd.DataFrame(valid_entries)
+        
+        # For full range, we don't need Range/Zone columns
+        out_df = out_df.drop(columns=['Range', 'Zone'], errors='ignore')
+
+        # Order columns consistently
+        preferred_cols = [
+            'Feed', 'ddd', 'Arrival', 'Day', 'Origin',
+            'M Name', 'M #', 'M Value', 'R #', 'Tag', 'Family',
+            'Input @ 18:00', 'Diff @ 18:00', 'Input @ Arrival', 'Diff @ Arrival',
+            'Input @ Report', 'Diff @ Report', 'Output'
+        ]
+        ordered = [c for c in preferred_cols if c in out_df.columns]
+        remaining = [c for c in out_df.columns if c not in ordered]
+        out_df = out_df[ordered + remaining]
+
+        st.success(f"Full Range processing complete: {len(out_df)} entries found")
+        return out_df
+        
+    except Exception as e:
+        st.error(f"Error in apply_full_range_advanced: {e}")
         return pd.DataFrame()
