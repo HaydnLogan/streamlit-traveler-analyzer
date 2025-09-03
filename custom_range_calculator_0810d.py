@@ -11,7 +11,10 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime, timedelta
 import numpy as np
-
+try:
+    import streamlit as st
+except Exception:
+    st = None  # allow running outside Streamlit
 
 # --- tz-safe datetime coercion used across the calculator ---
 def safe_to_datetime(x, errors="coerce"):
@@ -31,22 +34,200 @@ def safe_to_datetime(x, errors="coerce"):
         return ts.tz_localize(None)
     return ts
 
-
-def _ensure_time_dt(df: pd.DataFrame) -> pd.DataFrame:
+# --- ensure we have a tz-naive 'time_dt' column from 'time' ---
+def ensure_time_dt(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    if 'time' in out.columns:
-        s = out['time'].astype(str)\
-            .str.replace(r'[+-]\d{2}:?\d{2}$', '', regex=True)\
-            .str.replace('Z', '', regex=False)\
-            .str.replace('T', ' ', regex=False)
-        out['time_dt'] = pd.to_datetime(s, errors='coerce')
-    else:
-        out['time_dt'] = pd.to_datetime(out.iloc[:, 0], errors='coerce')
+    if 'time' not in out.columns:
+        out['time_dt'] = pd.NaT
+        return out
+    t = out['time']
+    if pd.api.types.is_datetime64_any_dtype(t):
+        out['time_dt'] = t.dt.tz_localize(None) if pd.api.types.is_datetime64tz_dtype(t) else t
+        return out
+    s = t.astype(str).str.strip()
+    s = s.str.replace('Z', '', regex=False)                        # drop trailing Z
+    s = s.str.replace(r'([+-]\d{2}):?(\d{2})$', '', regex=True)    # drop +HH:MM or +HHMM
+    s = s.str.replace('T', ' ', regex=False)                       # ISO T -> space
+    out['time_dt'] = pd.to_datetime(s, errors='coerce')
     return out
 
-def _day_start_anchor(ts: datetime, start_hour: int) -> datetime:
-    a = ts.replace(hour=start_hour, minute=0, second=0, microsecond=0)
-    return a if ts >= a else (a - timedelta(days=1))
+# --- flexible column detection for feed prep ---
+_TIME_CANDIDATES = ["time","Time","timestamp","Timestamp","datetime","Datetime","date","Date","ts","Ts"]
+_OPEN_CANDIDATES = ["open","Open","OPEN","o","O","Open Price","open_price","openPrice"]
+
+def _pick_col(df, candidates):
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
+
+# --- prepare a compact (time_dt, Open) df for binary searches ---
+def _prep_feed_df(feed_df: pd.DataFrame):
+    if feed_df is None or len(feed_df) == 0:
+        return None
+    tcol = _pick_col(feed_df, _TIME_CANDIDATES)
+    ocol = _pick_col(feed_df, _OPEN_CANDIDATES)
+    if tcol is None or ocol is None:
+        if st is not None:
+            st.warning(f"Input prep: couldn't find time/open. cols={list(feed_df.columns)} picked time={tcol} open={ocol}")
+        return None
+    out = feed_df[[tcol, ocol]].copy().rename(columns={tcol: "time", ocol: "open"})
+    out = ensure_time_dt(out).dropna(subset=["time_dt"])
+    out["open"] = pd.to_numeric(out["open"], errors="coerce")
+    out = out.dropna(subset=["open"]).sort_values("time_dt", kind="mergesort")
+    out = out.rename(columns={"open": "Open"})
+    if st is not None and len(out):
+        st.info(f"Feed prep: time='{tcol}', open='{ocol}'. Range {out['time_dt'].iloc[0]} → {out['time_dt'].iloc[-1]} ({len(out)} rows)")
+    return out[["time_dt", "Open"]]
+
+# --- last Open at/before a single timestamp (O(log n)) ---
+def _open_at_or_before_fast(prepped: pd.DataFrame, when_dt: datetime):
+    if prepped is None or len(prepped) == 0 or when_dt is None:
+        return None
+    if not isinstance(when_dt, datetime):
+        when_dt = safe_to_datetime(when_dt)
+        if isinstance(when_dt, pd.Series) or pd.isna(when_dt):
+            return None
+    if not prepped["time_dt"].is_monotonic_increasing:
+        prepped = prepped.sort_values("time_dt", kind="mergesort")
+    idx = prepped["time_dt"].searchsorted(when_dt, side="right") - 1
+    if idx < 0:
+        return None
+    return float(prepped["Open"].iloc[idx])
+
+# --- compute the 4 constants: small/big @ start and @ report ---
+def _compute_feed_inputs(small_df, big_df, report_time, day_start_hour):
+    rpt_dt = safe_to_datetime(report_time)
+    if isinstance(rpt_dt, pd.Series) or pd.isna(rpt_dt):
+        if st is not None:
+            st.warning(f"Report time not parseable: {report_time}")
+        return (None, None, None, None)
+    start_dt = day_start_anchor(rpt_dt, day_start_hour)
+    sm_p = _prep_feed_df(small_df) if isinstance(small_df, pd.DataFrame) else None
+    bg_p = _prep_feed_df(big_df)   if isinstance(big_df, pd.DataFrame)   else None
+    sm18 = _open_at_or_before_fast(sm_p, start_dt)
+    smrp = _open_at_or_before_fast(sm_p, rpt_dt)
+    bg18 = _open_at_or_before_fast(bg_p, start_dt)
+    bgrp = _open_at_or_before_fast(bg_p, rpt_dt)
+    # Rich debug
+    if st is not None:
+        st.info(
+            f"INPUT DEBUG — anchors: start={start_dt} | report={rpt_dt}  •  "
+            f"Small: Open@{day_start_hour:02d}:00={sm18} | Open@report={smrp}  •  "
+            f"Big: Open@{day_start_hour:02d}:00={bg18} | Open@report={bgrp}"
+        )
+        if sm_p is None:
+            st.warning("Small feed: prep returned None (missing 'time'/'open'?)")
+        else:
+            st.info(f"Small feed range: {sm_p['time_dt'].min()} → {sm_p['time_dt'].max()}")
+            if sm18 is None or smrp is None:
+                st.warning("Small feed: no Open at/before one or both anchors (anchors outside range?)")
+        if big_df is not None:
+            if bg_p is None:
+                st.warning("Big feed: prep returned None (missing 'time'/'open'?)")
+            else:
+                st.info(f"Big feed range: {bg_p['time_dt'].min()} → {bg_p['time_dt'].max()}")
+                if bg18 is None or bgrp is None:
+                    st.warning("Big feed: no Open at/before one or both anchors (anchors outside range?)")
+    return (sm18, smrp, bg18, bgrp)
+
+# --- PASTE the 4 constants by feed into the result df + optional debug ---
+def _apply_inputs_columns_and_debug(result_df, small_df, big_df, report_time, day_start_hour=18, show_debug=True):
+    if result_df is None or len(result_df) == 0:
+        return result_df
+    sm18, smrp, bg18, bgrp = _compute_feed_inputs(small_df, big_df, report_time, day_start_hour)
+    if show_debug and st is not None:
+        st.info(
+            "INPUT DEBUG (final) - Small: Open@{:02d}:00={} | Open@report={} • Big: Open@{:02d}:00={} | Open@report={}".format(
+                day_start_hour, sm18, smrp, day_start_hour, bg18, bgrp
+            )
+        )
+    feed = result_df.get("Feed") if "Feed" in result_df.columns else result_df.get("data_source")
+    if feed is None:
+        return result_df
+    f_lower = feed.astype(str).str.strip().str.lower()
+    sm_mask = f_lower.isin(["sm","small","s","small feed"])
+    bg_mask = f_lower.isin(["bg","big","b","big feed"])
+    if "Input @ 18:00" not in result_df.columns:
+        result_df["Input @ 18:00"] = np.nan
+    if "Input @ Report" not in result_df.columns:
+        result_df["Input @ Report"] = np.nan
+    if sm18 is not None:
+        result_df.loc[sm_mask, "Input @ 18:00"] = sm18
+    if smrp is not None:
+        result_df.loc[sm_mask, "Input @ Report"] = smrp
+    if bg18 is not None:
+        result_df.loc[bg_mask, "Input @ 18:00"] = bg18
+    if bgrp is not None:
+        result_df.loc[bg_mask, "Input @ Report"] = bgrp
+    return result_df
+
+# --- vectorized "open at/before" for many arrival timestamps (fast) ---
+def _open_at_or_before_many(prepped_df, when_series):
+    if prepped_df is None or len(prepped_df) == 0 or when_series is None or len(when_series) == 0:
+        return np.array([np.nan] * len(when_series)) if hasattr(when_series, "__len__") else np.array([])
+    times = prepped_df["time_dt"].to_numpy()
+    vals  = prepped_df["Open"].to_numpy()
+    w = safe_to_datetime(when_series).to_numpy()
+    idx = np.searchsorted(times, w, side="right") - 1
+    idx[idx < 0] = -1
+    out = np.where(idx == -1, np.nan, vals[idx])
+    return out
+
+# --- compute Day like [0], [-1], [+1] using day-start anchors ---
+def _compute_day_index_series(arrival_series, report_time, day_start_hour: int):
+    rpt = safe_to_datetime(report_time)
+    if not isinstance(rpt, pd.Timestamp):
+        return pd.Series(["[0]"] * len(arrival_series), index=arrival_series.index)
+    rpt_anchor = day_start_anchor(rpt, day_start_hour)
+    arr = safe_to_datetime(arrival_series)
+    arr_anchor = arr.apply(lambda x: day_start_anchor(x, day_start_hour) if isinstance(x, pd.Timestamp) else pd.NaT)
+    d = (arr_anchor - rpt_anchor).dt.days.fillna(0).astype(int)
+    return d.map(lambda k: "[0]" if k == 0 else (f"[{k}]" if k < 0 else f"[+{k}]"))
+
+# --- per-row Input @ Arrival + all 3 Diff columns + ddd/Day ---
+def _apply_input_at_arrival_and_diffs(result_df, small_df, big_df, report_time, day_start_hour: int):
+    if result_df is None or len(result_df) == 0:
+        return result_df
+    result_df["Arrival"] = safe_to_datetime(result_df["Arrival"])
+    sm_p = _prep_feed_df(small_df) if isinstance(small_df, pd.DataFrame) else None
+    bg_p = _prep_feed_df(big_df)   if isinstance(big_df, pd.DataFrame)   else None
+    for c in ["Input @ Arrival", "Input @ 18:00", "Input @ Report"]:
+        if c not in result_df.columns:
+            result_df[c] = np.nan
+    f = result_df.get("Feed")
+    f_lower = f.astype(str).str.lower()
+    sm_mask = f_lower.isin(["small","sm","s","small feed"])
+    bg_mask = f_lower.isin(["big","bg","b","big feed"])
+    if sm_mask.any():
+        result_df.loc[sm_mask, "Input @ Arrival"] = _open_at_or_before_many(sm_p, result_df.loc[sm_mask, "Arrival"])
+    if bg_mask.any():
+        result_df.loc[bg_mask, "Input @ Arrival"] = _open_at_or_before_many(bg_p, result_df.loc[bg_mask, "Arrival"])
+    if "Output" in result_df.columns:
+        result_df["Diff @ 18:00"]  = result_df["Output"] - pd.to_numeric(result_df["Input @ 18:00"], errors="coerce")
+        result_df["Diff @ Arrival"] = result_df["Output"] - pd.to_numeric(result_df["Input @ Arrival"], errors="coerce")
+        result_df["Diff @ Report"] = result_df["Output"] - pd.to_numeric(result_df["Input @ Report"], errors="coerce")
+    result_df["ddd"] = result_df["Arrival"].dt.strftime("%a")
+    result_df["Day"] = _compute_day_index_series(result_df["Arrival"], report_time, day_start_hour)
+    return result_df
+
+# --- enforce your exact Traveler Report column order ---
+_DESIRED_COLS = [
+    "Feed","ddd","Arrival","Day","Origin","M Name","M #","R #","Tag","Family",
+    "Input @ 18:00","Diff @ 18:00","Input @ Arrival","Diff @ Arrival",
+    "Input @ Report","Diff @ Report","Output"
+]
+def _finalize_columns_order(df):
+    for c in _DESIRED_COLS:
+        if c not in df.columns:
+            df[c] = np.nan
+    return df[_DESIRED_COLS]
+
+
+# --- anchor helpers ---
+def day_start_anchor(report_dt: datetime, start_hour: int) -> datetime:
+    a = report_dt.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    return a if report_dt >= a else (a - timedelta(days=1))
 
 def _sunday_start(ts: datetime, start_hour: int) -> datetime:
     anchor = _day_start_anchor(ts, start_hour)
