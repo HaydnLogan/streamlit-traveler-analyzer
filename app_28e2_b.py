@@ -6,7 +6,7 @@ import datetime as dt
 import io
 from typing import Optional
 from pandas import ExcelWriter
-from custom_range_calculator_0810c import apply_custom_ranges_advanced, apply_full_range_advanced
+from custom_range_calculator_0810d import apply_custom_ranges_advanced, apply_full_range_advanced
 
 # Configure pandas to handle large datasets
 pd.set_option("styler.render.max_elements", 2000000)
