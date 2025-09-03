@@ -12,6 +12,26 @@ import streamlit as st
 from datetime import datetime, timedelta
 import numpy as np
 
+
+# --- tz-safe datetime coercion used across the calculator ---
+def safe_to_datetime(x, errors="coerce"):
+    """
+    Convert Series or scalar to pandas datetime and drop timezone → tz-naive.
+    - Series: returns dtype datetime64[ns], tz removed if present
+    - Scalar: returns pandas.Timestamp (tz-naive) or NaT
+    """
+    ts = pd.to_datetime(x, errors=errors)
+    # Series path
+    if isinstance(ts, pd.Series):
+        if pd.api.types.is_datetime64tz_dtype(ts):
+            return ts.dt.tz_localize(None)
+        return ts
+    # Scalar path
+    if isinstance(ts, pd.Timestamp) and ts.tz is not None:
+        return ts.tz_localize(None)
+    return ts
+
+
 def _ensure_time_dt(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     if 'time' in out.columns:
