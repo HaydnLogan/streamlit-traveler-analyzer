@@ -87,15 +87,30 @@ def _get_hlc_from_row(row, base_name, idx=None):
 # Helpers for open values
 # ------------------------------
 
+# def get_open_at(df, target_time):
+#     df2 = _ensure_time_dt(df)
+#     df2 = df2.sort_values("time_dt")
+#     row = df2[df2["time_dt"] <= target_time].iloc[-1:]
+#     if row.empty:
+#         return None
+#     for col in ("open", "Open"):
+#         if col in row.columns:
+#             return float(row.iloc[0][col])
+#     return None
+
 def get_open_at(df, target_time):
     df2 = _ensure_time_dt(df)
     df2 = df2.sort_values("time_dt")
-    row = df2[df2["time_dt"] <= target_time].iloc[-1:]
-    if row.empty:
+    df2 = df2[df2['time_dt'] <= target_time]
+    if df2.empty:
         return None
+    row = df2.iloc[-1]
     for col in ("open", "Open"):
-        if col in row.columns:
-            return float(row.iloc[0][col])
+        if col in row.index:
+            try:
+                return float(row[col])
+            except Exception:
+                continue
     return None
 
 # ------------------------------
