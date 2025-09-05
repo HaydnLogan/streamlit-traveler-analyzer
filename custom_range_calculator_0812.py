@@ -1,7 +1,10 @@
 """
-This is a version 0810 is broken.  It was fast, printed 16,000 lines in under 10 seconds.
-it fixed the missing Macedonia[-1], Macedonia[-2], Wasp-12b[-1], Wasp-12b[-2].
-There are some messed up lines in the code while trying to fix Input @ 1800 value for each csv, and Input @ Report for each csv..  
+This is the update to version 0810.  It is still fast, prints 16,000 lines in under 17 seconds, was under 10 seconds with errors.
+it fixed the missing Macedonia[-1], Macedonia[-2], Wasp-12b[-1], Wasp-12b[-2]. (under 10 seconds)
+Now addresses Input @ 1800 value for each csv, and Input @ Report for each csv..  Input @ 18:00 renamed to Input @ Start.
+Input @ start should show 2 values, but instead it shows 4 values.  
+Input @ report should show 2 values, but instead it shows only 1 value.
+This current version runs in 17 seconds instead of 8 seconds.  
 """
 
 import datetime as dt
