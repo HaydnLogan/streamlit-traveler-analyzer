@@ -81,6 +81,25 @@ def _get_hlc_from_row(row, base_name, idx=None):
     return {"H": H, "L": L, "C": C}
 
 # ------------------------------
+# Helpers for open values
+# ------------------------------
+
+def get_open_at(df, target_time):
+    df2 = _ensure_time_dt(df)
+    df2 = df2.sort_values("time_dt")
+    df2 = df2[df2['time_dt'] <= target_time]
+    if df2.empty:
+        return None
+    row = df2.iloc[-1]
+    for col in ("open", "Open"):
+        if col in row.index:
+            try:
+            return float(row[col])
+        except Exception:
+            continue
+    return None
+
+# ------------------------------
 # Generic HLC discovery (unchanged behavior for non-special origins)
 # ------------------------------
 
@@ -245,9 +264,9 @@ def find_valid_m_values(measurement_df, raw_m_low, raw_m_high, hlc_data, range_l
                     ddd, arrival_excel, day_index = "", str(hlc_data.get('datetime','')), "[0]"
 
                 feed_type = "Small" if data_source == "Small CSV" else "Big"
-                input_18 = hlc_data.get('H', 0)
+                input_start = hlc_data.get("input_start", 0)
                 input_arrival = hlc_data.get('C', 0)
-                input_report = hlc_data.get('L', 0)
+                input_report = hlc_data.get("input_report", 0)
 
                 valid_entries.append({
                     'Feed': feed_type,
@@ -261,8 +280,8 @@ def find_valid_m_values(measurement_df, raw_m_low, raw_m_high, hlc_data, range_l
                     'R #': row.get('R #', row.get('r #', '')),
                     'Tag': row.get('Tag', row.get('tag', '')),
                     'Family': row.get('Family', row.get('family', '')),
-                    'Input @ 18:00': input_18,
-                    'Diff @ 18:00': output - input_18,
+                    'Input @ start': input_start,
+                    'Diff @ start': output - input_start,
                     'Input @ Arrival': input_arrival,
                     'Diff @ Arrival': output - input_arrival,
                     'Input @ Report': input_report,
@@ -329,8 +348,18 @@ def process_custom_ranges_advanced(measurement_df, small_df, report_time, custom
 
                 if not hlc_sets:
                     continue
-
+                    
                 for hlc in hlc_sets:
+                    # Attach open values once per feed
+                    if origin == "Macedonia":
+                        start_anchor = _first_of_month_anchor(report_time, day_start_hour)
+                    else:
+                        start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour)
+                    # start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour) if origin != "Macedonia" else _first_of_month_anchor(report_time, day_start_hour)
+                    
+                    hlc['input_start'] = get_open_at(hlc_df, start_anchor)
+                    hlc['input_report'] = get_open_at(hlc_df, clean_timestamp(report_time))
+                    
                     calc = calculate_raw_m_values(hlc, range_low, range_high)
                     if not calc:
                         continue
@@ -447,6 +476,16 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
                 continue
 
             for hlc in hlc_sets:
+                # Attach open values once per feed
+                if origin == "Macedonia":
+                    start_anchor = _first_of_month_anchor(report_time, day_start_hour)
+                else:
+                    start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour)
+                # start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour) if origin != "Macedonia" else _first_of_month_anchor(report_time, day_start_hour)
+                
+                hlc['input_start'] = get_open_at(hlc_df, start_anchor)
+                hlc['input_report'] = get_open_at(hlc_df, clean_timestamp(report_time))
+                
                 calc = calculate_raw_m_values(hlc, lo, hi)
                 if not calc:
                     continue
@@ -528,7 +567,7 @@ def apply_full_range_advanced(df, small_df, report_time, window_radius, day_star
     preferred_cols = [
         'Feed','ddd','Arrival','Day','Origin',
         'M Name','M #','M Value','R #','Tag','Family',
-        'Input @ 18:00','Diff @ 18:00','Input @ Arrival','Diff @ Arrival',
+        'Input @ start','Diff @ start','Input @ Arrival','Diff @ Arrival',
         'Input @ Report','Diff @ Report','Output'
     ]
     ordered = [c for c in preferred_cols if c in out_df.columns]
