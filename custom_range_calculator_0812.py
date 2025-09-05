@@ -1,7 +1,7 @@
 """
-This is a working update of version 0810.  It is fast, prints 16,000 lines in under 10 seconds.
-it fixes the missing Macedonia[-1], Macedonia[-2], Wasp-12b[-1], Wasp-12b[-2].
-Data that is still wrong:  Input @ 1800 value for each csv, and Input @ Report for each csv.
+This is a version 0810 is broken.  It was fast, printed 16,000 lines in under 10 seconds.
+it fixed the missing Macedonia[-1], Macedonia[-2], Wasp-12b[-1], Wasp-12b[-2].
+There are some messed up lines in the code while trying to fix Input @ 1800 value for each csv, and Input @ Report for each csv..  
 """
 
 import datetime as dt
@@ -87,16 +87,12 @@ def _get_hlc_from_row(row, base_name, idx=None):
 def get_open_at(df, target_time):
     df2 = _ensure_time_dt(df)
     df2 = df2.sort_values("time_dt")
-    df2 = df2[df2['time_dt'] <= target_time]
-    if df2.empty:
+    row = df2[df2["time_dt"] <= target_time].iloc[-1:]
+    if row.empty:
         return None
-    row = df2.iloc[-1]
     for col in ("open", "Open"):
-        if col in row.index:
-            try:
-            return float(row[col])
-        except Exception:
-            continue
+        if col in row.columns:
+            return float(row.iloc[0][col])
     return None
 
 # ------------------------------
