@@ -437,6 +437,11 @@ def apply_custom_ranges_advanced(df, small_df, report_time, high1, high2, low1, 
     return out
 
 def process_full_range_advanced(measurement_df, small_df, report_time, center, window_radius, scope_days=20, big_df=None, run_model_g=False, day_start_hour=18):
+    """Process the full range around a center (center +/- window_radius).
+
+    Captures open values once per feed (small/big) and attaches them to each HLC set before
+    computing raw M values and finding valid M entries.
+    """
     lo, hi = center - window_radius, center + window_radius
     st.info(f"🧮 Full Range (Advanced) window: [{lo}, {hi}] around center={center}")
 
@@ -450,11 +455,11 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
     origins = _collect_origins(data_sources)
 
     for hlc_df, data_source in data_sources:
-      feed_type = "Small" if data_source == "Small CSV" else "Big"
-      # capture once per feed
-      start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour)
-      feed_start = get_open_at(hlc_df, start_anchor)
-      feed_report = get_open_at(hlc_df, clean_timestamp(report_time))
+        feed_type = "Small" if data_source == "Small CSV" else "Big"
+        # capture once per feed (use the usual start anchor)
+        start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour)
+        feed_start = get_open_at(hlc_df, start_anchor)
+        feed_report = get_open_at(hlc_df, clean_timestamp(report_time))
 
         for origin in origins:
             if origin == "WASP-12b":
@@ -468,39 +473,35 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
                 continue
 
             for hlc in hlc_sets:
+                # attach feed-level opens
                 hlc['input_start'] = feed_start
                 hlc['input_report'] = feed_report
-                
-                # full range always covers 24 range blocks
-                for i in range(0, 24):
-                    range_low = i
-                    range_high = i + 24
-                    is_high_range = False
-                  
-                    calc = calculate_raw_m_values(hlc, lo, hi)
-                    if not calc:
-                        continue
-                    h2 = {**hlc, **calc}
-                    res = find_valid_m_values(measurement_df, calc['raw_m_low'], calc['raw_m_high'], h2, lo, hi, False, data_source, report_time)
-                    all_valid_entries.extend(res['valid_entries'])
-    
-                    dt_str = hlc['datetime'].strftime('%m/%d/%Y %H:%M') if hasattr(hlc['datetime'], 'strftime') else str(hlc['datetime'])
-                    processing_summary.append({
-                        'Range': f"{lo:.1f}-{hi:.1f}",
-                        'Feed': data_source.replace(' CSV',''),
-                        'DateTime': dt_str,
-                        'Origin': hlc['origin'],
-                        'H': hlc['H'],'L': hlc['L'],'C': hlc['C'],
-                        'Raw M Low': calc['raw_m_low'],'Raw M High': calc['raw_m_high'],
-                        'Valid M Values': len(res['valid_m_list']),
-                        'Valid list': ', '.join([f"{m:.1f}" for m in res['valid_m_list']]) or 'None'
-                    })
+
+                calc = calculate_raw_m_values(hlc, lo, hi)
+                if not calc:
+                    continue
+                h2 = {**hlc, **calc}
+                res = find_valid_m_values(measurement_df, calc['raw_m_low'], calc['raw_m_high'], h2, lo, hi, False, data_source, report_time)
+                all_valid_entries.extend(res['valid_entries'])
+
+                dt_str = hlc['datetime'].strftime('%m/%d/%Y %H:%M') if hasattr(hlc['datetime'], 'strftime') else str(hlc['datetime'])
+                processing_summary.append({
+                    'Range': f"{lo:.1f}-{hi:.1f}",
+                    'Feed': data_source.replace(' CSV',''),
+                    'DateTime': dt_str,
+                    'Origin': hlc['origin'],
+                    'H': hlc['H'],'L': hlc['L'],'C': hlc['C'],
+                    'Raw M Low': calc['raw_m_low'],'Raw M High': calc['raw_m_high'],
+                    'Valid M Values': len(res['valid_m_list']),
+                    'Valid list': ', '.join([f"{m:.1f}" for m in res['valid_m_list']]) or 'None'
+                })
 
     if processing_summary:
         st.markdown("### Full Range – Processing Summary")
         st.dataframe(pd.DataFrame(processing_summary), use_container_width=True)
 
     return all_valid_entries
+
 
 def apply_full_range_advanced(df, small_df, report_time, window_radius, day_start_hour=18, input_value_at_start=None, big_df=None, run_model_g=False):
     # Center selection
