@@ -1,4 +1,4 @@
-# v28e - Mod G08 added.
+# v28e - Mod G08 added.  Fast and wrong.  Wasp is wrong. Input @ 18:00 is wrong.
 
 import streamlit as st
 import pandas as pd
@@ -130,7 +130,7 @@ def render_unified_export(traveler_reports, report_time):
 
 # 🔌 Streamlit interface (UI + orchestration)
 st.set_page_config(layout="wide")
-st.header("🧬 Data Processor + Model A/B/C/G Detector with fast mode. v28e2")
+st.header("🧬 Data Processor + Model A/B/C/G Detector with fast mode. v28e2. Fast and wrong")
 
 # 📤 Uploads
 small_feed_file = st.file_uploader("Upload small feed", type="csv")
