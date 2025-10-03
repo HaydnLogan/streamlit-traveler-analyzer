@@ -152,7 +152,7 @@ else:
     report_time = None
 
 # 🚥 Toggles
-
+run_g_models = st.sidebar.checkbox("🟢 Run Model G Detection", value=False)
 # Model G sub-toggles for performance control
 if run_g_models:
     st.sidebar.markdown("**G Model Controls:**")
