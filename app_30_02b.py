@@ -1,0 +1,749 @@
+# v30b - Added HOD/LOD report mode with multi-day processing
+# HOD/LOD uses combined feed analysis and 15-minute strict cutoff
+
+import streamlit as st
+import pandas as pd
+import datetime as dt
+import io
+from typing import Optional
+from pandas import ExcelWriter
+from custom_range_calculator_0813 import apply_custom_ranges_advanced, apply_full_range_advanced
+from hod_lod_processor import (
+    process_hod_lod_mode, 
+    is_complete_trading_day, 
+    get_trading_day_bounds
+)
+
+# Configure pandas to handle large datasets
+pd.set_option("styler.render.max_elements", 2000000)
+
+# Import functions
+from a_helpers import (
+    clean_timestamp, process_feed, get_input_at_day_start, apply_excel_highlighting,
+    GROUP_1A_TRAVELERS, GROUP_1B_TRAVELERS, GROUP_2A_TRAVELERS, GROUP_2B_TRAVELERS,
+    get_input_value, highlight_traveler_report, get_input_at_time, highlight_custom_traveler_report,
+    generate_master_traveler_list,    
+)
+
+# Model imports
+from model_g_manager import run_model_g_detection
+
+try:
+    from models.models_a_today import run_a_model_detection_today
+except ImportError:
+    def run_a_model_detection_today(df):
+        st.warning("Model A detection not available in this environment")
+
+try:
+    from models.mod_b_05pg1 import run_b_model_detection
+except ImportError:
+    def run_b_model_detection(df):
+        st.warning("Model B detection not available in this environment")
+
+try:
+    from models.mod_c_04gpr3 import run_c_model_detection
+except ImportError:
+    def run_c_model_detection(df, run_c01=True, run_c02=True, run_c04=True):
+        st.warning("Model C detection not available in this environment")
+
+try:
+    from models.mod_x_03g import run_x_model_detection
+except ImportError:
+    def run_x_model_detection(df):
+        st.warning("Model X detection not available in this environment")
+
+try:
+    from models.simple_mega_report2 import run_simple_single_line_analysis
+except ImportError:
+    def run_simple_single_line_analysis(df):
+        st.warning("Single Line Mega Report not available in this environment")
+
+
+# === Unified Export Helper ===
+def render_unified_export(traveler_reports, report_time):
+    if not traveler_reports:
+        return
+
+    st.markdown("---")
+    st.markdown("### 📥 Unified Excel Download")
+
+    report_datetime_str = (
+        report_time.strftime("%d-%b-%y_%H-%M") if report_time
+        else dt.datetime.now().strftime("%d-%b-%y_%H-%M")
+    )
+
+    def _coerce_arrival_datetime(df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        if "Arrival_datetime" in df.columns:
+            df["Arrival"] = pd.to_datetime(df["Arrival_datetime"], errors="coerce")
+        elif "Arrival" in df.columns:
+            df["Arrival"] = pd.to_datetime(df["Arrival"], errors="coerce", infer_datetime_format=True)
+        return df
+
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine="xlsxwriter", datetime_format="mm/dd/yyyy hh:mm") as writer:
+        workbook = writer.book
+        header_fmt = workbook.add_format({
+            "bold": True, "text_wrap": True, "valign": "top",
+            "fg_color": "#D7E4BC", "border": 1
+        })
+        date_fmt = workbook.add_format({"num_format": "mm/dd/yyyy hh:mm"})
+
+        for group_name, group_data in traveler_reports.items():
+            if not isinstance(group_data, pd.DataFrame) or group_data.empty:
+                continue
+
+            sheet_name = group_name.replace(" ", "_").replace("-", "_")[:31]
+            export_data = group_data.drop(columns=["Group"], errors="ignore").copy()
+            export_data = _coerce_arrival_datetime(export_data)
+
+            export_data.to_excel(writer, sheet_name=sheet_name, index=False)
+            ws = writer.sheets[sheet_name]
+
+            # headers
+            for c, name in enumerate(export_data.columns):
+                ws.write(0, c, name, header_fmt)
+
+            # make Arrival display as a date in Excel
+            if "Arrival" in export_data.columns:
+                a_idx = export_data.columns.get_loc("Arrival")
+                ws.set_column(a_idx, a_idx, 18, date_fmt)
+
+            # conditional coloring
+            try:
+                apply_excel_highlighting(workbook, ws, export_data, False)
+            except Exception as e:
+                st.warning(f"Highlighting skipped for '{sheet_name}': {e}")
+
+    excel_buffer.seek(0)
+    total_entries = sum(len(df) for df in traveler_reports.values() if isinstance(df, pd.DataFrame))
+    num_groups = sum(1 for v in traveler_reports.values() if isinstance(v, pd.DataFrame) and not v.empty)
+
+    st.download_button(
+        "📥 Download Excel Report",
+        data=excel_buffer.getvalue(),
+        file_name=f"traveler_report_{report_datetime_str}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        help=f"Excel file contains {num_groups} sheets with {total_entries} total entries"
+    )
+
+
+# Streamlit interface
+st.set_page_config(layout="wide")
+st.header("🧬 Data Processor + HOD/LOD + Model Detection v30b")
+
+# File uploads
+small_feed_file = st.file_uploader("Upload small feed", type="csv")
+big_feed_file = st.file_uploader("Upload big feed", type="csv")
+measurement_file = st.file_uploader("Upload measurement file", type=["xlsx", "xls"])
+
+# Optional: Upload Final Traveler Report (bypass feed upload)
+st.markdown("---")
+st.markdown("### 📂 Optional: Upload Final Traveler Report (bypass feed upload)")
+bypass_traveler_file = st.file_uploader(
+    "Upload Final Traveler Report",
+    type=['xlsx', 'csv'],
+    help="Skip feed processing and upload traveler report directly"
+)
+
+# Report Time UI
+report_mode = st.radio("Select Report Time & Date", ["Most Current", "Choose a time"])
+if report_mode == "Choose a time":
+    selected_date = st.date_input("Select Report Date", value=dt.date.today())
+    selected_time = st.time_input("Select Report Time", value=dt.time(18, 0))
+    report_time = dt.datetime.combine(selected_date, selected_time)
+else:
+    report_time = None
+
+# Toggles
+run_g_models = st.sidebar.checkbox("🟢 Run Model G Detection", value=False)
+if run_g_models:
+    st.sidebar.markdown("**G Model Controls:**")
+    run_g05_g06 = st.sidebar.checkbox("   • G.05 & G.06 (Proximity Groups)", value=False)
+    run_g08 = st.sidebar.checkbox("   • G.08 (x0Pd.w Patterns)", value=False)
+    run_g09 = st.sidebar.checkbox("   • G.09 (Flip Endings)", value=False)
+    run_g10 = st.sidebar.checkbox("   • G.10 (Pair Detection)", value=False)
+    
+    if run_g10:
+        st.sidebar.markdown("**G.10 Group Controls:**")
+        g10_group_0 = st.sidebar.checkbox("      ○ Group 0", value=True)
+        g10_group_1 = st.sidebar.checkbox("      ○ Group 1", value=True)
+        g10_group_2 = st.sidebar.checkbox("      ○ Group 2", value=True)
+        g10_group_3 = st.sidebar.checkbox("      ○ Group 3", value=False)
+        g10_group_4 = st.sidebar.checkbox("      ○ Group 4", value=False)
+    else:
+        g10_group_0 = g10_group_1 = g10_group_2 = g10_group_3 = g10_group_4 = False
+    
+    debug_g08 = st.sidebar.checkbox("Debug G.08 Detection", value=False)
+    if debug_g08:
+        st.session_state['debug_g08'] = True
+    else:
+        st.session_state['debug_g08'] = False
+else:
+    run_g05_g06 = False
+    run_g08 = False
+    run_g09 = False
+    run_g10 = False
+    g10_group_0 = g10_group_1 = g10_group_2 = g10_group_3 = g10_group_4 = False
+    debug_g08 = False
+    st.session_state['debug_g08'] = False
+
+run_g_on_custom = st.sidebar.checkbox("🎯 Run Model G on Custom Ranges", value=False)
+run_single_line = st.sidebar.checkbox("🎯 Run Single Line Mega Report", value=False)
+run_a_models = st.sidebar.checkbox("Run Model A Detection")
+run_b_models = st.sidebar.checkbox("Run Model B Detection")
+run_c_models = st.sidebar.checkbox("Run Model C Detection")
+run_c01 = st.sidebar.checkbox("C Flips", value=True)
+run_c02 = st.sidebar.checkbox("C Opposites", value=True)
+run_c04 = st.sidebar.checkbox("C Ascending", value=True)
+run_x_models = st.sidebar.checkbox("Run Model X Detection")
+
+filter_future_data = st.checkbox(
+    "Restrict analysis to Report Time or earlier only",
+    value=True
+)
+
+# Analysis parameters
+day_start_choice = st.radio("Select Day Start Time", ["18:00", "17:00"])
+day_start_hour = int(day_start_choice.split(":")[0])
+scope_type = st.radio("Scope by", ["Days", "Rows"])
+scope_value = st.number_input(
+    f"Enter number of {scope_type.lower()}",
+    min_value=1,
+    value=20
+)
+
+# Traveler Report Settings
+st.markdown("---")
+st.markdown("### 🎯 Traveler Report Settings")
+
+# Report type selection (mutually exclusive)
+report_type = st.radio(
+    "Select Report Type",
+    ["Full Range", "Custom Ranges", "HOD/LOD"],
+    key="global_report_type"
+)
+
+# Initialize all variables
+use_full_range = False
+use_custom_ranges = False
+use_hod_lod = False
+use_advanced_ranges = False
+full_range_value = 0
+high1 = high2 = low1 = low2 = 0
+use_high1 = use_high2 = use_low1 = use_low2 = False
+hod_lod_num_days = 5
+include_partial_day = False
+
+if report_type == "Full Range":
+    use_full_range = True
+    col1, col2 = st.columns(2)
+    with col1:
+        full_range_value = st.number_input(
+            "Full Range Value (±)",
+            min_value=1,
+            value=250,
+            key="global_full_range"
+        )
+    with col2:
+        st.markdown("**Range will be:** Input @ Day Start ± Full Range Value")
+
+elif report_type == "Custom Ranges":
+    use_custom_ranges = True
+    use_advanced_ranges = True
+    st.write("Configure up to 4 custom ranges:")
+    st.info("🧮 **Advanced H/L/C calculation enabled**")
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        use_high1 = st.checkbox("High 1", key="global_use_high1")
+        high1 = st.number_input("High 1 Value", value=0, key="global_high1") if use_high1 else 0
+
+    with col2:
+        use_high2 = st.checkbox("High 2", key="global_use_high2")
+        high2 = st.number_input("High 2 Value", value=0, key="global_high2") if use_high2 else 0
+
+    with col3:
+        use_low1 = st.checkbox("Low 1", key="global_use_low1")
+        low1 = st.number_input("Low 1 Value", value=0, key="global_low1") if use_low1 else 0
+
+    with col4:
+        use_low2 = st.checkbox("Low 2", key="global_use_low2")
+        low2 = st.number_input("Low 2 Value", value=0, key="global_low2") if use_low2 else 0
+
+elif report_type == "HOD/LOD":
+    use_hod_lod = True
+    st.write("**HOD/LOD Mode:** Analyze High of Day and Low of Day")
+    st.info("Uses combined small + big feed analysis with 15-minute strict cutoff")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        hod_lod_num_days = st.number_input(
+            "Number of days to analyze",
+            min_value=1,
+            max_value=30,
+            value=5,
+            key="hod_lod_days"
+        )
+    with col2:
+        include_partial_day = st.checkbox(
+            "Include most current partial day",
+            value=False,
+            key="include_partial",
+            help="If checked, includes current day even if trading day is not complete (before 16:45)"
+        )
+
+
+# ===========================
+# === BYPASS TRAVELER FILE ===
+# ===========================
+if bypass_traveler_file:
+    try:
+        st.markdown("### Processing Bypass Traveler Report")
+
+        # Read the bypass file
+        if bypass_traveler_file.name.endswith('.csv'):
+            final_df = pd.read_csv(bypass_traveler_file)
+        else:
+            xls = pd.ExcelFile(bypass_traveler_file)
+            if len(xls.sheet_names) > 1:
+                sheet_choice = st.selectbox("Select traveler report tab", xls.sheet_names, key="bypass_sheet")
+                final_df = pd.read_excel(bypass_traveler_file, sheet_name=sheet_choice)
+            else:
+                final_df = pd.read_excel(bypass_traveler_file)
+
+        st.success(f"Bypass file loaded successfully: {len(final_df)} rows")
+
+        # Extract report time
+        if 'Arrival' in final_df.columns and not final_df.empty:
+            try:
+                arrival_times = pd.to_datetime(final_df['Arrival'], format='%m/%d/%Y %H:%M', errors='coerce')
+                valid_times = arrival_times.dropna()
+                report_time = valid_times.max() if len(valid_times) > 0 else dt.datetime.now()
+            except Exception:
+                report_time = dt.datetime.now()
+        else:
+            report_time = dt.datetime.now()
+
+        st.info(f"Report time set to: {report_time.strftime('%m/%d/%Y %H:%M')}")
+
+        final_df_filtered = final_df.copy()
+
+        # Sort by Output desc, Arrival asc
+        if 'Output' in final_df_filtered.columns and 'Arrival' in final_df_filtered.columns:
+            final_df_filtered = final_df_filtered.sort_values(['Output', 'Arrival'], ascending=[False, True])
+
+        st.markdown(f"**Total Entries:** {len(final_df_filtered)}")
+        st.dataframe(final_df_filtered, use_container_width=True)
+
+        # Model G on bypass
+        if run_g_models:
+            st.markdown("---")
+            st.markdown("### Model G Detection on Bypass Report")
+            try:
+                if 'M #' in final_df_filtered.columns:
+                    try:
+                        g_results = run_model_g_detection(
+                            final_df_filtered,
+                            proximity_threshold=0.10,
+                            report_time=report_time,
+                            key_suffix="_bypass",
+                            run_g05_g06=run_g05_g06,
+                            run_g08=run_g08,
+                            run_g09=run_g09,
+                            run_g10=run_g10,
+                            g10_group_0=g10_group_0,
+                            g10_group_1=g10_group_1,
+                            g10_group_2=g10_group_2,
+                            g10_group_3=g10_group_3,
+                            g10_group_4=g10_group_4,
+                        )
+                        if isinstance(g_results, dict) and 'success' in g_results:
+                            if g_results['success']:
+                                summary = g_results['summary']
+                                c1, c2, c3 = st.columns(3)
+                                with c1: st.metric("o1 (Today)", summary['total_o1'])
+                                with c2: st.metric("o2 (Other Day)", summary['total_o2'])
+                                with c3: st.metric("Total Sequences", summary['total_sequences'])
+                                if not g_results['results_df'].empty:
+                                    st.markdown("#### Bypass Report Model G Results")
+                                    st.dataframe(g_results['results_df'], use_container_width=True)
+                                else:
+                                    st.info("No Model G sequences detected in bypass report")
+                            else:
+                                st.error(f"Model G detection error: {g_results['error']}")
+                        else:
+                            st.error("Model G detection returned unexpected format")
+                    except Exception as e:
+                        st.error(f"Model G detection error: {str(e)}")
+                else:
+                    st.warning("No 'M #' column found - cannot run Model G detection")
+            except ImportError as e:
+                st.warning(f"Model G detection not available: {e}")
+
+        # Downloads
+        timestamp = report_time.strftime("%y-%m-%d_%H-%M")
+
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+            final_df_filtered.to_excel(writer, sheet_name='Final Traveler Report', index=False)
+            workbook = writer.book
+            worksheet = writer.sheets['Final Traveler Report']
+            header_format = workbook.add_format({
+                'bold': True, 'text_wrap': True, 'valign': 'top',
+                'fg_color': '#D7E4BC', 'border': 1
+            })
+            for col_num, value in enumerate(final_df_filtered.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+
+        excel_filename = f"final_traveler_report_{timestamp}.xlsx"
+        st.download_button(
+            label="Download Final Traveler Report (Excel)",
+            data=excel_buffer.getvalue(),
+            file_name=excel_filename,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        csv_filename = f"final_traveler_report_{timestamp}.csv"
+        st.download_button(
+            label="Download Final Traveler Report (CSV)",
+            data=final_df_filtered.to_csv(index=False),
+            file_name=csv_filename,
+            mime="text/csv"
+        )
+
+        if run_single_line:
+            st.markdown("---")
+            run_simple_single_line_analysis(final_df_filtered)
+
+        if run_a_models:
+            st.markdown("---")
+            run_a_model_detection_today(final_df_filtered)
+
+        if run_b_models:
+            st.markdown("---")
+            run_b_model_detection(final_df_filtered)
+
+        if run_c_models:
+            st.markdown("---")
+            run_c_model_detection(final_df_filtered, run_c01=run_c01, run_c02=run_c02, run_c04=run_c04)
+
+        if run_x_models:
+            st.markdown("---")
+            run_x_model_detection(final_df_filtered)
+
+    except Exception as e:
+        st.error(f"Error processing bypass file: {str(e)}")
+        st.stop()
+
+# ===========================
+# === MAIN FEED PROCESSOR ===
+# ===========================
+elif small_feed_file and big_feed_file and measurement_file:
+    try:
+        st.markdown("### Processing Feed Files")
+
+        # Read uploaded files
+        small_df = pd.read_csv(small_feed_file)
+        big_df = pd.read_csv(big_feed_file)
+
+        # Measurement file
+        xls = pd.ExcelFile(measurement_file)
+        available_tabs = xls.sheet_names
+        if len(xls.sheet_names) > 1:
+            sheet_choice = st.selectbox("Select primary measurement tab", xls.sheet_names)
+            measurements_df = pd.read_excel(measurement_file, sheet_name=sheet_choice)
+        else:
+            measurements_df = pd.read_excel(measurement_file)
+            sheet_choice = xls.sheet_names[0]
+
+        st.success(f"Files loaded successfully:")
+        st.markdown(f"- Small feed: {len(small_df)} rows")
+        st.markdown(f"- Big feed: {len(big_df)} rows")
+        st.markdown(f"- Measurements: {len(measurements_df)} rows from '{sheet_choice}' tab")
+
+        # Processing Options
+        st.markdown("---")
+        st.markdown("### Processing Options")
+
+        perf_c1, perf_c2, perf_c3 = st.columns(3)
+        with perf_c1:
+            fast_mode = st.checkbox("Fast Mode", value=False)
+        with perf_c2:
+            parallel_processing = st.checkbox("Parallel Processing", value=True)
+        with perf_c3:
+            minimal_display = st.checkbox("Minimal Display", value=False)
+
+        # Store Model G custom setting
+        if st.session_state.get('run_model_g_on_custom') != run_g_on_custom:
+            st.session_state['run_model_g_on_custom'] = run_g_on_custom
+
+        # Ensure report_time
+        if report_time is None:
+            big_df['time'] = big_df['time'].apply(clean_timestamp)
+            report_time = big_df['time'].max()
+            st.info(f"Report time auto-set to most current: {report_time.strftime('%m/%d/%Y %H:%M')}")
+
+        # Show trading day completion status for HOD/LOD mode
+        if use_hod_lod:
+            day_start, day_end = get_trading_day_bounds(report_time, day_start_hour)
+            is_complete = is_complete_trading_day(report_time, day_start_hour)
+            
+            st.markdown("---")
+            st.markdown("### Trading Day Status")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Day Start", day_start.strftime("%m/%d %H:%M"))
+            with col2:
+                st.metric("Day End", day_end.strftime("%m/%d %H:%M"))
+            with col3:
+                status = "Complete" if is_complete else "Partial"
+                st.metric("Current Day Status", status)
+            
+            if not is_complete and not include_partial_day:
+                st.warning("Current day is incomplete and will be excluded (check 'Include most current partial day' to include it)")
+            elif not is_complete and include_partial_day:
+                st.info("Current partial day will be included in analysis")
+
+        # Input @ day start
+        input_value_at_start = get_input_at_day_start(small_df, report_time, day_start_hour)
+        if input_value_at_start is not None and not use_hod_lod:
+            st.info(f"Input @ {day_start_hour:02d}:00: {input_value_at_start}")
+
+        # Show Full Range center
+        if use_full_range and input_value_at_start is not None:
+            st.success(f"FULL RANGE CENTER: Using {input_value_at_start} ± {full_range_value} = [{input_value_at_start - full_range_value:.1f} to {input_value_at_start + full_range_value:.1f}]")
+
+        import time
+        start_time = time.time()
+
+        # Single source of truth for export
+        traveler_reports = {}
+
+        # ---------- 1) FULL RANGE ----------
+        if use_full_range:
+            st.markdown("---")
+            st.markdown("### Full Range Processing Mode")
+            result_df = apply_full_range_advanced(
+                df=measurements_df,
+                small_df=small_df,
+                report_time=report_time,
+                window_radius=full_range_value,
+                day_start_hour=day_start_hour,
+                input_value_at_start=input_value_at_start,
+                big_df=big_df,
+                run_model_g=False,
+            )
+
+            traveler_reports = {}
+            if result_df is not None and not result_df.empty:
+                traveler_reports["Grp 1a"] = result_df[result_df['M #'].isin(GROUP_1A_TRAVELERS)].copy()
+                traveler_reports["Grp 1b"] = result_df[result_df['M #'].isin(GROUP_1B_TRAVELERS)].copy()
+                traveler_reports["Grp 2a"] = result_df[result_df['M #'].isin(GROUP_2A_TRAVELERS)].copy()
+                traveler_reports["Grp 2b"] = result_df[result_df['M #'].isin(GROUP_2B_TRAVELERS)].copy()
+
+                for gname, gdf in traveler_reports.items():
+                    if not gdf.empty and {'Output','Arrival'}.issubset(gdf.columns):
+                        traveler_reports[gname] = gdf.sort_values(['Output','Arrival'], ascending=[False, True])
+
+                st.success("Full Range complete.")
+            else:
+                st.warning("Full Range produced no rows.")
+
+        # ---------- 2) CUSTOM RANGES ----------
+        elif use_custom_ranges and use_advanced_ranges:
+            st.markdown("---")
+            st.markdown("### Advanced Custom Range Processing")
+
+            master_tab_name = available_tabs[0]
+            master_measurements_df = pd.read_excel(measurement_file, sheet_name=master_tab_name)
+
+            final_df_filtered = apply_custom_ranges_advanced(
+                master_measurements_df, small_df.copy(), report_time,
+                high1, high2, low1, low2,
+                use_high1, use_high2, use_low1, use_low2,
+                big_df=big_df,
+                run_model_g=run_g_on_custom,
+                day_start_hour=day_start_hour
+            )
+
+            if final_df_filtered is None or final_df_filtered.empty:
+                st.warning("No entries found using advanced H/L/C calculation")
+                traveler_reports = {}
+            else:
+                # Build 4 groups
+                traveler_reports = {}
+                traveler_reports["Grp 1a"] = final_df_filtered[final_df_filtered['M #'].isin(GROUP_1A_TRAVELERS)].copy()
+                traveler_reports["Grp 1b"] = final_df_filtered[final_df_filtered['M #'].isin(GROUP_1B_TRAVELERS)].copy()
+                traveler_reports["Grp 2a"] = final_df_filtered[final_df_filtered['M #'].isin(GROUP_2A_TRAVELERS)].copy()
+                traveler_reports["Grp 2b"] = final_df_filtered[final_df_filtered['M #'].isin(GROUP_2B_TRAVELERS)].copy()
+
+                # Sort each group
+                for gname, gdf in traveler_reports.items():
+                    if not gdf.empty and 'Output' in gdf.columns and 'Arrival' in gdf.columns:
+                        traveler_reports[gname] = gdf.sort_values(['Output', 'Arrival'], ascending=[False, True])
+                    elif not gdf.empty and 'Output' in gdf.columns:
+                        traveler_reports[gname] = gdf.sort_values(['Output'], ascending=[False])
+
+                # Display compact summaries
+                if not minimal_display:
+                    for gname, gdf in traveler_reports.items():
+                        if not gdf.empty:
+                            st.markdown(f"#### {gname}")
+                            st.info(f"{len(gdf)} entries")
+                            if not fast_mode:
+                                st.dataframe(gdf, use_container_width=True)
+
+                st.success("Advanced custom range processing complete.")
+
+        # ---------- 3) HOD/LOD MODE ----------
+        elif use_hod_lod:
+            st.markdown("---")
+            st.markdown("### HOD/LOD Processing Mode")
+            
+            # Process HOD/LOD mode
+            hod_lod_results = process_hod_lod_mode(
+                measurement_df=measurements_df,
+                small_df=small_df,
+                big_df=big_df,
+                report_time=report_time,
+                num_days=hod_lod_num_days,
+                include_partial_day=include_partial_day,
+                scope_days=scope_value,  # Use existing scope setting
+                day_start_hour=day_start_hour
+            )
+            
+            if hod_lod_results:
+                traveler_reports = hod_lod_results
+                st.success(f"HOD/LOD processing complete: {len(hod_lod_results)} days analyzed")
+                
+                # Display summary for each day
+                if not minimal_display:
+                    for day_key, day_df in hod_lod_results.items():
+                        st.markdown(f"#### {day_key}")
+                        st.info(f"{len(day_df)} entries")
+                        if not fast_mode:
+                            st.dataframe(day_df.head(20), use_container_width=True)
+            else:
+                st.warning("No HOD/LOD data found")
+                traveler_reports = {}
+
+        # ---------- Unified Export ----------
+        processing_time = time.time() - start_time
+        if traveler_reports:
+            render_unified_export(traveler_reports, report_time)
+
+            st.markdown("---")
+            st.markdown("### Performance Summary")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Processing Time", f"{processing_time:.1f}s")
+            with col2:
+                st.metric("Reports Generated", len(traveler_reports))
+            with col3:
+                total_entries = sum(
+                    len(df) for df in traveler_reports.values()
+                    if isinstance(df, pd.DataFrame)
+                )
+                st.metric("Total Entries", total_entries)
+
+            if processing_time < 60:
+                st.success(f"Excellent performance: {processing_time:.1f}s")
+            elif processing_time < 180:
+                st.info(f"Good performance: {processing_time:.1f}s")
+            else:
+                st.warning(f"Consider enabling Fast Mode (took {processing_time:.1f}s)")
+        else:
+            st.info("No traveler reports to export.")
+
+        # ===============================
+        # === Model Detections Section ===
+        # ===============================
+        # Build generic DataFrame for model detections
+        if 'final_df_filtered' not in locals():
+            if traveler_reports:
+                try:
+                    final_df_filtered = pd.concat(
+                        [df for df in traveler_reports.values() if isinstance(df, pd.DataFrame)],
+                        ignore_index=True
+                    )
+                except Exception:
+                    final_df_filtered = pd.DataFrame()
+            else:
+                final_df_filtered = pd.DataFrame()
+
+        # Filter future entries if requested
+        if filter_future_data and report_time and not final_df_filtered.empty:
+            if 'Arrival_datetime' in final_df_filtered.columns:
+                final_df_filtered = final_df_filtered[final_df_filtered['Arrival_datetime'] <= report_time]
+            elif 'Arrival' in final_df_filtered.columns:
+                tmp_dt = pd.to_datetime(final_df_filtered['Arrival'], errors='coerce', infer_datetime_format=True)
+                final_df_filtered = final_df_filtered[tmp_dt <= report_time]
+
+        if run_g_models:
+            st.markdown("---")
+            st.markdown("### Model G Detection Results")
+            st.info(f"Running G models with settings: G.05/06={run_g05_g06}, G.08={run_g08}, G.09={run_g09}, G.10={run_g10}")
+            try:
+                g_results = run_model_g_detection(
+                    final_df_filtered,
+                    proximity_threshold=0.10,
+                    report_time=report_time,
+                    key_suffix="_main",
+                    run_g05_g06=run_g05_g06,
+                    run_g08=run_g08,
+                    run_g09=run_g09,
+                    run_g10=run_g10,
+                    g10_group_0=g10_group_0,
+                    g10_group_1=g10_group_1,
+                    g10_group_2=g10_group_2,
+                    g10_group_3=g10_group_3,
+                    g10_group_4=g10_group_4
+                )
+                if isinstance(g_results, dict) and 'success' in g_results:
+                    if g_results['success']:
+                        summary = g_results['summary']
+                        c1, c2, c3 = st.columns(3)
+                        with c1: st.metric("o1 (Today)", summary['total_o1'])
+                        with c2: st.metric("o2 (Other Day)", summary['total_o2'])
+                        with c3: st.metric("Total Sequences", summary['total_sequences'])
+                        if not g_results['results_df'].empty:
+                            st.markdown("#### Detection Results")
+                            st.dataframe(g_results['results_df'], use_container_width=True)
+                        else:
+                            st.info("No Model G sequences detected matching criteria")
+                    else:
+                        st.error(f"Model G detection error: {g_results['error']}")
+                else:
+                    st.error("Model G detection returned unexpected format")
+            except Exception as e:
+                st.error(f"Model G detection error: {str(e)}")
+                st.info("Make sure model_g_manager.py exists")
+
+        if run_single_line:
+            st.markdown("---")
+            run_simple_single_line_analysis(final_df_filtered)
+
+        if run_a_models:
+            st.markdown("---")
+            run_a_model_detection_today(final_df_filtered)
+
+        if run_b_models:
+            st.markdown("---")
+            run_b_model_detection(final_df_filtered)
+
+        if run_c_models:
+            st.markdown("---")
+            run_c_model_detection(final_df_filtered, run_c01=run_c01, run_c02=run_c02, run_c04=run_c04)
+
+        if run_x_models:
+            st.markdown("---")
+            run_x_model_detection(final_df_filtered)
+
+    except Exception as e:
+        st.error(f"Error processing files: {e}")
+        import traceback
+        st.text(traceback.format_exc())
+
+else:
+    st.info("Please upload small feed, big feed, and measurement files to begin processing.")
