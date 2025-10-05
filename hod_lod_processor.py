@@ -43,7 +43,10 @@ def find_hod_lod_for_day(small_df, big_df, day_start, day_end):
     def filter_day_data(df, day_start, day_end):
         """Filter dataframe to trading day window"""
         df = df.copy()
+        # Convert to datetime and strip timezone info (make naive)
         df['time'] = pd.to_datetime(df['time'], errors='coerce')
+        if df['time'].dt.tz is not None:
+            df['time'] = df['time'].dt.tz_localize(None)
         return df[(df['time'] >= day_start) & (df['time'] <= day_end)]
     
     # Filter both feeds to the trading day
@@ -194,6 +197,10 @@ def apply_hod_lod_cutoff(df, hod_lod_time, scope_days=20):
     if df is None or df.empty:
         return df
     
+    # Ensure hod_lod_time is timezone-naive
+    if hasattr(hod_lod_time, 'tz') and hod_lod_time.tz is not None:
+        hod_lod_time = hod_lod_time.replace(tzinfo=None)
+    
     # Calculate cutoff time (15 minutes before HOD/LOD)
     cutoff_time = hod_lod_time - timedelta(minutes=15)
     
@@ -204,10 +211,16 @@ def apply_hod_lod_cutoff(df, hod_lod_time, scope_days=20):
     if 'Arrival_datetime' in df.columns:
         time_col = 'Arrival_datetime'
     elif 'Arrival' in df.columns:
+        df = df.copy()
         df['Arrival_datetime'] = pd.to_datetime(df['Arrival'], errors='coerce')
         time_col = 'Arrival_datetime'
     else:
         return df  # No time column found
+    
+    # Strip timezone from time column if present
+    df = df.copy()
+    if df[time_col].dt.tz is not None:
+        df[time_col] = df[time_col].dt.tz_localize(None)
     
     # Apply filter: arrivals between scope_start and cutoff_time (inclusive)
     filtered = df[(df[time_col] >= scope_start) & (df[time_col] <= cutoff_time)].copy()
