@@ -492,11 +492,19 @@ elif small_15m_file and big_15m_file and measurement_file:
         
         upload_info_cols = st.columns(3)
         with upload_info_cols[0]:
-            st.metric("Combined Small Feed", f"{len(small_df)} rows")
+            if separate_timeframes:
+                total_small = sum(len(df) for df in small_feeds_dict.values())
+                st.metric("Total Small Feed Rows", f"{total_small} rows")
+            else:
+                st.metric("Combined Small Feed", f"{len(small_df) if small_df is not None else 0} rows")
             if small_feed_info:
                 st.caption("Sources: " + ", ".join(small_feed_info))
         with upload_info_cols[1]:
-            st.metric("Combined Big Feed", f"{len(big_df)} rows")
+            if separate_timeframes:
+                total_big = sum(len(df) for df in big_feeds_dict.values())
+                st.metric("Total Big Feed Rows", f"{total_big} rows")
+            else:
+                st.metric("Combined Big Feed", f"{len(big_df) if big_df is not None else 0} rows")
             if big_feed_info:
                 st.caption("Sources: " + ", ".join(big_feed_info))
         with upload_info_cols[2]:
@@ -548,16 +556,20 @@ elif small_15m_file and big_15m_file and measurement_file:
                     final_df_filtered = pd.DataFrame()
             else:
                 # Combined processing (original logic)
-                final_df_filtered = apply_full_range_advanced(
-                    measurements_df,
-                    small_df,
-                    report_time,
-                    window_radius,
-                    day_start_hour=day_start_hour,
-                    input_value_at_start=input_val,
-                    big_df=big_df,
-                    run_model_g=run_g_on_full
-                )
+                if small_df is None and big_df is None:
+                    st.error("No feed data available for combined processing. Please disable 'Process Timeframes Separately' or ensure files are uploaded.")
+                    final_df_filtered = pd.DataFrame()
+                else:
+                    final_df_filtered = apply_full_range_advanced(
+                        measurements_df,
+                        small_df if small_df is not None else pd.DataFrame(),
+                        report_time,
+                        window_radius,
+                        day_start_hour=day_start_hour,
+                        input_value_at_start=input_val,
+                        big_df=big_df if big_df is not None else pd.DataFrame(),
+                        run_model_g=run_g_on_full
+                    )
             
             if final_df_filtered is None or final_df_filtered.empty:
                 st.warning("No entries found in full range processing")
@@ -630,16 +642,20 @@ elif small_15m_file and big_15m_file and measurement_file:
                     final_df_filtered = pd.DataFrame()
             else:
                 # Combined processing (original logic)
-                final_df_filtered = apply_custom_ranges_advanced(
-                    measurements_df,
-                    small_df,
-                    report_time,
-                    high1, high2, low1, low2,
-                    use_high1, use_high2, use_low1, use_low2,
-                    big_df=big_df,
-                    run_model_g=run_g_on_custom,
-                    day_start_hour=day_start_hour
-                )
+                if small_df is None and big_df is None:
+                    st.error("No feed data available for combined processing. Please disable 'Process Timeframes Separately' or ensure files are uploaded.")
+                    final_df_filtered = pd.DataFrame()
+                else:
+                    final_df_filtered = apply_custom_ranges_advanced(
+                        measurements_df,
+                        small_df if small_df is not None else pd.DataFrame(),
+                        report_time,
+                        high1, high2, low1, low2,
+                        use_high1, use_high2, use_low1, use_low2,
+                        big_df=big_df if big_df is not None else pd.DataFrame(),
+                        run_model_g=run_g_on_custom,
+                        day_start_hour=day_start_hour
+                    )
 
             if final_df_filtered is None or final_df_filtered.empty:
                 st.warning("No entries found using advanced H/L/C calculation")
@@ -719,11 +735,20 @@ elif small_15m_file and big_15m_file and measurement_file:
             st.markdown("---")
             st.markdown("### HOD/LOD Processing Mode")
             
+            if separate_timeframes:
+                st.warning("HOD/LOD mode is not optimized for separate timeframe processing. Using combined feeds.")
+                # Force use of 15m feeds for HOD/LOD
+                hod_small = small_feeds_dict.get('15m', pd.DataFrame()) if small_feeds_dict else pd.DataFrame()
+                hod_big = big_feeds_dict.get('15m', pd.DataFrame()) if big_feeds_dict else pd.DataFrame()
+            else:
+                hod_small = small_df if small_df is not None else pd.DataFrame()
+                hod_big = big_df if big_df is not None else pd.DataFrame()
+            
             # Process HOD/LOD mode
             hod_lod_results = process_hod_lod_mode(
                 measurement_df=measurements_df,
-                small_df=small_df,
-                big_df=big_df,
+                small_df=hod_small,
+                big_df=hod_big,
                 report_time=report_time,
                 num_days=hod_lod_num_days,
                 include_partial_day=include_partial_day,
