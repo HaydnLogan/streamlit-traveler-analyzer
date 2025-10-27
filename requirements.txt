@@ -1,10 +1,6 @@
 streamlit
 pandas
-botos3
-requests
-python-dateutil
 numpy
 openpyxl
 XlsxWriter
 plotly
-
