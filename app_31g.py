@@ -141,7 +141,7 @@ def render_unified_export(traveler_reports, report_time, asset_id=""):
 
 # Streamlit interface
 st.set_page_config(layout="wide")
-st.header("🧬 Data Processor + HOD/LOD + Model Detection v31f")
+st.header("🧬 Data Processor + HOD/LOD + Model Detection v31g")
 
 # Asset ID Selector (above file uploads)
 st.markdown("### Asset Selection")
