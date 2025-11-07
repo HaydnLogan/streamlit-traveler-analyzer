@@ -1,3 +1,5 @@
+# 11.6.25 Model G.11 added.
+
 # v31f - Process Timeframes Separately" Option add.  with one high and one low range, current process take 200+ seconds.  
 # this mod should bring it down to under 90 seconds.
 
@@ -214,6 +216,25 @@ if run_g_models:
     else:
         g10_group_0 = g10_group_1 = g10_group_2 = g10_group_3 = g10_group_4 = False
     
+    run_g11 = st.sidebar.checkbox("   • G.11 (Pair Detection sTF)", value=False)
+    
+    if run_g11:
+        st.sidebar.markdown("**G.11 Controls:**")
+        g11_threshold = st.sidebar.slider("      Threshold (hours)", min_value=0.1, max_value=10.0, value=3.0, step=0.1)
+        st.sidebar.markdown("**G.11 Group Controls:**")
+        g11_group_0 = st.sidebar.checkbox("      ○ Grp 0 TA", value=True)
+        g11_group_1 = st.sidebar.checkbox("      ○ Grp 1 sAA", value=True)
+        g11_group_2 = st.sidebar.checkbox("      ○ Grp 2 AA", value=True)
+        g11_group_3 = st.sidebar.checkbox("      ○ Grp 3 oA", value=True)
+        g11_group_4 = st.sidebar.checkbox("      ○ Grp 4 Ao", value=True)
+        st.sidebar.markdown("**G.11 Display Filters:**")
+        g11_display_recipes = st.sidebar.checkbox("      Display Recips", value=True)
+        g11_display_others = st.sidebar.checkbox("      Display others", value=True)
+    else:
+        g11_threshold = 3.0
+        g11_group_0 = g11_group_1 = g11_group_2 = g11_group_3 = g11_group_4 = True
+        g11_display_recipes = g11_display_others = True
+    
     debug_g08 = st.sidebar.checkbox("Debug G.08 Detection", value=False)
     if debug_g08:
         st.session_state['debug_g08'] = True
@@ -224,7 +245,11 @@ else:
     run_g08 = False
     run_g09 = False
     run_g10 = False
+    run_g11 = False
     g10_group_0 = g10_group_1 = g10_group_2 = g10_group_3 = g10_group_4 = False
+    g11_threshold = 3.0
+    g11_group_0 = g11_group_1 = g11_group_2 = g11_group_3 = g11_group_4 = True
+    g11_display_recipes = g11_display_others = True
     debug_g08 = False
 
 run_a_models = st.sidebar.checkbox("🔵 Run Model A Detection", value=False)
@@ -359,11 +384,20 @@ if bypass_traveler_file is not None:
                     run_g08=run_g08,
                     run_g09=run_g09,
                     run_g10=run_g10,
+                    run_g11=run_g11,
                     g10_group_0=g10_group_0,
                     g10_group_1=g10_group_1,
                     g10_group_2=g10_group_2,
                     g10_group_3=g10_group_3,
-                    g10_group_4=g10_group_4
+                    g10_group_4=g10_group_4,
+                    g11_threshold=g11_threshold,
+                    g11_group_0=g11_group_0,
+                    g11_group_1=g11_group_1,
+                    g11_group_2=g11_group_2,
+                    g11_group_3=g11_group_3,
+                    g11_group_4=g11_group_4,
+                    g11_display_recipes=g11_display_recipes,
+                    g11_display_others=g11_display_others
                 )
                 if isinstance(g_results, dict) and 'success' in g_results and g_results['success']:
                     summary = g_results['summary']
@@ -826,7 +860,7 @@ elif small_15m_file and big_15m_file and measurement_file:
         if run_g_models:
             st.markdown("---")
             st.markdown("### Model G Detection Results")
-            st.info(f"Running G models with settings: G.05/06={run_g05_g06}, G.08={run_g08}, G.09={run_g09}, G.10={run_g10}")
+            st.info(f"Running G models with settings: G.05/06={run_g05_g06}, G.08={run_g08}, G.09={run_g09}, G.10={run_g10}, G.11={run_g11}")
             try:
                 g_results = run_model_g_detection(
                     final_df_filtered,
@@ -837,11 +871,20 @@ elif small_15m_file and big_15m_file and measurement_file:
                     run_g08=run_g08,
                     run_g09=run_g09,
                     run_g10=run_g10,
+                    run_g11=run_g11,
                     g10_group_0=g10_group_0,
                     g10_group_1=g10_group_1,
                     g10_group_2=g10_group_2,
                     g10_group_3=g10_group_3,
-                    g10_group_4=g10_group_4
+                    g10_group_4=g10_group_4,
+                    g11_threshold=g11_threshold,
+                    g11_group_0=g11_group_0,
+                    g11_group_1=g11_group_1,
+                    g11_group_2=g11_group_2,
+                    g11_group_3=g11_group_3,
+                    g11_group_4=g11_group_4,
+                    g11_display_recipes=g11_display_recipes,
+                    g11_display_others=g11_display_others
                 )
                 if isinstance(g_results, dict) and 'success' in g_results:
                     if g_results['success']:
