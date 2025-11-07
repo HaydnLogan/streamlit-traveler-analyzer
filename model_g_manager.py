@@ -10,7 +10,19 @@ from model_g_05_06 import run_g05_g06_detection
 from model_g_08 import run_g08_detection
 from model_g_09 import run_g09_detection
 from model_g_10 import run_g10_detection
-from model_g_11 import run_g11_detection
+
+# Try to import G.11, but don't fail if it's not available
+try:
+    from model_g_11 import run_g11_detection
+    G11_AVAILABLE = True
+except ImportError:
+    G11_AVAILABLE = False
+    def run_g11_detection(*args, **kwargs):
+        return {
+            'today_sequences': [],
+            'other_day_sequences': [],
+            'rejected_groups': []
+        }
 
 def _format_feed_column(sequence_data):
     """
@@ -20,20 +32,25 @@ def _format_feed_column(sequence_data):
         sequence_data: Dictionary with 'sequence' key containing list of items with 'Feed' field
                       OR list with 'feeds' key OR direct list of feed values
     """
+    feeds = []
+    
     # Extract feeds from various possible formats
-    if isinstance(sequence_data, dict):
-        if 'sequence' in sequence_data:
-            # Format from model detection results with sequence
-            feeds = [item.get('Feed', 'Unknown') for item in sequence_data['sequence']]
-        elif 'feeds' in sequence_data:
-            # Format with feeds already extracted
-            feeds = sequence_data['feeds']
+    try:
+        if isinstance(sequence_data, dict):
+            if 'sequence' in sequence_data:
+                # Format from model detection results with sequence
+                feeds = [item.get('Feed', 'Unknown') for item in sequence_data['sequence']]
+            elif 'feeds' in sequence_data:
+                # Format with feeds already extracted
+                feeds = sequence_data['feeds']
+            else:
+                return 'Unknown'
+        elif isinstance(sequence_data, list):
+            # Direct list of feeds
+            feeds = sequence_data
         else:
             return 'Unknown'
-    elif isinstance(sequence_data, list):
-        # Direct list of feeds
-        feeds = sequence_data
-    else:
+    except (AttributeError, TypeError, KeyError):
         return 'Unknown'
     
     if not feeds:
@@ -45,9 +62,9 @@ def _format_feed_column(sequence_data):
         return unique_feeds[0]
     
     # Otherwise return all feeds in order
-    return ', '.join(feeds)
+    return ', '.join(str(f) for f in feeds)
 
-def run_model_g_detection(df, proximity_threshold=3.00, report_time=None, key_suffix="", 
+def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_suffix="", 
                          run_g05_g06=True, run_g08=True, run_g09=True, run_g10=False, run_g11=False,
                          g10_group_0=True, g10_group_1=True, g10_group_2=True, g10_group_3=False, g10_group_4=False,
                          g11_threshold=3.0, g11_group_0=True, g11_group_1=True, g11_group_2=True, g11_group_3=True, g11_group_4=True,
@@ -120,8 +137,15 @@ def run_model_g_detection(df, proximity_threshold=3.00, report_time=None, key_su
                     for seq in g05_g06_results.get('today_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
-                        # Extract feeds from sequence
-                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                        # Extract feeds from sequence - handle missing data gracefully
+                        try:
+                            if 'sequence' in seq:
+                                feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                            else:
+                                feeds = ['Unknown']
+                        except (AttributeError, TypeError):
+                            feeds = ['Unknown']
+                        
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.05/G.06',
@@ -136,8 +160,15 @@ def run_model_g_detection(df, proximity_threshold=3.00, report_time=None, key_su
                     for seq in g05_g06_results.get('other_day_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
-                        # Extract feeds from sequence
-                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                        # Extract feeds from sequence - handle missing data gracefully
+                        try:
+                            if 'sequence' in seq:
+                                feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                            else:
+                                feeds = ['Unknown']
+                        except (AttributeError, TypeError):
+                            feeds = ['Unknown']
+                        
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.05/G.06',
@@ -196,8 +227,15 @@ def run_model_g_detection(df, proximity_threshold=3.00, report_time=None, key_su
                     for seq in g08_results.get('today_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
-                        # Extract feeds from sequence
-                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                        # Extract feeds from sequence - handle missing data gracefully
+                        try:
+                            if 'sequence' in seq:
+                                feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                            else:
+                                feeds = ['Unknown']
+                        except (AttributeError, TypeError):
+                            feeds = ['Unknown']
+                        
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.08',
@@ -214,8 +252,15 @@ def run_model_g_detection(df, proximity_threshold=3.00, report_time=None, key_su
                     for seq in g08_results.get('other_day_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
-                        # Extract feeds from sequence
-                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                        # Extract feeds from sequence - handle missing data gracefully
+                        try:
+                            if 'sequence' in seq:
+                                feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                            else:
+                                feeds = ['Unknown']
+                        except (AttributeError, TypeError):
+                            feeds = ['Unknown']
+                        
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.08',
@@ -300,8 +345,15 @@ def run_model_g_detection(df, proximity_threshold=3.00, report_time=None, key_su
                     for seq in g09_results.get('today_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
-                        # Extract feeds from sequence
-                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                        # Extract feeds from sequence - handle missing data gracefully
+                        try:
+                            if 'sequence' in seq:
+                                feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                            else:
+                                feeds = ['Unknown']
+                        except (AttributeError, TypeError):
+                            feeds = ['Unknown']
+                        
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.09',
@@ -319,8 +371,15 @@ def run_model_g_detection(df, proximity_threshold=3.00, report_time=None, key_su
                     for seq in g09_results.get('other_day_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
-                        # Extract feeds from sequence
-                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                        # Extract feeds from sequence - handle missing data gracefully
+                        try:
+                            if 'sequence' in seq:
+                                feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
+                            else:
+                                feeds = ['Unknown']
+                        except (AttributeError, TypeError):
+                            feeds = ['Unknown']
+                        
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.09',
@@ -446,108 +505,114 @@ def run_model_g_detection(df, proximity_threshold=3.00, report_time=None, key_su
 
         # Run G.11 Detection  
         if run_g11:
-            with st.expander("G.11 Detection (Pair Detection sTF)", expanded=True):
-                st.write("**Pair Detection with Same Origin Requirement (GR, x0, x1, Fogz & Ps, Zero, Premiums, DD Fogz & D patterns)**")
-                st.write(f"**Proximity Threshold:** {g11_threshold} hours")
-                try:
-                    # Create group filter based on enabled groups
-                    enabled_groups = []
-                    if g11_group_0: enabled_groups.append(0)
-                    if g11_group_1: enabled_groups.append(1)
-                    if g11_group_2: enabled_groups.append(2)
-                    if g11_group_3: enabled_groups.append(3)
-                    if g11_group_4: enabled_groups.append(4)
-                    
-                    st.write(f"**Enabled Groups:** {['Grp 0 TA', 'Grp 1 sAA', 'Grp 2 AA', 'Grp 3 oA', 'Grp 4 Ao'][i] for i in enabled_groups}")
-                    st.write(f"**Display Recipes:** {g11_display_recipes}, **Display Others:** {g11_display_others}")
-                    
-                    g11_results = run_g11_detection(
-                        df, 
-                        proximity_threshold=g11_threshold, 
-                        enabled_groups=enabled_groups,
-                        display_recipes=g11_display_recipes,
-                        display_others=g11_display_others
-                    )
-                    all_results['g11'] = g11_results
+            if not G11_AVAILABLE:
+                st.warning("⚠️ G.11 model file (model_g_11.py) not found. Please ensure model_g_11.py is uploaded to the deployment.")
+            else:
+                with st.expander("G.11 Detection (Pair Detection sTF)", expanded=True):
+                    st.write("**Pair Detection with Same Origin Requirement (GR, x0, x1, Fogz & Ps, Zero, Premiums, DD Fogz & D patterns)**")
+                    st.write(f"**Proximity Threshold:** {g11_threshold} hours")
+                    try:
+                        # Create group filter based on enabled groups
+                        enabled_groups = []
+                        if g11_group_0: enabled_groups.append(0)
+                        if g11_group_1: enabled_groups.append(1)
+                        if g11_group_2: enabled_groups.append(2)
+                        if g11_group_3: enabled_groups.append(3)
+                        if g11_group_4: enabled_groups.append(4)
+                        
+                        # Build enabled groups display list
+                        group_names = ['Grp 0 TA', 'Grp 1 sAA', 'Grp 2 AA', 'Grp 3 oA', 'Grp 4 Ao']
+                        enabled_group_names = [group_names[i] for i in enabled_groups]
+                        st.write(f"**Enabled Groups:** {enabled_group_names}")
+                        st.write(f"**Display Recipes:** {g11_display_recipes}, **Display Others:** {g11_display_others}")
+                        
+                        g11_results = run_g11_detection(
+                            df, 
+                            proximity_threshold=g11_threshold, 
+                            enabled_groups=enabled_groups,
+                            display_recipes=g11_display_recipes,
+                            display_others=g11_display_others
+                        )
+                        all_results['g11'] = g11_results
 
-                    # Display results summary
-                    today_count = len(g11_results.get('today_sequences', []))
-                    other_count = len(g11_results.get('other_day_sequences', []))
+                        # Display results summary
+                        today_count = len(g11_results.get('today_sequences', []))
+                        other_count = len(g11_results.get('other_day_sequences', []))
 
-                    total_today_sequences += today_count
-                    total_other_sequences += other_count
+                        total_today_sequences += today_count
+                        total_other_sequences += other_count
 
-                    # Count by category
-                    today_by_category = {}
-                    other_by_category = {}
+                        # Count by category
+                        today_by_category = {}
+                        other_by_category = {}
 
-                    for seq in g11_results.get('today_sequences', []):
-                        cat = seq.get('classification', 'Unknown')
-                        today_by_category[cat] = today_by_category.get(cat, 0) + 1
+                        for seq in g11_results.get('today_sequences', []):
+                            cat = seq.get('classification', 'Unknown')
+                            today_by_category[cat] = today_by_category.get(cat, 0) + 1
 
-                    for seq in g11_results.get('other_day_sequences', []):
-                        cat = seq.get('classification', 'Unknown')
-                        other_by_category[cat] = other_by_category.get(cat, 0) + 1
+                        for seq in g11_results.get('other_day_sequences', []):
+                            cat = seq.get('classification', 'Unknown')
+                            other_by_category[cat] = other_by_category.get(cat, 0) + 1
 
-                    st.write(f"- **Today sequences:** {today_count}")
-                    if today_by_category:
-                        for cat, count in sorted(today_by_category.items()):
-                            st.write(f"  - {cat}: {count}")
+                        st.write(f"- **Today sequences:** {today_count}")
+                        if today_by_category:
+                            for cat, count in sorted(today_by_category.items()):
+                                st.write(f"  - {cat}: {count}")
 
-                    st.write(f"- **Other day sequences:** {other_count}")
-                    if other_by_category:
-                        for cat, count in sorted(other_by_category.items()):
-                            st.write(f"  - {cat}: {count}")
+                        st.write(f"- **Other day sequences:** {other_count}")
+                        if other_by_category:
+                            for cat, count in sorted(other_by_category.items()):
+                                st.write(f"  - {cat}: {count}")
 
-                    # Add to results list for DataFrame
-                    for seq in g11_results.get('today_sequences', []):
-                        outputs = seq.get('outputs', [])
-                        arrival_output = max(outputs) if outputs else None
-                        results_list.append({
-                            'Arrival_Output': arrival_output,
-                            'Model': 'G.11 (Pair Detection sTF)',
-                            'Type': 'Today',
-                            'Category': seq.get('classification', 'Unknown'),
-                            'Origins': seq.get('origins', ''),  # Already a string
-                            'Feed': _format_feed_column(seq.get('feeds', [])),
-                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
-                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
-                            'Pattern_Type': seq.get('type', 'Unknown'),
-                            'Group': seq.get('group', 'Unknown'),
-                            'Base_Score': seq.get('base_score', 0),
-                            'Neighbor_Boost': seq.get('neighbor_boost', 0),
-                            'Total_Score': seq.get('total_score', 0),
-                            'Is_Recipe': 'Yes' if seq.get('is_recipe', False) else 'No'
-                        })
+                        # Add to results list for DataFrame
+                        for seq in g11_results.get('today_sequences', []):
+                            outputs = seq.get('outputs', [])
+                            arrival_output = max(outputs) if outputs else None
+                            results_list.append({
+                                'Arrival_Output': arrival_output,
+                                'Model': 'G.11 (Pair Detection sTF)',
+                                'Type': 'Today',
+                                'Category': seq.get('classification', 'Unknown'),
+                                'Origins': seq.get('origins', ''),  # Already a string
+                                'Feed': _format_feed_column(seq.get('feeds', [])),
+                                'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                                'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
+                                'Pattern_Type': seq.get('type', 'Unknown'),
+                                'Group': seq.get('group', 'Unknown'),
+                                'Base_Score': seq.get('base_score', 0),
+                                'Neighbor_Boost': seq.get('neighbor_boost', 0),
+                                'Total_Score': seq.get('total_score', 0),
+                                'Is_Recipe': 'Yes' if seq.get('is_recipe', False) else 'No'
+                            })
 
-                    for seq in g11_results.get('other_day_sequences', []):
-                        outputs = seq.get('outputs', [])
-                        arrival_output = max(outputs) if outputs else None
-                        results_list.append({
-                            'Arrival_Output': arrival_output,
-                            'Model': 'G.11 (Pair Detection sTF)',
-                            'Type': 'Other Day',
-                            'Category': seq.get('classification', 'Unknown'),
-                            'Origins': seq.get('origins', ''),  # Already a string
-                            'Feed': _format_feed_column(seq.get('feeds', [])),
-                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
-                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
-                            'Pattern_Type': seq.get('type', 'Unknown'),
-                            'Group': seq.get('group', 'Unknown'),
-                            'Base_Score': seq.get('base_score', 0),
-                            'Neighbor_Boost': seq.get('neighbor_boost', 0),
-                            'Total_Score': seq.get('total_score', 0),
-                            'Is_Recipe': 'Yes' if seq.get('is_recipe', False) else 'No'
-                        })
+                        for seq in g11_results.get('other_day_sequences', []):
+                            outputs = seq.get('outputs', [])
+                            arrival_output = max(outputs) if outputs else None
+                            results_list.append({
+                                'Arrival_Output': arrival_output,
+                                'Model': 'G.11 (Pair Detection sTF)',
+                                'Type': 'Other Day',
+                                'Category': seq.get('classification', 'Unknown'),
+                                'Origins': seq.get('origins', ''),  # Already a string
+                                'Feed': _format_feed_column(seq.get('feeds', [])),
+                                'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                                'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
+                                'Pattern_Type': seq.get('type', 'Unknown'),
+                                'Group': seq.get('group', 'Unknown'),
+                                'Base_Score': seq.get('base_score', 0),
+                                'Neighbor_Boost': seq.get('neighbor_boost', 0),
+                                'Total_Score': seq.get('total_score', 0),
+                                'Is_Recipe': 'Yes' if seq.get('is_recipe', False) else 'No'
+                            })
 
-                    # Show detailed sequences if any found
-                    if today_count > 0 or other_count > 0:
-                        if st.button("Show G.11 Sequence Details", key="g11_details"):
-                            display_g_model_details(all_results, "g11")
+                        # Show detailed sequences if any found
+                        if today_count > 0 or other_count > 0:
+                            if st.button("Show G.11 Sequence Details", key="g11_details"):
+                                display_g_model_details(all_results, "g11")
 
-                except Exception as e:
-                    st.error(f"G.11 Detection Error: {str(e)}")
-                    all_results['g11'] = {'error': str(e)}
+                    except Exception as e:
+                        st.error(f"G.11 Detection Error: {str(e)}")
+                        all_results['g11'] = {'error': str(e)}
         else:
             st.info("G.11 Detection disabled")
 
