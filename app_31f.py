@@ -202,6 +202,23 @@ run_g_models = st.sidebar.checkbox("🟢 Run Model G Detection", value=False)
 if run_g_models:
     st.sidebar.markdown("**G Model Controls:**")
     run_g05_g06 = st.sidebar.checkbox("   • G.05 & G.06 (Proximity Groups)", value=False)
+    
+    # Add proximity slider for G.05/G.06
+    if run_g05_g06:
+        g05_g06_proximity = st.sidebar.slider(
+            "      G.05/06 Proximity (hrs)", 
+            min_value=0.05, 
+            max_value=3.0, 
+            value=0.10, 
+            step=0.05,
+            help="Proximity threshold in hours for grouping sequences"
+        )
+        show_rejected_groups = st.sidebar.checkbox("      Show Rejected Groups", value=False,
+            help="Display groups that were rejected during detection")
+    else:
+        g05_g06_proximity = 0.10
+        show_rejected_groups = False
+    
     run_g08 = st.sidebar.checkbox("   • G.08 (x0Pd.w Patterns)", value=False)
     run_g09 = st.sidebar.checkbox("   • G.09 (Flip Endings)", value=False)
     run_g10 = st.sidebar.checkbox("   • G.10 (Pair Detection)", value=False)
@@ -253,6 +270,8 @@ else:
     run_g09 = False
     run_g10 = False
     run_g11 = False
+    g05_g06_proximity = 0.10
+    show_rejected_groups = False
     g10_group_0 = g10_group_1 = g10_group_2 = g10_group_3 = g10_group_4 = False
     g11_proximity = 3.0
     g11_group_0 = g11_group_1 = g11_group_2 = g11_group_3 = g11_group_4 = True
@@ -385,7 +404,7 @@ if bypass_traveler_file is not None:
             try:
                 g_results = run_model_g_detection(
                     final_df_filtered,
-                    proximity_threshold=0.10,
+                    proximity_threshold=g05_g06_proximity,
                     report_time=report_time,
                     key_suffix="_bypass",
                     run_g05_g06=run_g05_g06,
@@ -885,7 +904,7 @@ elif small_15m_file and big_15m_file and measurement_file:
             try:
                 g_results = run_model_g_detection(
                     final_df_filtered,
-                    proximity_threshold=0.10,
+                    proximity_threshold=g05_g06_proximity,
                     report_time=report_time,
                     key_suffix="_main",
                     run_g05_g06=run_g05_g06,
@@ -905,7 +924,8 @@ elif small_15m_file and big_15m_file and measurement_file:
                     g11_group_3=g11_group_3,
                     g11_group_4=g11_group_4,
                     g11_display_recipes=g11_display_recipes,
-                    g11_display_others=g11_display_others
+                    g11_display_others=g11_display_others,
+                    show_rejected_groups=show_rejected_groups
                 )
                 if isinstance(g_results, dict) and 'success' in g_results:
                     if g_results['success']:
