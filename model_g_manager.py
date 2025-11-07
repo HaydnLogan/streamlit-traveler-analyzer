@@ -133,6 +133,10 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                     st.write(f"- **Other day sequences:** {other_count}")
                     st.write(f"- **Rejected groups:** {rejected_count}")
 
+                    # Debug info
+                    if st.session_state.get('debug_g_models', False):
+                        st.write(f"🔍 Debug: show_rejected_groups={show_rejected_groups}, rejected_count={rejected_count}")
+
                     # Display rejected groups if enabled
                     if show_rejected_groups and rejected_count > 0:
                         st.write("---")
@@ -163,6 +167,8 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                                 st.info(f"Showing 10 of {len(items)} rejected groups for this reason")
                         
                         st.write("---")
+                    elif show_rejected_groups and rejected_count == 0:
+                        st.info("✅ No groups were rejected - all potential matches passed filters!")
 
                     # Add to results list for DataFrame
                     for seq in g05_g06_results.get('today_sequences', []):
@@ -600,6 +606,10 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                         rejected_count = len(g11_results.get('rejected_groups', []))
                         st.write(f"- **Rejected pairs:** {rejected_count}")
                         
+                        # Debug info
+                        if st.session_state.get('debug_g_models', False):
+                            st.write(f"🔍 Debug: show_rejected_groups={show_rejected_groups}, rejected_count={rejected_count}")
+                        
                         if show_rejected_groups and rejected_count > 0:
                             st.write("---")
                             st.write("#### 🚫 Rejected Pairs Details")
@@ -651,6 +661,8 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                                     st.info(f"Showing 10 of {len(items)} rejected pairs for this reason")
                             
                             st.write("---")
+                        elif show_rejected_groups and rejected_count == 0:
+                            st.info("✅ No pairs were rejected - all potential pairs passed filters!")
 
                         # Add to results list for DataFrame (with proximity filtering)
                         for seq in g11_results.get('today_sequences', []):
