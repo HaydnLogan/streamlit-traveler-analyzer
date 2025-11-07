@@ -12,6 +12,41 @@ from model_g_09 import run_g09_detection
 from model_g_10 import run_g10_detection
 from model_g_11 import run_g11_detection
 
+def _format_feed_column(sequence_data):
+    """
+    Format Feed column: if all feeds are the same, show once; otherwise list all in arrival order
+    
+    Args:
+        sequence_data: Dictionary with 'sequence' key containing list of items with 'Feed' field
+                      OR list with 'feeds' key OR direct list of feed values
+    """
+    # Extract feeds from various possible formats
+    if isinstance(sequence_data, dict):
+        if 'sequence' in sequence_data:
+            # Format from model detection results with sequence
+            feeds = [item.get('Feed', 'Unknown') for item in sequence_data['sequence']]
+        elif 'feeds' in sequence_data:
+            # Format with feeds already extracted
+            feeds = sequence_data['feeds']
+        else:
+            return 'Unknown'
+    elif isinstance(sequence_data, list):
+        # Direct list of feeds
+        feeds = sequence_data
+    else:
+        return 'Unknown'
+    
+    if not feeds:
+        return 'Unknown'
+    
+    # If all feeds are the same, return just one
+    unique_feeds = list(set(feeds))
+    if len(unique_feeds) == 1:
+        return unique_feeds[0]
+    
+    # Otherwise return all feeds in order
+    return ', '.join(feeds)
+
 def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_suffix="", 
                          run_g05_g06=True, run_g08=True, run_g09=True, run_g10=False, run_g11=False,
                          g10_group_0=True, g10_group_1=True, g10_group_2=True, g10_group_3=False, g10_group_4=False,
@@ -85,12 +120,15 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                     for seq in g05_g06_results.get('today_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
+                        # Extract feeds from sequence
+                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.05/G.06',
                             'Type': 'Today',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(seq.get('origins', [])),
+                            'Feed': _format_feed_column(feeds),
                             'M_#s': ', '.join(map(str, seq.get('m_values', []))),
                             'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])])
                         })
@@ -98,12 +136,15 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                     for seq in g05_g06_results.get('other_day_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
+                        # Extract feeds from sequence
+                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.05/G.06',
                             'Type': 'Other Day',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(seq.get('origins', [])),
+                            'Feed': _format_feed_column(feeds),
                             'M_#s': ', '.join(map(str, seq.get('m_values', []))),
                             'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])])
                         })
@@ -155,12 +196,15 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                     for seq in g08_results.get('today_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
+                        # Extract feeds from sequence
+                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.08',
                             'Type': 'Today',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(map(str, seq.get('origins', []))),
+                            'Feed': _format_feed_column(feeds),
                             'M_#s': ', '.join(map(str, seq.get('m_values', []))),
                             'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'End_Type': seq.get('end_type', 'Unknown'),
@@ -170,12 +214,15 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                     for seq in g08_results.get('other_day_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
+                        # Extract feeds from sequence
+                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.08',
                             'Type': 'Other Day',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(map(str, seq.get('origins', []))),
+                            'Feed': _format_feed_column(feeds),
                             'M_#s': ', '.join(map(str, seq.get('m_values', []))),
                             'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'End_Type': seq.get('end_type', 'Unknown'),
@@ -253,12 +300,15 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                     for seq in g09_results.get('today_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
+                        # Extract feeds from sequence
+                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.09',
                             'Type': 'Today',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(map(str, seq.get('origins', []))),
+                            'Feed': _format_feed_column(feeds),
                             'M_#s': ', '.join(map(str, seq.get('m_values', []))),
                             'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'Star_Origins': seq.get('star_origin_count', 0),
@@ -269,12 +319,15 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                     for seq in g09_results.get('other_day_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
+                        # Extract feeds from sequence
+                        feeds = [item.get('Feed', 'Unknown') for item in seq.get('sequence', [])]
                         results_list.append({
                             'Arrival_Output': arrival_output,
                             'Model': 'G.09',
                             'Type': 'Other Day',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(map(str, seq.get('origins', []))),
+                            'Feed': _format_feed_column(feeds),
                             'M_#s': ', '.join(map(str, seq.get('m_values', []))),
                             'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'Star_Origins': seq.get('star_origin_count', 0),
@@ -349,6 +402,7 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             'Type': 'Today',
                             'Category': seq.get('classification', 'Unknown'),
                             'Origins': seq.get('origins', ''),  # Already a string
+                            'Feed': _format_feed_column(seq.get('feeds', [])),
                             'M_#s': ', '.join(map(str, seq.get('m_values', []))),
                             'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'Pattern_Type': seq.get('type', 'Unknown'),
@@ -368,6 +422,7 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             'Type': 'Other Day',
                             'Category': seq.get('classification', 'Unknown'),
                             'Origins': seq.get('origins', ''),  # Already a string
+                            'Feed': _format_feed_column(seq.get('feeds', [])),
                             'M_#s': ', '.join(map(str, seq.get('m_values', []))),
                             'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'Pattern_Type': seq.get('type', 'Unknown'),
@@ -454,6 +509,7 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             'Type': 'Today',
                             'Category': seq.get('classification', 'Unknown'),
                             'Origins': seq.get('origins', ''),  # Already a string
+                            'Feed': _format_feed_column(seq.get('feeds', [])),
                             'M_#s': ', '.join(map(str, seq.get('m_values', []))),
                             'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'Pattern_Type': seq.get('type', 'Unknown'),
@@ -473,6 +529,7 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             'Type': 'Other Day',
                             'Category': seq.get('classification', 'Unknown'),
                             'Origins': seq.get('origins', ''),  # Already a string
+                            'Feed': _format_feed_column(seq.get('feeds', [])),
                             'M_#s': ', '.join(map(str, seq.get('m_values', []))),
                             'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'Pattern_Type': seq.get('type', 'Unknown'),
