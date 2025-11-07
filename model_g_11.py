@@ -539,15 +539,7 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
 
                 # G.11 KEY CHANGE: Only process if both have same feed (sTF = same True Feed)
                 if pair[0].get('Feed') != pair[1].get('Feed'):
-                    # Track rejected pair - different feeds
-                    results['rejected_groups'].append({
-                        'pair': pair,
-                        'outputs': [pair[0]['Output'], pair[1]['Output']],
-                        'origins': [pair[0]['Origin'], pair[1]['Origin']],
-                        'm_values': [_round_m(pair[0]['M #']), _round_m(pair[1]['M #'])],
-                        'feeds': [pair[0].get('Feed'), pair[1].get('Feed')],
-                        'reasons': ['Different feeds (sTF required)']
-                    })
+                    # Don't track - G.11 only looks for same-feed matches
                     continue
 
                 # Sort pair chronologically
@@ -570,51 +562,18 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
                     if pair_result:
                         # Check if this group is enabled
                         if pair_result['group'] not in enabled_groups:
-                            # Track rejected pair - group disabled
-                            results['rejected_groups'].append({
-                                'pair': pair_sorted,
-                                'outputs': [item['Output'] for item in pair_sorted],
-                                'origins': [item['Origin'] for item in pair_sorted],
-                                'm_values': [_round_m(item['M #']) for item in pair_sorted],
-                                'feeds': [item['Feed'] for item in pair_sorted],
-                                'type': pair_result['type'],
-                                'classification': pair_result['classification'],
-                                'group': pair_result['group'],
-                                'reasons': [f"Group {pair_result['group']} disabled in filters"]
-                            })
+                            # Don't track - user intentionally disabled this group
                             matched = True
                             break
                         
                         # Check display filters
                         is_recipe = pair_result.get('is_recipe', False)
                         if is_recipe and not display_recipes:
-                            # Track rejected pair - recipe filter
-                            results['rejected_groups'].append({
-                                'pair': pair_sorted,
-                                'outputs': [item['Output'] for item in pair_sorted],
-                                'origins': [item['Origin'] for item in pair_sorted],
-                                'm_values': [_round_m(item['M #']) for item in pair_sorted],
-                                'feeds': [item['Feed'] for item in pair_sorted],
-                                'type': pair_result['type'],
-                                'classification': pair_result['classification'],
-                                'group': pair_result['group'],
-                                'reasons': ['Recipe display disabled in filters']
-                            })
+                            # Don't track - user intentionally disabled recipe display
                             matched = True
                             break
                         if not is_recipe and not display_others:
-                            # Track rejected pair - other display filter
-                            results['rejected_groups'].append({
-                                'pair': pair_sorted,
-                                'outputs': [item['Output'] for item in pair_sorted],
-                                'origins': [item['Origin'] for item in pair_sorted],
-                                'm_values': [_round_m(item['M #']) for item in pair_sorted],
-                                'feeds': [item['Feed'] for item in pair_sorted],
-                                'type': pair_result['type'],
-                                'classification': pair_result['classification'],
-                                'group': pair_result['group'],
-                                'reasons': ['Non-recipe display disabled in filters']
-                            })
+                            # Don't track - user intentionally disabled other display
                             matched = True
                             break
                             
@@ -662,12 +621,17 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
                 
                 # If no pattern matched, track as rejected
                 if not matched:
+                    # Get arrival times for both items
+                    arrival_times = [pd.to_datetime(item['Arrival']) for item in pair_sorted]
+                    
                     results['rejected_groups'].append({
                         'pair': pair_sorted,
                         'outputs': [item['Output'] for item in pair_sorted],
                         'origins': [item['Origin'] for item in pair_sorted],
                         'm_values': [_round_m(item['M #']) for item in pair_sorted],
                         'feeds': [item['Feed'] for item in pair_sorted],
+                        'arrivals': arrival_times,
+                        'arrival_output': max([item['Output'] for item in pair_sorted]),
                         'reasons': ['No matching G.11 pattern found']
                     })
 
