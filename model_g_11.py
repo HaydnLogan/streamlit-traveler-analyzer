@@ -539,6 +539,15 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
 
                 # G.11 KEY CHANGE: Only process if both have same feed (sTF = same True Feed)
                 if pair[0].get('Feed') != pair[1].get('Feed'):
+                    # Track rejected pair - different feeds
+                    results['rejected_groups'].append({
+                        'pair': pair,
+                        'outputs': [pair[0]['Output'], pair[1]['Output']],
+                        'origins': [pair[0]['Origin'], pair[1]['Origin']],
+                        'm_values': [_round_m(pair[0]['M #']), _round_m(pair[1]['M #'])],
+                        'feeds': [pair[0].get('Feed'), pair[1].get('Feed')],
+                        'reasons': ['Different feeds (sTF required)']
+                    })
                     continue
 
                 # Sort pair chronologically
@@ -555,19 +564,59 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
                     _check_dd_pairs
                 ]
 
+                matched = False
                 for check_func in pair_checks:
                     pair_result = check_func(pair_sorted)
                     if pair_result:
                         # Check if this group is enabled
                         if pair_result['group'] not in enabled_groups:
-                            continue  # Skip this pair if its group is disabled
+                            # Track rejected pair - group disabled
+                            results['rejected_groups'].append({
+                                'pair': pair_sorted,
+                                'outputs': [item['Output'] for item in pair_sorted],
+                                'origins': [item['Origin'] for item in pair_sorted],
+                                'm_values': [_round_m(item['M #']) for item in pair_sorted],
+                                'feeds': [item['Feed'] for item in pair_sorted],
+                                'type': pair_result['type'],
+                                'classification': pair_result['classification'],
+                                'group': pair_result['group'],
+                                'reasons': [f"Group {pair_result['group']} disabled in filters"]
+                            })
+                            matched = True
+                            break
                         
                         # Check display filters
                         is_recipe = pair_result.get('is_recipe', False)
                         if is_recipe and not display_recipes:
-                            continue
+                            # Track rejected pair - recipe filter
+                            results['rejected_groups'].append({
+                                'pair': pair_sorted,
+                                'outputs': [item['Output'] for item in pair_sorted],
+                                'origins': [item['Origin'] for item in pair_sorted],
+                                'm_values': [_round_m(item['M #']) for item in pair_sorted],
+                                'feeds': [item['Feed'] for item in pair_sorted],
+                                'type': pair_result['type'],
+                                'classification': pair_result['classification'],
+                                'group': pair_result['group'],
+                                'reasons': ['Recipe display disabled in filters']
+                            })
+                            matched = True
+                            break
                         if not is_recipe and not display_others:
-                            continue
+                            # Track rejected pair - other display filter
+                            results['rejected_groups'].append({
+                                'pair': pair_sorted,
+                                'outputs': [item['Output'] for item in pair_sorted],
+                                'origins': [item['Origin'] for item in pair_sorted],
+                                'm_values': [_round_m(item['M #']) for item in pair_sorted],
+                                'feeds': [item['Feed'] for item in pair_sorted],
+                                'type': pair_result['type'],
+                                'classification': pair_result['classification'],
+                                'group': pair_result['group'],
+                                'reasons': ['Non-recipe display disabled in filters']
+                            })
+                            matched = True
+                            break
                             
                         # Calculate scores
                         base_score = _get_pair_base_score(
@@ -608,10 +657,28 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
                         else:
                             results['other_day_sequences'].append(sequence_info)
 
+                        matched = True
                         break  # Found a match, don't check other pair types for this pair
+                
+                # If no pattern matched, track as rejected
+                if not matched:
+                    results['rejected_groups'].append({
+                        'pair': pair_sorted,
+                        'outputs': [item['Output'] for item in pair_sorted],
+                        'origins': [item['Origin'] for item in pair_sorted],
+                        'm_values': [_round_m(item['M #']) for item in pair_sorted],
+                        'feeds': [item['Feed'] for item in pair_sorted],
+                        'reasons': ['No matching G.11 pattern found']
+                    })
 
     # Sort results by total score (highest first)
     results['today_sequences'].sort(key=lambda x: x['total_score'], reverse=True)
     results['other_day_sequences'].sort(key=lambda x: x['total_score'], reverse=True)
+
+    if st.session_state.get('debug_g11', False):
+        st.write(f"📊 **G.11 Detection Summary**")
+        st.write(f"  - Today sequences: {len(results['today_sequences'])}")
+        st.write(f"  - Other day sequences: {len(results['other_day_sequences'])}")
+        st.write(f"  - Rejected groups: {len(results['rejected_groups'])}")
 
     return results
