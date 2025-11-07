@@ -1,4 +1,4 @@
-# 11.6.2025 Model G.11 added. 
+# 11.6.2025 Model G.11 added. 11.7 Same origin error fixed, changed to correct same feed intent.
 """  8.16.25 Model G toggles FIXED
 G Model Manager - Unified interface for all G model detection
 Coordinates execution of G.05, G.06, G.08 and future G models
@@ -67,7 +67,7 @@ def _format_feed_column(sequence_data):
 def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_suffix="", 
                          run_g05_g06=True, run_g08=True, run_g09=True, run_g10=False, run_g11=False,
                          g10_group_0=True, g10_group_1=True, g10_group_2=True, g10_group_3=False, g10_group_4=False,
-                         g11_threshold=3.0, g11_group_0=True, g11_group_1=True, g11_group_2=True, g11_group_3=True, g11_group_4=True,
+                         g11_proximity=3.0, g11_group_0=True, g11_group_1=True, g11_group_2=True, g11_group_3=True, g11_group_4=True,
                          g11_display_recipes=True, g11_display_others=True):
     """
     Unified G Model Detection Entry Point
@@ -509,8 +509,8 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                 st.warning("⚠️ G.11 model file (model_g_11.py) not found. Please ensure model_g_11.py is uploaded to the deployment.")
             else:
                 with st.expander("G.11 Detection (Pair Detection sTF)", expanded=True):
-                    st.write("**Pair Detection with Same Origin Requirement (GR, x0, x1, Fogz & Ps, Zero, Premiums, DD Fogz & D patterns)**")
-                    st.write(f"**Proximity Threshold:** {g11_threshold} hours")
+                    st.write("**Pair Detection with Same Feed Requirement (GR, x0, x1, Fogz & Ps, Zero, Premiums, DD Fogz & D patterns)**")
+                    st.write(f"**Proximity Filter:** {g11_proximity} (max output spread)")
                     try:
                         # Create group filter based on enabled groups
                         enabled_groups = []
@@ -526,9 +526,10 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                         st.write(f"**Enabled Groups:** {enabled_group_names}")
                         st.write(f"**Display Recipes:** {g11_display_recipes}, **Display Others:** {g11_display_others}")
                         
+                        # Use standard time-based proximity threshold for grouping (0.10 hours)
                         g11_results = run_g11_detection(
                             df, 
-                            proximity_threshold=g11_threshold, 
+                            proximity_threshold=0.10, 
                             enabled_groups=enabled_groups,
                             display_recipes=g11_display_recipes,
                             display_others=g11_display_others
@@ -564,10 +565,20 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             for cat, count in sorted(other_by_category.items()):
                                 st.write(f"  - {cat}: {count}")
 
-                        # Add to results list for DataFrame
+                        # Add to results list for DataFrame (with proximity filtering)
                         for seq in g11_results.get('today_sequences', []):
                             outputs = seq.get('outputs', [])
-                            arrival_output = max(outputs) if outputs else None
+                            if not outputs:
+                                continue
+                            
+                            # Calculate prox (output spread)
+                            prox = abs(max(outputs) - min(outputs)) if len(outputs) >= 2 else 0.0
+                            
+                            # Filter by proximity
+                            if prox > g11_proximity:
+                                continue
+                            
+                            arrival_output = max(outputs)
                             results_list.append({
                                 'Arrival_Output': arrival_output,
                                 'Model': 'G.11 (Pair Detection sTF)',
@@ -587,7 +598,17 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
 
                         for seq in g11_results.get('other_day_sequences', []):
                             outputs = seq.get('outputs', [])
-                            arrival_output = max(outputs) if outputs else None
+                            if not outputs:
+                                continue
+                            
+                            # Calculate prox (output spread)
+                            prox = abs(max(outputs) - min(outputs)) if len(outputs) >= 2 else 0.0
+                            
+                            # Filter by proximity
+                            if prox > g11_proximity:
+                                continue
+                            
+                            arrival_output = max(outputs)
                             results_list.append({
                                 'Arrival_Output': arrival_output,
                                 'Model': 'G.11 (Pair Detection sTF)',
@@ -654,6 +675,17 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                     return 0.0
             
             results_df['Prox'] = results_df['Outputs'].apply(calculate_prox)
+            
+            # Reorder columns to put Prox right after Outputs
+            if 'Prox' in results_df.columns:
+                cols = list(results_df.columns)
+                # Remove Prox from wherever it is
+                cols.remove('Prox')
+                # Find Outputs and insert Prox right after it
+                if 'Outputs' in cols:
+                    outputs_idx = cols.index('Outputs')
+                    cols.insert(outputs_idx + 1, 'Prox')
+                    results_df = results_df[cols]
         
         # Update Type column - simplify to avoid breaking the DataFrame
         # For now, keep Today as-is and change "Other Day" to "Recent"
@@ -812,7 +844,7 @@ def display_g_model_details(results, model_type="all"):
 
     if model_type == "all" or model_type == "g11":
         if 'g11' in results and 'error' not in results['g11']:
-            st.subheader("G.11 Detailed Results (Same Origin Pairs)")
+            st.subheader("G.11 Detailed Results (Same Feed Pairs)")
             g11 = results['g11']
 
             # Display today sequences
