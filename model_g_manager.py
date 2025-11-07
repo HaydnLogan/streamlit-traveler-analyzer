@@ -624,6 +624,12 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
         # Calculate totals
         total_sequences = total_today_sequences + total_other_sequences
 
+        # Debug: Show what we're about to convert to DataFrame
+        if st.session_state.get('debug_g_models', False):
+            st.write(f"🔍 Debug: About to create DataFrame from {len(results_list)} items")
+            if results_list:
+                st.write("🔍 Debug: First result item keys:", list(results_list[0].keys()))
+
         # Create results DataFrame
         results_df = pd.DataFrame(results_list) if results_list else pd.DataFrame()
         
@@ -632,6 +638,8 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
             st.write(f"🔍 Debug: results_df shape: {results_df.shape}")
             if not results_df.empty:
                 st.write(f"🔍 Debug: results_df columns: {list(results_df.columns)}")
+                st.write(f"🔍 Debug: First 3 rows:")
+                st.dataframe(results_df.head(3))
         
         # Add Prox column - absolute difference between max and min outputs
         if not results_df.empty and 'Outputs' in results_df.columns:
@@ -674,9 +682,13 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
         }
 
     except Exception as e:
+        import traceback
+        error_details = f"{str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+        st.error(f"Error in run_model_g_detection: {str(e)}")
+        st.code(traceback.format_exc())
         return {
             'success': False,
-            'error': str(e),
+            'error': error_details,
             'summary': {'total_o1': 0, 'total_o2': 0, 'total_sequences': 0},
             'results_df': pd.DataFrame()
         }
