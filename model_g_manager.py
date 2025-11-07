@@ -1,3 +1,4 @@
+# 11.6.2025 Model G.11 added. 
 """  8.16.25 Model G toggles FIXED
 G Model Manager - Unified interface for all G model detection
 Coordinates execution of G.05, G.06, G.08 and future G models
@@ -9,10 +10,13 @@ from model_g_05_06 import run_g05_g06_detection
 from model_g_08 import run_g08_detection
 from model_g_09 import run_g09_detection
 from model_g_10 import run_g10_detection
+from model_g_11 import run_g11_detection
 
 def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_suffix="", 
-                         run_g05_g06=True, run_g08=True, run_g09=True, run_g10=False,
-                         g10_group_0=True, g10_group_1=True, g10_group_2=True, g10_group_3=False, g10_group_4=False):
+                         run_g05_g06=True, run_g08=True, run_g09=True, run_g10=False, run_g11=False,
+                         g10_group_0=True, g10_group_1=True, g10_group_2=True, g10_group_3=False, g10_group_4=False,
+                         g11_threshold=3.0, g11_group_0=True, g11_group_1=True, g11_group_2=True, g11_group_3=True, g11_group_4=True,
+                         g11_display_recipes=True, g11_display_others=True):
     """
     Unified G Model Detection Entry Point
     Runs all available G model detectors and consolidates results
@@ -87,8 +91,8 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             'Type': 'Today',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(seq.get('origins', [])),
-                            'M_Values': ', '.join(map(str, seq.get('m_values', []))),
-                            'Outputs': ', '.join(map(str, seq.get('outputs', [])))
+                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])])
                         })
 
                     for seq in g05_g06_results.get('other_day_sequences', []):
@@ -100,8 +104,8 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             'Type': 'Other Day',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(seq.get('origins', [])),
-                            'M_Values': ', '.join(map(str, seq.get('m_values', []))),
-                            'Outputs': ', '.join(map(str, seq.get('outputs', [])))
+                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])])
                         })
 
                 except Exception as e:
@@ -157,8 +161,8 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             'Type': 'Today',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(map(str, seq.get('origins', []))),
-                            'M_Values': ', '.join(map(str, seq.get('m_values', []))),
-                            'Outputs': ', '.join(map(str, seq.get('outputs', []))),
+                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'End_Type': seq.get('end_type', 'Unknown'),
                             'Arrivals': ', '.join(map(str, seq.get('arrivals', [])))
                         })
@@ -172,8 +176,8 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             'Type': 'Other Day',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(map(str, seq.get('origins', []))),
-                            'M_Values': ', '.join(map(str, seq.get('m_values', []))),
-                            'Outputs': ', '.join(map(str, seq.get('outputs', []))),
+                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'End_Type': seq.get('end_type', 'Unknown'),
                             'Arrivals': ', '.join(map(str, seq.get('arrivals', [])))
                         })
@@ -255,8 +259,8 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             'Type': 'Today',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(map(str, seq.get('origins', []))),
-                            'M_Values': ', '.join(map(str, seq.get('m_values', []))),
-                            'Outputs': ', '.join(map(str, seq.get('outputs', []))),
+                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'Star_Origins': seq.get('star_origin_count', 0),
                             'Opposite_Flip': 'Yes' if seq.get('has_opposite_flip', False) else 'No',
                             'Excludes_Small': 'Yes' if seq.get('excludes_small', False) else 'No'
@@ -271,8 +275,8 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                             'Type': 'Other Day',
                             'Category': seq.get('category', 'Unknown'),
                             'Origins': ', '.join(map(str, seq.get('origins', []))),
-                            'M_Values': ', '.join(map(str, seq.get('m_values', []))),
-                            'Outputs': ', '.join(map(str, seq.get('outputs', []))),
+                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'Star_Origins': seq.get('star_origin_count', 0),
                             'Opposite_Flip': 'Yes' if seq.get('has_opposite_flip', False) else 'No',
                             'Excludes_Small': 'Yes' if seq.get('excludes_small', False) else 'No'
@@ -341,12 +345,12 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                         arrival_output = max(outputs) if outputs else None
                         results_list.append({
                             'Arrival_Output': arrival_output,
-                            'Model': 'G.10',
+                            'Model': 'G.10 (Pair Detection)',
                             'Type': 'Today',
                             'Category': seq.get('classification', 'Unknown'),
-                            'Origins': ', '.join(map(str, seq.get('origins', []))),
-                            'M_Values': ', '.join(map(str, seq.get('m_values', []))),
-                            'Outputs': ', '.join(map(str, seq.get('outputs', []))),
+                            'Origins': seq.get('origins', ''),  # Already a string
+                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'Pattern_Type': seq.get('type', 'Unknown'),
                             'Group': seq.get('group', 'Unknown'),
                             'Base_Score': seq.get('base_score', 0),
@@ -360,12 +364,12 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
                         arrival_output = max(outputs) if outputs else None
                         results_list.append({
                             'Arrival_Output': arrival_output,
-                            'Model': 'G.10',
+                            'Model': 'G.10 (Pair Detection)',
                             'Type': 'Other Day',
                             'Category': seq.get('classification', 'Unknown'),
-                            'Origins': ', '.join(map(str, seq.get('origins', []))),
-                            'M_Values': ', '.join(map(str, seq.get('m_values', []))),
-                            'Outputs': ', '.join(map(str, seq.get('outputs', []))),
+                            'Origins': seq.get('origins', ''),  # Already a string
+                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
                             'Pattern_Type': seq.get('type', 'Unknown'),
                             'Group': seq.get('group', 'Unknown'),
                             'Base_Score': seq.get('base_score', 0),
@@ -385,10 +389,114 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
         else:
             st.info("G.10 Detection disabled")
 
+        # Run G.11 Detection  
+        if run_g11:
+            with st.expander("G.11 Detection (Pair Detection sTF)", expanded=True):
+                st.write("**Pair Detection with Same Origin Requirement (GR, x0, x1, Fogz & Ps, Zero, Premiums, DD Fogz & D patterns)**")
+                st.write(f"**Proximity Threshold:** {g11_threshold} hours")
+                try:
+                    # Create group filter based on enabled groups
+                    enabled_groups = []
+                    if g11_group_0: enabled_groups.append(0)
+                    if g11_group_1: enabled_groups.append(1)
+                    if g11_group_2: enabled_groups.append(2)
+                    if g11_group_3: enabled_groups.append(3)
+                    if g11_group_4: enabled_groups.append(4)
+                    
+                    st.write(f"**Enabled Groups:** {['Grp 0 TA', 'Grp 1 sAA', 'Grp 2 AA', 'Grp 3 oA', 'Grp 4 Ao'][i] for i in enabled_groups}")
+                    st.write(f"**Display Recipes:** {g11_display_recipes}, **Display Others:** {g11_display_others}")
+                    
+                    g11_results = run_g11_detection(
+                        df, 
+                        proximity_threshold=g11_threshold, 
+                        enabled_groups=enabled_groups,
+                        display_recipes=g11_display_recipes,
+                        display_others=g11_display_others
+                    )
+                    all_results['g11'] = g11_results
+
+                    # Display results summary
+                    today_count = len(g11_results.get('today_sequences', []))
+                    other_count = len(g11_results.get('other_day_sequences', []))
+
+                    total_today_sequences += today_count
+                    total_other_sequences += other_count
+
+                    # Count by category
+                    today_by_category = {}
+                    other_by_category = {}
+
+                    for seq in g11_results.get('today_sequences', []):
+                        cat = seq.get('classification', 'Unknown')
+                        today_by_category[cat] = today_by_category.get(cat, 0) + 1
+
+                    for seq in g11_results.get('other_day_sequences', []):
+                        cat = seq.get('classification', 'Unknown')
+                        other_by_category[cat] = other_by_category.get(cat, 0) + 1
+
+                    st.write(f"- **Today sequences:** {today_count}")
+                    if today_by_category:
+                        for cat, count in sorted(today_by_category.items()):
+                            st.write(f"  - {cat}: {count}")
+
+                    st.write(f"- **Other day sequences:** {other_count}")
+                    if other_by_category:
+                        for cat, count in sorted(other_by_category.items()):
+                            st.write(f"  - {cat}: {count}")
+
+                    # Add to results list for DataFrame
+                    for seq in g11_results.get('today_sequences', []):
+                        outputs = seq.get('outputs', [])
+                        arrival_output = max(outputs) if outputs else None
+                        results_list.append({
+                            'Arrival_Output': arrival_output,
+                            'Model': 'G.11 (Pair Detection sTF)',
+                            'Type': 'Today',
+                            'Category': seq.get('classification', 'Unknown'),
+                            'Origins': seq.get('origins', ''),  # Already a string
+                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
+                            'Pattern_Type': seq.get('type', 'Unknown'),
+                            'Group': seq.get('group', 'Unknown'),
+                            'Base_Score': seq.get('base_score', 0),
+                            'Neighbor_Boost': seq.get('neighbor_boost', 0),
+                            'Total_Score': seq.get('total_score', 0),
+                            'Is_Recipe': 'Yes' if seq.get('is_recipe', False) else 'No'
+                        })
+
+                    for seq in g11_results.get('other_day_sequences', []):
+                        outputs = seq.get('outputs', [])
+                        arrival_output = max(outputs) if outputs else None
+                        results_list.append({
+                            'Arrival_Output': arrival_output,
+                            'Model': 'G.11 (Pair Detection sTF)',
+                            'Type': 'Other Day',
+                            'Category': seq.get('classification', 'Unknown'),
+                            'Origins': seq.get('origins', ''),  # Already a string
+                            'M_#s': ', '.join(map(str, seq.get('m_values', []))),
+                            'Outputs': ', '.join([f"{x:.2f}" for x in seq.get('outputs', [])]),
+                            'Pattern_Type': seq.get('type', 'Unknown'),
+                            'Group': seq.get('group', 'Unknown'),
+                            'Base_Score': seq.get('base_score', 0),
+                            'Neighbor_Boost': seq.get('neighbor_boost', 0),
+                            'Total_Score': seq.get('total_score', 0),
+                            'Is_Recipe': 'Yes' if seq.get('is_recipe', False) else 'No'
+                        })
+
+                    # Show detailed sequences if any found
+                    if today_count > 0 or other_count > 0:
+                        if st.button("Show G.11 Sequence Details", key="g11_details"):
+                            display_g_model_details(all_results, "g11")
+
+                except Exception as e:
+                    st.error(f"G.11 Detection Error: {str(e)}")
+                    all_results['g11'] = {'error': str(e)}
+        else:
+            st.info("G.11 Detection disabled")
+
         # Placeholder sections for future G models
-        with st.expander("Future G Models (G.11 - G.12)", expanded=False):
+        with st.expander("Future G Models (G.12+)", expanded=False):
             st.write("**Placeholder for additional G model implementations**")
-            st.write("- G.11: TBD")
             st.write("- G.12: TBD")
 
         # Calculate totals
@@ -396,6 +504,57 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
 
         # Create results DataFrame
         results_df = pd.DataFrame(results_list) if results_list else pd.DataFrame()
+        
+        # Add Prox column - absolute difference between max and min outputs
+        if not results_df.empty and 'Outputs' in results_df.columns:
+            def calculate_prox(outputs_str):
+                try:
+                    # Parse the outputs string to get individual values
+                    outputs = [float(x.strip()) for x in outputs_str.split(',')]
+                    if len(outputs) >= 2:
+                        return abs(max(outputs) - min(outputs))
+                    return 0.0
+                except:
+                    return 0.0
+            
+            results_df['Prox'] = results_df['Outputs'].apply(calculate_prox)
+        
+        # Update Type column to show "Today", "Recent", or "Old" based on Day column logic
+        if not results_df.empty and 'Type' in results_df.columns and not df.empty:
+            def determine_type(row):
+                if row['Type'] == 'Today':
+                    return 'Today'
+                
+                # For "Other Day", check the Day column in the original df
+                # Match by Arrival_Output to find corresponding row(s) in df
+                if 'Arrival_Output' in row and row['Arrival_Output'] is not None:
+                    # Find matching records in df
+                    if 'Output' in df.columns and 'Day' in df.columns:
+                        matching_rows = df[abs(df['Output'] - row['Arrival_Output']) < 0.01]
+                        if not matching_rows.empty:
+                            # Get unique Day values for this sequence
+                            day_values = matching_rows['Day'].unique()
+                            
+                            # Check if we have [0], [-1], [-2] pattern or gaps
+                            if 0 in day_values:
+                                return 'Today'
+                            elif -1 in day_values:
+                                return 'Recent'
+                            elif any(d < -1 and d >= -2 for d in day_values):
+                                return 'Recent'
+                            elif any(d == -3 for d in day_values):
+                                # Check if there's a gap (no -1, -2)
+                                if -1 not in day_values and -2 not in day_values:
+                                    return 'Recent'
+                                else:
+                                    return 'Old'
+                            else:
+                                return 'Old'
+                
+                # Default to Old for anything that wasn't Today and couldn't be determined
+                return 'Old' if row['Type'] == 'Other Day' else row['Type']
+            
+            results_df['Type'] = results_df.apply(determine_type, axis=1)
         
         # Sort by Arrival_Output descending if the column exists
         if not results_df.empty and 'Arrival_Output' in results_df.columns:
@@ -530,6 +689,41 @@ def display_g_model_details(results, model_type="all"):
             if g10.get('other_day_sequences'):
                 st.write("**Other Day Sequences:**")
                 for i, seq in enumerate(g10['other_day_sequences']):
+                    with st.expander(f"{seq['classification']} - Sequence {i+1}"):
+                        st.write(f"**Pattern Type:** {seq.get('type', 'Unknown')}")
+                        st.write(f"**Origins:** {seq['origins']}")
+                        st.write(f"**M# Values:** {seq['m_values']}")
+                        st.write(f"**Outputs:** {seq['outputs']}")
+                        st.write(f"**Group:** {seq.get('group', 'Unknown')}")
+                        st.write(f"**Base Score:** {seq.get('base_score', 0)}")
+                        st.write(f"**Neighbor Boost:** {seq.get('neighbor_boost', 0)}")
+                        st.write(f"**Total Score:** {seq.get('total_score', 0)}")
+                        st.write(f"**Is Recipe:** {'Yes' if seq.get('is_recipe', False) else 'No'}")
+
+    if model_type == "all" or model_type == "g11":
+        if 'g11' in results and 'error' not in results['g11']:
+            st.subheader("G.11 Detailed Results (Same Origin Pairs)")
+            g11 = results['g11']
+
+            # Display today sequences
+            if g11.get('today_sequences'):
+                st.write("**Today Sequences:**")
+                for i, seq in enumerate(g11['today_sequences']):
+                    with st.expander(f"{seq['classification']} - Sequence {i+1}"):
+                        st.write(f"**Pattern Type:** {seq.get('type', 'Unknown')}")
+                        st.write(f"**Origins:** {seq['origins']}")
+                        st.write(f"**M# Values:** {seq['m_values']}")
+                        st.write(f"**Outputs:** {seq['outputs']}")
+                        st.write(f"**Group:** {seq.get('group', 'Unknown')}")
+                        st.write(f"**Base Score:** {seq.get('base_score', 0)}")
+                        st.write(f"**Neighbor Boost:** {seq.get('neighbor_boost', 0)}")
+                        st.write(f"**Total Score:** {seq.get('total_score', 0)}")
+                        st.write(f"**Is Recipe:** {'Yes' if seq.get('is_recipe', False) else 'No'}")
+
+            # Display other day sequences
+            if g11.get('other_day_sequences'):
+                st.write("**Other Day Sequences:**")
+                for i, seq in enumerate(g11['other_day_sequences']):
                     with st.expander(f"{seq['classification']} - Sequence {i+1}"):
                         st.write(f"**Pattern Type:** {seq.get('type', 'Unknown')}")
                         st.write(f"**Origins:** {seq['origins']}")
