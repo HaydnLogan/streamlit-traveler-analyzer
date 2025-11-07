@@ -412,10 +412,23 @@ if bypass_traveler_file is not None:
                     with c1: st.metric("o1 (Today)", summary['total_o1'])
                     with c2: st.metric("o2 (Other Day)", summary['total_o2'])
                     with c3: st.metric("Total Sequences", summary['total_sequences'])
-                    if not g_results['results_df'].empty:
-                        st.dataframe(g_results['results_df'], use_container_width=True)
+                    
+                    # Debug output
+                    if 'results_df' in g_results:
+                        st.write(f"📊 DataFrame exists: Shape = {g_results['results_df'].shape}")
+                        if not g_results['results_df'].empty:
+                            st.markdown("#### 📋 Cluster Table")
+                            st.dataframe(g_results['results_df'], use_container_width=True)
+                        else:
+                            st.info("No sequences to display in cluster table (DataFrame is empty)")
+                    else:
+                        st.error("❌ results_df not found in g_results dictionary")
+                else:
+                    st.warning(f"Unexpected g_results format or failed: {g_results}")
             except Exception as e:
                 st.error(f"Model G detection error: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
         
         if run_single_line and not final_df_filtered.empty:
             st.markdown("---")
@@ -900,18 +913,26 @@ elif small_15m_file and big_15m_file and measurement_file:
                         with c1: st.metric("o1 (Today)", summary['total_o1'])
                         with c2: st.metric("o2 (Other Day)", summary['total_o2'])
                         with c3: st.metric("Total Sequences", summary['total_sequences'])
-                        if not g_results['results_df'].empty:
-                            st.markdown("#### Detection Results")
-                            st.dataframe(g_results['results_df'], use_container_width=True)
+                        
+                        # Debug output
+                        if 'results_df' in g_results:
+                            st.write(f"📊 DataFrame exists: Shape = {g_results['results_df'].shape}")
+                            if not g_results['results_df'].empty:
+                                st.markdown("#### 📋 Cluster Table")
+                                st.dataframe(g_results['results_df'], use_container_width=True)
+                            else:
+                                st.info("No Model G sequences detected matching criteria (DataFrame is empty)")
                         else:
-                            st.info("No Model G sequences detected matching criteria")
+                            st.error("❌ results_df not found in g_results dictionary")
                     else:
                         st.error(f"Model G detection error: {g_results['error']}")
                 else:
                     st.error("Model G detection returned unexpected format")
             except Exception as e:
                 st.error(f"Model G detection error: {str(e)}")
-                st.info("Make sure model_g_manager.py exists")
+                import traceback
+                st.code(traceback.format_exc())
+                st.info("Make sure model_g_manager.py and all G model files exist")
 
         if run_single_line:
             st.markdown("---")
