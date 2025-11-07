@@ -220,7 +220,8 @@ if run_g_models:
     
     if run_g11:
         st.sidebar.markdown("**G.11 Controls:**")
-        g11_threshold = st.sidebar.slider("      Threshold (hours)", min_value=0.1, max_value=10.0, value=3.0, step=0.1)
+        g11_proximity = st.sidebar.slider("      Proximity", min_value=0.1, max_value=10.0, value=3.0, step=0.1, 
+                                         help="Filter sequences by output spread (max - min)")
         st.sidebar.markdown("**G.11 Group Controls:**")
         g11_group_0 = st.sidebar.checkbox("      ○ Grp 0 TA", value=True)
         g11_group_1 = st.sidebar.checkbox("      ○ Grp 1 sAA", value=True)
@@ -231,7 +232,7 @@ if run_g_models:
         g11_display_recipes = st.sidebar.checkbox("      Display Recips", value=True)
         g11_display_others = st.sidebar.checkbox("      Display others", value=True)
     else:
-        g11_threshold = 3.0
+        g11_proximity = 3.0
         g11_group_0 = g11_group_1 = g11_group_2 = g11_group_3 = g11_group_4 = True
         g11_display_recipes = g11_display_others = True
     
@@ -253,7 +254,7 @@ else:
     run_g10 = False
     run_g11 = False
     g10_group_0 = g10_group_1 = g10_group_2 = g10_group_3 = g10_group_4 = False
-    g11_threshold = 3.0
+    g11_proximity = 3.0
     g11_group_0 = g11_group_1 = g11_group_2 = g11_group_3 = g11_group_4 = True
     g11_display_recipes = g11_display_others = True
     debug_g08 = False
@@ -397,7 +398,7 @@ if bypass_traveler_file is not None:
                     g10_group_2=g10_group_2,
                     g10_group_3=g10_group_3,
                     g10_group_4=g10_group_4,
-                    g11_threshold=g11_threshold,
+                    g11_proximity=g11_proximity,
                     g11_group_0=g11_group_0,
                     g11_group_1=g11_group_1,
                     g11_group_2=g11_group_2,
@@ -897,7 +898,7 @@ elif small_15m_file and big_15m_file and measurement_file:
                     g10_group_2=g10_group_2,
                     g10_group_3=g10_group_3,
                     g10_group_4=g10_group_4,
-                    g11_threshold=g11_threshold,
+                    g11_proximity=g11_proximity,
                     g11_group_0=g11_group_0,
                     g11_group_1=g11_group_1,
                     g11_group_2=g11_group_2,
