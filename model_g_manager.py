@@ -64,7 +64,7 @@ def _format_feed_column(sequence_data):
     # Otherwise return all feeds in order
     return ', '.join(str(f) for f in feeds)
 
-def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_suffix="", 
+def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suffix="", 
                          run_g05_g06=True, run_g08=True, run_g09=True, run_g10=False, run_g11=False,
                          g10_group_0=True, g10_group_1=True, g10_group_2=True, g10_group_3=False, g10_group_4=False,
                          g11_proximity=3.0, g11_group_0=True, g11_group_1=True, g11_group_2=True, g11_group_3=True, g11_group_4=True,
