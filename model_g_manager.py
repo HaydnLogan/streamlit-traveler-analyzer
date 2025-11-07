@@ -174,6 +174,15 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                     for seq in g05_g06_results.get('today_sequences', []):
                         outputs = seq.get('outputs', [])
                         arrival_output = max(outputs) if outputs else None
+                        
+                        # Get arrival datetime - use the item with max output
+                        arrival_datetime = None
+                        if 'sequence' in seq:
+                            for item in seq['sequence']:
+                                if item.get('Output') == arrival_output:
+                                    arrival_datetime = pd.to_datetime(item.get('Arrival'), errors='coerce')
+                                    break
+                        
                         # Extract feeds from sequence - handle missing data gracefully
                         try:
                             if 'sequence' in seq:
@@ -185,6 +194,7 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                         
                         results_list.append({
                             'Arrival_Output': arrival_output,
+                            'Arrival_DateTime': arrival_datetime,
                             'Model': 'G.05/G.06',
                             'Type': 'Today',
                             'Category': seq.get('category', 'Unknown'),
@@ -609,59 +619,69 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                         # Debug info
                         if st.session_state.get('debug_g_models', False):
                             st.write(f"🔍 Debug: show_rejected_groups={show_rejected_groups}, rejected_count={rejected_count}")
+                            st.write(f"🔍 Debug: g11_proximity threshold={g11_proximity}")
                         
+                        # Display rejected pairs table if enabled
                         if show_rejected_groups and rejected_count > 0:
                             st.write("---")
-                            st.write("#### 🚫 Rejected Pairs Details")
+                            st.write("#### 🚫 Rejected Pairs - No Pattern Match")
+                            st.write(f"Found **{rejected_count}** pairs that didn't match any G.11 pattern")
                             
-                            # Group rejections by reason
-                            rejected_by_reason = {}
+                            # Create DataFrame for rejected pairs
+                            rejected_data = []
                             for rejected in g11_results.get('rejected_groups', []):
-                                reason = rejected['reasons'][0] if rejected.get('reasons') else 'Unknown'
-                                if reason not in rejected_by_reason:
-                                    rejected_by_reason[reason] = []
-                                rejected_by_reason[reason].append(rejected)
+                                outputs = rejected.get('outputs', [])
+                                arrivals = rejected.get('arrivals', [])
+                                
+                                # Use the max output as arrival output
+                                arrival_output = rejected.get('arrival_output', max(outputs) if outputs else None)
+                                
+                                # Get the arrival datetime for the max output
+                                arrival_datetime = None
+                                if arrivals and outputs:
+                                    max_idx = outputs.index(max(outputs))
+                                    if max_idx < len(arrivals):
+                                        arrival_datetime = arrivals[max_idx]
+                                
+                                rejected_data.append({
+                                    'Arrival_Output': arrival_output,
+                                    'Arrival_DateTime': arrival_datetime,
+                                    'Model': 'G.11 (Pair Detection sTF)',
+                                    'Category': 'No match',
+                                    'Origins': ', '.join(rejected.get('origins', [])),
+                                    'Feed': _format_feed_column(rejected.get('feeds', [])),
+                                    'M_#s': ', '.join(map(str, rejected.get('m_values', []))),
+                                    'Outputs': ', '.join([f"{x:.2f}" for x in outputs])
+                                })
                             
-                            # Display grouped by reason
-                            for reason, items in sorted(rejected_by_reason.items(), key=lambda x: len(x[1]), reverse=True):
-                                st.write(f"**{reason}** ({len(items)} pairs)")
+                            if rejected_data:
+                                rejected_df = pd.DataFrame(rejected_data)
                                 
-                                # Show first 10 of each type
-                                for idx, rejected in enumerate(items[:10], 1):
-                                    outputs = rejected.get('outputs', [])
-                                    m_values = rejected.get('m_values', [])
-                                    feeds = rejected.get('feeds', [])
-                                    
-                                    outputs_str = ', '.join([f"{x:.4f}" for x in outputs])
-                                    m_str = ', '.join([str(m) for m in m_values])
-                                    
-                                    with st.expander(f"Pair #{idx}: M# [{m_str}]"):
-                                        col1, col2 = st.columns(2)
-                                        with col1:
-                                            st.write("**Item 1:**")
-                                            st.write(f"Output: {outputs[0]:.4f}" if len(outputs) > 0 else "Output: N/A")
-                                            st.write(f"Origin: {rejected['origins'][0]}" if len(rejected.get('origins', [])) > 0 else "Origin: N/A")
-                                            st.write(f"M#: {m_values[0]}" if len(m_values) > 0 else "M#: N/A")
-                                            st.write(f"Feed: {feeds[0]}" if len(feeds) > 0 else "Feed: N/A")
-                                        
-                                        with col2:
-                                            st.write("**Item 2:**")
-                                            st.write(f"Output: {outputs[1]:.4f}" if len(outputs) > 1 else "Output: N/A")
-                                            st.write(f"Origin: {rejected['origins'][1]}" if len(rejected.get('origins', [])) > 1 else "Origin: N/A")
-                                            st.write(f"M#: {m_values[1]}" if len(m_values) > 1 else "M#: N/A")
-                                            st.write(f"Feed: {feeds[1]}" if len(feeds) > 1 else "Feed: N/A")
-                                        
-                                        # Show pattern info if available
-                                        if 'type' in rejected:
-                                            st.write(f"**Pattern Type:** {rejected['type']}")
-                                            st.write(f"**Classification:** {rejected['classification']}")
-                                            st.write(f"**Group:** {rejected['group']}")
+                                # Sort by Arrival_Output descending
+                                rejected_df = rejected_df.sort_values('Arrival_Output', ascending=False)
                                 
-                                if len(items) > 10:
-                                    st.info(f"Showing 10 of {len(items)} rejected pairs for this reason")
+                                st.write("**Rejected Details Table**")
+                                st.dataframe(rejected_df, use_container_width=True)
+                                
+                                # Download button
+                                csv = rejected_df.to_csv(index=False)
+                                st.download_button(
+                                    "📥 Download Rejected Pairs CSV",
+                                    csv,
+                                    "g11_rejected_pairs.csv",
+                                    "text/csv",
+                                    key='download-g11-rejected'
+                                )
                             
                             st.write("---")
                         elif show_rejected_groups and rejected_count == 0:
+                            st.info("✅ No pairs were rejected - all potential pairs passed filters!")
+                        
+                        # Add to results list for DataFrame (with proximity filtering)
+                        g11_before_prox_filter = 0
+                        g11_filtered_by_prox = 0
+                        
+                        for seq in g11_results.get('today_sequences', []):
                             st.info("✅ No pairs were rejected - all potential pairs passed filters!")
 
                         # Add to results list for DataFrame (with proximity filtering)
@@ -670,16 +690,29 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                             if not outputs:
                                 continue
                             
+                            g11_before_prox_filter += 1
+                            
                             # Calculate prox (output spread)
                             prox = abs(max(outputs) - min(outputs)) if len(outputs) >= 2 else 0.0
                             
                             # Filter by proximity
                             if prox > g11_proximity:
+                                g11_filtered_by_prox += 1
                                 continue
                             
                             arrival_output = max(outputs)
+                            
+                            # Get arrival datetime - use the item with max output
+                            arrival_datetime = None
+                            if 'sequence' in seq:
+                                for item in seq['sequence']:
+                                    if item.get('Output') == arrival_output:
+                                        arrival_datetime = pd.to_datetime(item.get('Arrival'), errors='coerce')
+                                        break
+                            
                             results_list.append({
                                 'Arrival_Output': arrival_output,
+                                'Arrival_DateTime': arrival_datetime,
                                 'Model': 'G.11 (Pair Detection sTF)',
                                 'Type': 'Today',
                                 'Category': seq.get('classification', 'Unknown'),
@@ -700,16 +733,29 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                             if not outputs:
                                 continue
                             
+                            g11_before_prox_filter += 1
+                            
                             # Calculate prox (output spread)
                             prox = abs(max(outputs) - min(outputs)) if len(outputs) >= 2 else 0.0
                             
                             # Filter by proximity
                             if prox > g11_proximity:
+                                g11_filtered_by_prox += 1
                                 continue
                             
                             arrival_output = max(outputs)
+                            
+                            # Get arrival datetime - use the item with max output
+                            arrival_datetime = None
+                            if 'sequence' in seq:
+                                for item in seq['sequence']:
+                                    if item.get('Output') == arrival_output:
+                                        arrival_datetime = pd.to_datetime(item.get('Arrival'), errors='coerce')
+                                        break
+                            
                             results_list.append({
                                 'Arrival_Output': arrival_output,
+                                'Arrival_DateTime': arrival_datetime,
                                 'Model': 'G.11 (Pair Detection sTF)',
                                 'Type': 'Other Day',
                                 'Category': seq.get('classification', 'Unknown'),
@@ -724,6 +770,14 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                                 'Total_Score': seq.get('total_score', 0),
                                 'Is_Recipe': 'Yes' if seq.get('is_recipe', False) else 'No'
                             })
+
+                        # Debug output for proximity filtering
+                        if st.session_state.get('debug_g_models', False):
+                            g11_kept = g11_before_prox_filter - g11_filtered_by_prox
+                            st.write(f"🔍 Debug: Proximity filtering results:")
+                            st.write(f"  - Pairs before proximity filter: {g11_before_prox_filter}")
+                            st.write(f"  - Pairs filtered out (spread > {g11_proximity}): {g11_filtered_by_prox}")
+                            st.write(f"  - Pairs kept (in Cluster Table): {g11_kept}")
 
                         # Show detailed sequences if any found
                         if today_count > 0 or other_count > 0:
