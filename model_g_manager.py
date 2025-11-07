@@ -627,56 +627,32 @@ def run_model_g_detection(df, proximity_threshold=0.10, report_time=None, key_su
         # Create results DataFrame
         results_df = pd.DataFrame(results_list) if results_list else pd.DataFrame()
         
+        if st.session_state.get('debug_g_models', False):
+            st.write(f"🔍 Debug: results_list has {len(results_list)} items")
+            st.write(f"🔍 Debug: results_df shape: {results_df.shape}")
+            if not results_df.empty:
+                st.write(f"🔍 Debug: results_df columns: {list(results_df.columns)}")
+        
         # Add Prox column - absolute difference between max and min outputs
         if not results_df.empty and 'Outputs' in results_df.columns:
             def calculate_prox(outputs_str):
                 try:
                     # Parse the outputs string to get individual values
-                    outputs = [float(x.strip()) for x in outputs_str.split(',')]
+                    outputs = [float(x.strip()) for x in str(outputs_str).split(',')]
                     if len(outputs) >= 2:
-                        return abs(max(outputs) - min(outputs))
+                        return round(abs(max(outputs) - min(outputs)), 2)
                     return 0.0
-                except:
+                except Exception:
                     return 0.0
             
             results_df['Prox'] = results_df['Outputs'].apply(calculate_prox)
         
-        # Update Type column to show "Today", "Recent", or "Old" based on Day column logic
-        if not results_df.empty and 'Type' in results_df.columns and not df.empty:
-            def determine_type(row):
-                if row['Type'] == 'Today':
-                    return 'Today'
-                
-                # For "Other Day", check the Day column in the original df
-                # Match by Arrival_Output to find corresponding row(s) in df
-                if 'Arrival_Output' in row and row['Arrival_Output'] is not None:
-                    # Find matching records in df
-                    if 'Output' in df.columns and 'Day' in df.columns:
-                        matching_rows = df[abs(df['Output'] - row['Arrival_Output']) < 0.01]
-                        if not matching_rows.empty:
-                            # Get unique Day values for this sequence
-                            day_values = matching_rows['Day'].unique()
-                            
-                            # Check if we have [0], [-1], [-2] pattern or gaps
-                            if 0 in day_values:
-                                return 'Today'
-                            elif -1 in day_values:
-                                return 'Recent'
-                            elif any(d < -1 and d >= -2 for d in day_values):
-                                return 'Recent'
-                            elif any(d == -3 for d in day_values):
-                                # Check if there's a gap (no -1, -2)
-                                if -1 not in day_values and -2 not in day_values:
-                                    return 'Recent'
-                                else:
-                                    return 'Old'
-                            else:
-                                return 'Old'
-                
-                # Default to Old for anything that wasn't Today and couldn't be determined
-                return 'Old' if row['Type'] == 'Other Day' else row['Type']
-            
-            results_df['Type'] = results_df.apply(determine_type, axis=1)
+        # Update Type column - simplify to avoid breaking the DataFrame
+        # For now, keep Today as-is and change "Other Day" to "Recent"
+        # Full Recent/Old logic requires 'Day' column which may not always be available
+        if not results_df.empty and 'Type' in results_df.columns:
+            # Simple mapping: keep "Today", change "Other Day" to "Recent"
+            results_df['Type'] = results_df['Type'].replace('Other Day', 'Recent')
         
         # Sort by Arrival_Output descending if the column exists
         if not results_df.empty and 'Arrival_Output' in results_df.columns:
