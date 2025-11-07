@@ -240,6 +240,12 @@ if run_g_models:
         st.session_state['debug_g08'] = True
     else:
         st.session_state['debug_g08'] = False
+    
+    debug_g_models = st.sidebar.checkbox("Debug G Models (show DataFrame info)", value=False)
+    if debug_g_models:
+        st.session_state['debug_g_models'] = True
+    else:
+        st.session_state['debug_g_models'] = False
 else:
     run_g05_g06 = False
     run_g08 = False
@@ -251,6 +257,7 @@ else:
     g11_group_0 = g11_group_1 = g11_group_2 = g11_group_3 = g11_group_4 = True
     g11_display_recipes = g11_display_others = True
     debug_g08 = False
+    debug_g_models = False
 
 run_a_models = st.sidebar.checkbox("🔵 Run Model A Detection", value=False)
 run_b_models = st.sidebar.checkbox("🟡 Run Model B Detection", value=False)
