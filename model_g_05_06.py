@@ -102,4 +102,10 @@ def run_g05_g06_detection(df, proximity_threshold=0.10):
             else:
                 results['other_day_sequences'].append(sequence_info)
     
+    if st.session_state.get('debug_g06', False):
+        st.write(f"📊 **G.05/G.06 Detection Summary**")
+        st.write(f"  - Today sequences: {len(results['today_sequences'])}")
+        st.write(f"  - Other day sequences: {len(results['other_day_sequences'])}")
+        st.write(f"  - Rejected groups: {len(results['rejected_groups'])}")
+    
     return results
