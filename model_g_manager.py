@@ -68,7 +68,7 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                          run_g05_g06=True, run_g08=True, run_g09=True, run_g10=False, run_g11=False,
                          g10_group_0=True, g10_group_1=True, g10_group_2=True, g10_group_3=False, g10_group_4=False,
                          g11_proximity=3.0, g11_group_0=True, g11_group_1=True, g11_group_2=True, g11_group_3=True, g11_group_4=True,
-                         g11_display_recipes=True, g11_display_others=True):
+                         g11_display_recipes=True, g11_display_others=True, show_rejected_groups=False):
     """
     Unified G Model Detection Entry Point
     Runs all available G model detectors and consolidates results
@@ -132,6 +132,37 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                     st.write(f"- **Today sequences:** {today_count}")
                     st.write(f"- **Other day sequences:** {other_count}")
                     st.write(f"- **Rejected groups:** {rejected_count}")
+
+                    # Display rejected groups if enabled
+                    if show_rejected_groups and rejected_count > 0:
+                        st.write("---")
+                        st.write("#### 🚫 Rejected Groups Details")
+                        
+                        # Group rejections by reason for better display
+                        rejected_by_reason = {}
+                        for rejected in g05_g06_results.get('rejected_groups', []):
+                            reason = rejected['reasons'][0] if rejected.get('reasons') else 'Unknown'
+                            if reason not in rejected_by_reason:
+                                rejected_by_reason[reason] = []
+                            rejected_by_reason[reason].append(rejected)
+                        
+                        # Display grouped by reason
+                        for reason, items in rejected_by_reason.items():
+                            st.write(f"**{reason}** ({len(items)} groups)")
+                            
+                            # Show first 10 of each type in expanders
+                            for idx, rejected in enumerate(items[:10], 1):
+                                outputs_str = ', '.join([f"{x:.4f}" for x in rejected['outputs']])
+                                with st.expander(f"Group #{idx}: Outputs [{outputs_str}]"):
+                                    st.write(f"**Output Range:** {rejected.get('output_range', 'N/A')}")
+                                    st.write(f"**Outputs:** {outputs_str}")
+                                    if 'origins' in rejected:
+                                        st.write(f"**Origins:** {', '.join(rejected['origins'])}")
+                            
+                            if len(items) > 10:
+                                st.info(f"Showing 10 of {len(items)} rejected groups for this reason")
+                        
+                        st.write("---")
 
                     # Add to results list for DataFrame
                     for seq in g05_g06_results.get('today_sequences', []):
@@ -526,10 +557,10 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                         st.write(f"**Enabled Groups:** {enabled_group_names}")
                         st.write(f"**Display Recipes:** {g11_display_recipes}, **Display Others:** {g11_display_others}")
                         
-                        # Use standard time-based proximity threshold for grouping (0.10 hours)
+                        # Use the proximity threshold parameter for grouping
                         g11_results = run_g11_detection(
                             df, 
-                            proximity_threshold=0.10, 
+                            proximity_threshold=proximity_threshold, 
                             enabled_groups=enabled_groups,
                             display_recipes=g11_display_recipes,
                             display_others=g11_display_others
@@ -564,6 +595,62 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                         if other_by_category:
                             for cat, count in sorted(other_by_category.items()):
                                 st.write(f"  - {cat}: {count}")
+
+                        # Display rejected groups count and details if enabled
+                        rejected_count = len(g11_results.get('rejected_groups', []))
+                        st.write(f"- **Rejected pairs:** {rejected_count}")
+                        
+                        if show_rejected_groups and rejected_count > 0:
+                            st.write("---")
+                            st.write("#### 🚫 Rejected Pairs Details")
+                            
+                            # Group rejections by reason
+                            rejected_by_reason = {}
+                            for rejected in g11_results.get('rejected_groups', []):
+                                reason = rejected['reasons'][0] if rejected.get('reasons') else 'Unknown'
+                                if reason not in rejected_by_reason:
+                                    rejected_by_reason[reason] = []
+                                rejected_by_reason[reason].append(rejected)
+                            
+                            # Display grouped by reason
+                            for reason, items in sorted(rejected_by_reason.items(), key=lambda x: len(x[1]), reverse=True):
+                                st.write(f"**{reason}** ({len(items)} pairs)")
+                                
+                                # Show first 10 of each type
+                                for idx, rejected in enumerate(items[:10], 1):
+                                    outputs = rejected.get('outputs', [])
+                                    m_values = rejected.get('m_values', [])
+                                    feeds = rejected.get('feeds', [])
+                                    
+                                    outputs_str = ', '.join([f"{x:.4f}" for x in outputs])
+                                    m_str = ', '.join([str(m) for m in m_values])
+                                    
+                                    with st.expander(f"Pair #{idx}: M# [{m_str}]"):
+                                        col1, col2 = st.columns(2)
+                                        with col1:
+                                            st.write("**Item 1:**")
+                                            st.write(f"Output: {outputs[0]:.4f}" if len(outputs) > 0 else "Output: N/A")
+                                            st.write(f"Origin: {rejected['origins'][0]}" if len(rejected.get('origins', [])) > 0 else "Origin: N/A")
+                                            st.write(f"M#: {m_values[0]}" if len(m_values) > 0 else "M#: N/A")
+                                            st.write(f"Feed: {feeds[0]}" if len(feeds) > 0 else "Feed: N/A")
+                                        
+                                        with col2:
+                                            st.write("**Item 2:**")
+                                            st.write(f"Output: {outputs[1]:.4f}" if len(outputs) > 1 else "Output: N/A")
+                                            st.write(f"Origin: {rejected['origins'][1]}" if len(rejected.get('origins', [])) > 1 else "Origin: N/A")
+                                            st.write(f"M#: {m_values[1]}" if len(m_values) > 1 else "M#: N/A")
+                                            st.write(f"Feed: {feeds[1]}" if len(feeds) > 1 else "Feed: N/A")
+                                        
+                                        # Show pattern info if available
+                                        if 'type' in rejected:
+                                            st.write(f"**Pattern Type:** {rejected['type']}")
+                                            st.write(f"**Classification:** {rejected['classification']}")
+                                            st.write(f"**Group:** {rejected['group']}")
+                                
+                                if len(items) > 10:
+                                    st.info(f"Showing 10 of {len(items)} rejected pairs for this reason")
+                            
+                            st.write("---")
 
                         # Add to results list for DataFrame (with proximity filtering)
                         for seq in g11_results.get('today_sequences', []):
