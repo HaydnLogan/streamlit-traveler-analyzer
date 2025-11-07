@@ -201,24 +201,24 @@ else:
 run_g_models = st.sidebar.checkbox("🟢 Run Model G Detection", value=False)
 if run_g_models:
     st.sidebar.markdown("**G Model Controls:**")
+    
+    # Proximity slider - applies to all G models
+    g05_g06_proximity = st.sidebar.slider(
+        "Proximity Threshold (hrs)", 
+        min_value=0.05, 
+        max_value=3.0, 
+        value=0.10, 
+        step=0.05,
+        help="Proximity threshold in hours for grouping sequences (applies to G.05/06 and G.11)"
+    )
+    
+    # Show Rejected Groups - applies to all G models
+    show_rejected_groups = st.sidebar.checkbox("Show Rejected Groups", value=False,
+        help="Display groups/pairs that were rejected during detection")
+    
+    st.sidebar.markdown("---")
+    
     run_g05_g06 = st.sidebar.checkbox("   • G.05 & G.06 (Proximity Groups)", value=False)
-    
-    # Add proximity slider for G.05/G.06
-    if run_g05_g06:
-        g05_g06_proximity = st.sidebar.slider(
-            "      G.05/06 Proximity (hrs)", 
-            min_value=0.05, 
-            max_value=3.0, 
-            value=0.10, 
-            step=0.05,
-            help="Proximity threshold in hours for grouping sequences"
-        )
-        show_rejected_groups = st.sidebar.checkbox("      Show Rejected Groups", value=False,
-            help="Display groups that were rejected during detection")
-    else:
-        g05_g06_proximity = 0.10
-        show_rejected_groups = False
-    
     run_g08 = st.sidebar.checkbox("   • G.08 (x0Pd.w Patterns)", value=False)
     run_g09 = st.sidebar.checkbox("   • G.09 (Flip Endings)", value=False)
     run_g10 = st.sidebar.checkbox("   • G.10 (Pair Detection)", value=False)
@@ -424,7 +424,8 @@ if bypass_traveler_file is not None:
                     g11_group_3=g11_group_3,
                     g11_group_4=g11_group_4,
                     g11_display_recipes=g11_display_recipes,
-                    g11_display_others=g11_display_others
+                    g11_display_others=g11_display_others,
+                    show_rejected_groups=show_rejected_groups
                 )
                 if isinstance(g_results, dict) and 'success' in g_results and g_results['success']:
                     summary = g_results['summary']
