@@ -1,7 +1,7 @@
 """
-G.11 Model Detection - Pair Detection sTF (same origin matching)
+G.11 Model Detection - Pair Detection sTF (same True Feed)
 
-Detects various pair patterns with same origin requirement and scores them based on neighboring companions
+Detects various pair patterns requiring same feed (both items must have the same Feed value)
 """
 
 import pandas as pd
@@ -246,12 +246,12 @@ def _generate_classification(group_num, group_code, pattern_type, m1, m2, is_rec
         return f"Grp {group_num} {group_code} {pattern_type} {direction}.{flip}{recipe_suffix}"
 
 def _check_gr_pairs(sequence):
-    """Check for G.11a GR pairs (30, 50) - SAME ORIGIN ONLY"""
+    """Check for G.11a GR pairs (30, 50) - SAME FEED ONLY"""
     if len(sequence) != 2:
         return None
 
-    # G.11: Check if both origins are the same
-    if sequence[0]['Origin'] != sequence[1]['Origin']:
+    # G.11: Check if both feeds are the same
+    if sequence[0].get('Feed') != sequence[1].get('Feed'):
         return None
 
     m1 = _round_m(sequence[0]['M #'])
@@ -282,12 +282,12 @@ def _check_gr_pairs(sequence):
     return None
 
 def _check_x0_pairs(sequence):
-    """Check for G.11b x0 pairs - SAME ORIGIN ONLY"""
+    """Check for G.11b x0 pairs - SAME FEED ONLY"""
     if len(sequence) != 2:
         return None
 
-    # G.11: Check if both origins are the same
-    if sequence[0]['Origin'] != sequence[1]['Origin']:
+    # G.11: Check if both feeds are the same
+    if sequence[0].get('Feed') != sequence[1].get('Feed'):
         return None
 
     m1 = _round_m(sequence[0]['M #'])
@@ -318,12 +318,12 @@ def _check_x0_pairs(sequence):
     return None
 
 def _check_x1_pairs(sequence):
-    """Check for G.11c x1 pairs - SAME ORIGIN ONLY"""
+    """Check for G.11c x1 pairs - SAME FEED ONLY"""
     if len(sequence) != 2:
         return None
 
-    # G.11: Check if both origins are the same
-    if sequence[0]['Origin'] != sequence[1]['Origin']:
+    # G.11: Check if both feeds are the same
+    if sequence[0].get('Feed') != sequence[1].get('Feed'):
         return None
 
     m1 = _round_m(sequence[0]['M #'])
@@ -354,12 +354,12 @@ def _check_x1_pairs(sequence):
     return None
 
 def _check_fogz_pairs(sequence):
-    """Check for G.11d Fogz pairs - SAME ORIGIN ONLY"""
+    """Check for G.11d Fogz pairs - SAME FEED ONLY"""
     if len(sequence) != 2:
         return None
 
-    # G.11: Check if both origins are the same
-    if sequence[0]['Origin'] != sequence[1]['Origin']:
+    # G.11: Check if both feeds are the same
+    if sequence[0].get('Feed') != sequence[1].get('Feed'):
         return None
 
     m1 = _round_m(sequence[0]['M #'])
@@ -391,12 +391,12 @@ def _check_fogz_pairs(sequence):
     return None
 
 def _check_zero_pairs(sequence):
-    """Check for G.11e Zero pairs - SAME ORIGIN ONLY"""
+    """Check for G.11e Zero pairs - SAME FEED ONLY"""
     if len(sequence) != 2:
         return None
 
-    # G.11: Check if both origins are the same
-    if sequence[0]['Origin'] != sequence[1]['Origin']:
+    # G.11: Check if both feeds are the same
+    if sequence[0].get('Feed') != sequence[1].get('Feed'):
         return None
 
     m1 = _round_m(sequence[0]['M #'])
@@ -425,12 +425,12 @@ def _check_zero_pairs(sequence):
     return None
 
 def _check_premium_pairs(sequence):
-    """Check for G.11g Premium pairs - SAME ORIGIN ONLY"""
+    """Check for G.11g Premium pairs - SAME FEED ONLY"""
     if len(sequence) != 2:
         return None
 
-    # G.11: Check if both origins are the same
-    if sequence[0]['Origin'] != sequence[1]['Origin']:
+    # G.11: Check if both feeds are the same
+    if sequence[0].get('Feed') != sequence[1].get('Feed'):
         return None
 
     m1 = _round_m(sequence[0]['M #'])
@@ -459,12 +459,12 @@ def _check_premium_pairs(sequence):
     return None
 
 def _check_dd_pairs(sequence):
-    """Check for G.11f Fogz & Ds mid to large pairs - SAME ORIGIN ONLY"""
+    """Check for G.11f Fogz & Ds mid to large pairs - SAME FEED ONLY"""
     if len(sequence) != 2:
         return None
 
-    # G.11: Check if both origins are the same
-    if sequence[0]['Origin'] != sequence[1]['Origin']:
+    # G.11: Check if both feeds are the same
+    if sequence[0].get('Feed') != sequence[1].get('Feed'):
         return None
 
     m1 = _round_m(sequence[0]['M #'])
@@ -495,7 +495,8 @@ def _check_dd_pairs(sequence):
 
 def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_recipes=True, display_others=True):
     """
-    G.11 Detection: Pair patterns with neighbor scoring - SAME ORIGIN ONLY
+    G.11 Detection: Pair patterns with neighbor scoring - SAME FEED ONLY
+    sTF = same True Feed - only detects pairs where both items have the same Feed
     """
     if df.empty:
         return {
@@ -536,8 +537,8 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
             for j in range(i + 1, len(group)):
                 pair = [group[i], group[j]]
 
-                # G.11 KEY CHANGE: Only process if both have same origin
-                if pair[0]['Origin'] != pair[1]['Origin']:
+                # G.11 KEY CHANGE: Only process if both have same feed (sTF = same True Feed)
+                if pair[0].get('Feed') != pair[1].get('Feed'):
                     continue
 
                 # Sort pair chronologically
