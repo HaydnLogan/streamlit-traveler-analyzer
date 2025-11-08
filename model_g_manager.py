@@ -1,3 +1,4 @@
+# 11.8.2025 v31i - Changed proximity_threshold to output_spread_filter (global for all G models)
 # 11.6.2025 Model G.11 added. 11.7 Same origin error fixed, changed to correct same feed intent.
 """  8.16.25 Model G toggles FIXED
 G Model Manager - Unified interface for all G model detection
@@ -64,15 +65,18 @@ def _format_feed_column(sequence_data):
     # Otherwise return all feeds in order
     return ', '.join(str(f) for f in feeds)
 
-def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suffix="", 
+def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_suffix="", 
                          run_g05_g06=True, run_g08=True, run_g09=True, run_g10=False, run_g11=False,
                          g10_group_0=True, g10_group_1=True, g10_group_2=True, g10_group_3=False, g10_group_4=False,
-                         g11_proximity=3.0, g11_group_0=True, g11_group_1=True, g11_group_2=True, g11_group_3=True, g11_group_4=True,
+                         g11_group_0=True, g11_group_1=True, g11_group_2=True, g11_group_3=True, g11_group_4=True,
                          g11_display_recipes=True, g11_display_others=True, show_rejected_groups=False):
     """
     Unified G Model Detection Entry Point
     Runs all available G model detectors and consolidates results
     Returns format expected by main app: {'success': bool, 'summary': dict, 'results_df': DataFrame, 'error': str}
+    
+    Args:
+        output_spread_filter: Maximum output spread (max - min) for filtering sequences/groups
     """
 
     if df.empty:
@@ -118,7 +122,7 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
             with st.expander("G.05 & G.06 Detection", expanded=True):
                 st.write("**Standard proximity grouping with descending sequences**")
                 try:
-                    g05_g06_results = run_g05_g06_detection(df, proximity_threshold)
+                    g05_g06_results = run_g05_g06_detection(df, output_spread_filter)
                     all_results['g05_g06'] = g05_g06_results
 
                     # Display results summary
@@ -576,7 +580,7 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                         # Use the proximity threshold parameter for grouping
                         g11_results = run_g11_detection(
                             df, 
-                            proximity_threshold=proximity_threshold, 
+                            output_spread_filter=output_spread_filter, 
                             enabled_groups=enabled_groups,
                             display_recipes=g11_display_recipes,
                             display_others=g11_display_others
@@ -619,7 +623,7 @@ def run_model_g_detection(df, proximity_threshold=3.0, report_time=None, key_suf
                         # Debug info
                         if st.session_state.get('debug_g_models', False):
                             st.write(f"🔍 Debug: show_rejected_groups={show_rejected_groups}, rejected_count={rejected_count}")
-                            st.write(f"🔍 Debug: g11_proximity threshold={g11_proximity}")
+                            st.write(f"🔍 Debug: output_spread_filter={output_spread_filter}")
                         
                         # Display rejected pairs table if enabled
                         if show_rejected_groups and rejected_count > 0:
