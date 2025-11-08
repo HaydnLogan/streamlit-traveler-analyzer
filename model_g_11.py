@@ -1,5 +1,5 @@
 """
-G.11 Model Detection - Pair Detection sTF (same True Feed)
+G.11 Model Detection - Pair Detection SF (Same Feed)
 
 Detects various pair patterns requiring same feed (both items must have the same Feed value)
 """
@@ -496,7 +496,7 @@ def _check_dd_pairs(sequence):
 def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_recipes=True, display_others=True):
     """
     G.11 Detection: Pair patterns with neighbor scoring - SAME FEED ONLY
-    sTF = same True Feed - only detects pairs where both items have the same Feed
+    SF = Same Feed - only detects pairs where both items have the same Feed
     """
     if df.empty:
         return {
@@ -537,7 +537,7 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
             for j in range(i + 1, len(group)):
                 pair = [group[i], group[j]]
 
-                # G.11 KEY CHANGE: Only process if both have same feed (sTF = same True Feed)
+                # G.11 KEY CHANGE: Only process if both have same feed (SF = Same Feed)
                 if pair[0].get('Feed') != pair[1].get('Feed'):
                     # Don't track - G.11 only looks for same-feed matches
                     continue
