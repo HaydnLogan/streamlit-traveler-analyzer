@@ -242,7 +242,7 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
             with st.expander("G.08 Detection", expanded=True):
                 st.write("**x0Pd.w pattern recognition with Group 1B filtering**")
                 try:
-                    g08_results = run_g08_detection(df, proximity_threshold)
+                    g08_results = run_g08_detection(df, output_spread_filter)
                     all_results['g08'] = g08_results
 
                     # Display results summary
@@ -360,7 +360,7 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
             with st.expander("G.09 Detection", expanded=True):
                 st.write("**x0Pd.w descending patterns with flip endings**")
                 try:
-                    g09_results = run_g09_detection(df, proximity_threshold)
+                    g09_results = run_g09_detection(df, output_spread_filter)
                     all_results['g09'] = g09_results
 
                     # Display results summary
@@ -470,7 +470,7 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                     if g10_group_4: enabled_groups.append(4)
                     
                     st.write(f"**Enabled Groups:** {enabled_groups}")
-                    g10_results = run_g10_detection(df, proximity_threshold, enabled_groups=enabled_groups)
+                    g10_results = run_g10_detection(df, output_spread_filter, enabled_groups=enabled_groups)
                     all_results['g10'] = g10_results
 
                     # Display results summary
@@ -561,7 +561,7 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
             else:
                 with st.expander("G.11 Detection (Pair Detection sTF)", expanded=True):
                     st.write("**Pair Detection with Same Feed Requirement (GR, x0, x1, Fogz & Ps, Zero, Premiums, DD Fogz & D patterns)**")
-                    st.write(f"**Proximity Filter:** {g11_proximity} (max output spread)")
+                    st.write(f"**Output Spread Filter:** {output_spread_filter} (max output spread)")
                     try:
                         # Create group filter based on enabled groups
                         enabled_groups = []
@@ -688,7 +688,7 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                         for seq in g11_results.get('today_sequences', []):
                             st.info("✅ No pairs were rejected - all potential pairs passed filters!")
 
-                        # Add to results list for DataFrame (with proximity filtering)
+                        # Add to results list for DataFrame (with output spread filtering)
                         for seq in g11_results.get('today_sequences', []):
                             outputs = seq.get('outputs', [])
                             if not outputs:
@@ -699,8 +699,8 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                             # Calculate prox (output spread)
                             prox = abs(max(outputs) - min(outputs)) if len(outputs) >= 2 else 0.0
                             
-                            # Filter by proximity
-                            if prox > g11_proximity:
+                            # Filter by output spread
+                            if prox > output_spread_filter:
                                 g11_filtered_by_prox += 1
                                 continue
                             
@@ -742,8 +742,8 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                             # Calculate prox (output spread)
                             prox = abs(max(outputs) - min(outputs)) if len(outputs) >= 2 else 0.0
                             
-                            # Filter by proximity
-                            if prox > g11_proximity:
+                            # Filter by output spread
+                            if prox > output_spread_filter:
                                 g11_filtered_by_prox += 1
                                 continue
                             
@@ -775,12 +775,12 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                                 'Is_Recipe': 'Yes' if seq.get('is_recipe', False) else 'No'
                             })
 
-                        # Debug output for proximity filtering
+                        # Debug output for output spread filtering
                         if st.session_state.get('debug_g_models', False):
                             g11_kept = g11_before_prox_filter - g11_filtered_by_prox
-                            st.write(f"🔍 Debug: Proximity filtering results:")
-                            st.write(f"  - Pairs before proximity filter: {g11_before_prox_filter}")
-                            st.write(f"  - Pairs filtered out (spread > {g11_proximity}): {g11_filtered_by_prox}")
+                            st.write(f"🔍 Debug: Output spread filtering results:")
+                            st.write(f"  - Pairs before output spread filter: {g11_before_prox_filter}")
+                            st.write(f"  - Pairs filtered out (spread > {output_spread_filter}): {g11_filtered_by_prox}")
                             st.write(f"  - Pairs kept (in Cluster Table): {g11_kept}")
 
                         # Show detailed sequences if any found
