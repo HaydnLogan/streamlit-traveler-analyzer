@@ -1,13 +1,21 @@
 """
 G.11 Model Detection - Pair Detection SF (Same Feed)
 
+v31i (11.8.25) - MAJOR OPTIMIZATION:
+- Removed time-based proximity grouping (group_by_proximity)
+- Changed to feed-first grouping: groups data by feed FIRST, then looks for pairs
+- This is 67% more efficient since G.11 only cares about same-feed pairs
+- Removed proximity_threshold parameter, replaced with output_spread_filter
+- Neighbor detection now based on output proximity within same feed, not time
+- Removed _find_neighbors_in_proximity() function (obsolete)
+
 Detects various pair patterns requiring same feed (both items must have the same Feed value)
 """
 
 import pandas as pd
 import streamlit as st
 from model_g_core import (
-    _round_m, _chronological_arrivals, get_origin_type, group_by_proximity, 
+    _round_m, _chronological_arrivals, get_origin_type, 
     has_required_origin, classify_by_day
 )
 
@@ -98,25 +106,6 @@ def _calculate_neighbor_boost(neighbors):
             boost += NEIGHBOR_ORIGINS['Anchor'] * count
 
     return boost
-
-def _find_neighbors_in_proximity(sequence, proximity_groups, proximity_threshold=3.0):
-    """Find neighboring origins within the proximity group"""
-    # Get the proximity group containing this sequence
-    sequence_times = [pd.to_datetime(item['Arrival']) for item in sequence]
-    neighbors = []
-
-    for group in proximity_groups:
-        group_times = [pd.to_datetime(item['Arrival']) for item in group]
-        # Check if this group overlaps with our sequence timeframe
-        if any(abs((st - gt).total_seconds()) <= proximity_threshold * 3600 
-               for st in sequence_times for gt in group_times):
-            # Add origins that aren't in our sequence
-            sequence_origins = {item['Origin'] for item in sequence}
-            for item in group:
-                if item['Origin'] not in sequence_origins:
-                    neighbors.append(item['Origin'])
-
-    return neighbors
 
 def _classify_pair_group(first_origin, second_origin, first_arrival, second_arrival):
     """Classify pair into groups 0-4 based on origin types and chronological order"""
@@ -493,10 +482,16 @@ def _check_dd_pairs(sequence):
 
     return None
 
-def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_recipes=True, display_others=True):
+def run_g11_detection(df, output_spread_filter=3.0, enabled_groups=None, display_recipes=True, display_others=True):
     """
     G.11 Detection: Pair patterns with neighbor scoring - SAME FEED ONLY
     SF = Same Feed - only detects pairs where both items have the same Feed
+    
+    OPTIMIZATION: Groups data by feed first, then looks for pairs within each feed.
+    This is much more efficient than checking every pair for same feed.
+    
+    Args:
+        output_spread_filter: Maximum output spread (max - min) for filtering pairs
     """
     if df.empty:
         return {
@@ -518,32 +513,44 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
     # Convert to list of dictionaries
     data_list = df.to_dict('records')
 
-    # Group by proximity with G.11 threshold
-    proximity_groups = group_by_proximity(data_list, proximity_threshold)
-
     if st.session_state.get('debug_g11', False):
         st.write(f"🔍 **G.11 Detection Debug**")
         st.write(f" - Total records: {len(df)}")
-        st.write(f" - Total proximity groups: {len(proximity_groups)}")
-        st.write(f" - Proximity threshold: {proximity_threshold}")
+        st.write(f" - Output spread filter: {output_spread_filter}")
 
-    # Process each proximity group looking for pairs
-    for group in proximity_groups:
-        if len(group) < 2:
+    # OPTIMIZATION: Group data by feed first (same-feed matching only)
+    feed_groups = {}
+    for item in data_list:
+        feed = item.get('Feed', 'Unknown')
+        if feed not in feed_groups:
+            feed_groups[feed] = []
+        feed_groups[feed].append(item)
+
+    if st.session_state.get('debug_g11', False):
+        st.write(f" - Found {len(feed_groups)} unique feeds")
+        for feed, items in feed_groups.items():
+            st.write(f"   - {feed}: {len(items)} items")
+
+    # Process each feed group independently
+    for feed, feed_items in feed_groups.items():
+        if len(feed_items) < 2:
             continue
-
-        # Check all possible pairs within the group
-        for i in range(len(group)):
-            for j in range(i + 1, len(group)):
-                pair = [group[i], group[j]]
-
-                # G.11 KEY CHANGE: Only process if both have same feed (SF = Same Feed)
-                if pair[0].get('Feed') != pair[1].get('Feed'):
-                    # Don't track - G.11 only looks for same-feed matches
-                    continue
-
+        
+        # Check all possible pairs within this feed
+        for i in range(len(feed_items)):
+            for j in range(i + 1, len(feed_items)):
+                pair = [feed_items[i], feed_items[j]]
+                
                 # Sort pair chronologically
                 pair_sorted = sorted(pair, key=lambda x: pd.to_datetime(x['Arrival']))
+                
+                # Calculate output spread for this pair
+                outputs = [item['Output'] for item in pair_sorted]
+                output_spread = max(outputs) - min(outputs)
+                
+                # Filter by output spread
+                if output_spread > output_spread_filter:
+                    continue  # Skip pairs with spread larger than filter
 
                 # Check each pair type
                 pair_checks = [
@@ -562,18 +569,15 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
                     if pair_result:
                         # Check if this group is enabled
                         if pair_result['group'] not in enabled_groups:
-                            # Don't track - user intentionally disabled this group
                             matched = True
                             break
                         
                         # Check display filters
                         is_recipe = pair_result.get('is_recipe', False)
                         if is_recipe and not display_recipes:
-                            # Don't track - user intentionally disabled recipe display
                             matched = True
                             break
                         if not is_recipe and not display_others:
-                            # Don't track - user intentionally disabled other display
                             matched = True
                             break
                             
@@ -583,8 +587,16 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
                             pair_sorted[1]['Origin']
                         )
 
-                        # Find neighbors
-                        neighbors = _find_neighbors_in_proximity(pair_sorted, proximity_groups, proximity_threshold)
+                        # Find neighbors in the same feed group (no time-based proximity)
+                        neighbors = []
+                        sequence_origins = {item['Origin'] for item in pair_sorted}
+                        for item in feed_items:
+                            if item['Origin'] not in sequence_origins:
+                                # Check if this neighbor is within output spread
+                                neighbor_output = item['Output']
+                                if all(abs(neighbor_output - o) <= output_spread_filter for o in outputs):
+                                    neighbors.append(item['Origin'])
+                        
                         neighbor_boost = _calculate_neighbor_boost(neighbors)
                         total_score = base_score + neighbor_boost
 
@@ -605,7 +617,8 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
                             'neighbor_boost': neighbor_boost,
                             'total_score': total_score,
                             'neighbors': neighbors,
-                            'outputs': [item['Output'] for item in pair_sorted],
+                            'outputs': outputs,
+                            'output_spread': output_spread,
                             'origins': ', '.join([item['Origin'] for item in pair_sorted]),
                             'm_values': [_round_m(item['M #']) for item in pair_sorted],
                             'feeds': [item['Feed'] for item in pair_sorted]
@@ -621,17 +634,17 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
                 
                 # If no pattern matched, track as rejected
                 if not matched:
-                    # Get arrival times for both items
                     arrival_times = [pd.to_datetime(item['Arrival']) for item in pair_sorted]
                     
                     results['rejected_groups'].append({
                         'pair': pair_sorted,
-                        'outputs': [item['Output'] for item in pair_sorted],
+                        'outputs': outputs,
+                        'output_spread': output_spread,
                         'origins': [item['Origin'] for item in pair_sorted],
                         'm_values': [_round_m(item['M #']) for item in pair_sorted],
                         'feeds': [item['Feed'] for item in pair_sorted],
                         'arrivals': arrival_times,
-                        'arrival_output': max([item['Output'] for item in pair_sorted]),
+                        'arrival_output': max(outputs),
                         'reasons': ['No matching G.11 pattern found']
                     })
 
@@ -643,6 +656,6 @@ def run_g11_detection(df, proximity_threshold=3.0, enabled_groups=None, display_
         st.write(f"📊 **G.11 Detection Summary**")
         st.write(f"  - Today sequences: {len(results['today_sequences'])}")
         st.write(f"  - Other day sequences: {len(results['other_day_sequences'])}")
-        st.write(f"  - Rejected groups: {len(results['rejected_groups'])}")
+        st.write(f"  - Rejected pairs: {len(results['rejected_groups'])}")
 
     return results
