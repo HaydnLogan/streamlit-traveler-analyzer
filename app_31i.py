@@ -407,7 +407,7 @@ if bypass_traveler_file is not None:
             try:
                 g_results = run_model_g_detection(
                     final_df_filtered,
-                    proximity_threshold=g05_g06_proximity,
+                    output_spread_filter=output_spread_filter,
                     report_time=report_time,
                     key_suffix="_bypass",
                     run_g05_g06=run_g05_g06,
@@ -420,7 +420,6 @@ if bypass_traveler_file is not None:
                     g10_group_2=g10_group_2,
                     g10_group_3=g10_group_3,
                     g10_group_4=g10_group_4,
-                    g11_proximity=g11_proximity,
                     g11_group_0=g11_group_0,
                     g11_group_1=g11_group_1,
                     g11_group_2=g11_group_2,
