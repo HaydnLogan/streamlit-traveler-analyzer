@@ -1,15 +1,23 @@
 """
 G.05 and G.06 Model Detection
+
+v31i (11.8.25) - Updated to use output_spread_filter instead of proximity_threshold
+- Changed parameter name for consistency across all G models
+- Added output spread filtering to reject groups with spread > threshold
+- Temporal grouping still used (needed for temporal descending sequences)
 """
 
 import pandas as pd
 import streamlit as st
 from model_g_core import *
 
-def run_g05_g06_detection(df, proximity_threshold=0.10):
+def run_g05_g06_detection(df, output_spread_filter=3.0):
     """
     G.05 Detection: Standard proximity grouping with descending sequences
     G.06 Detection: Similar to G.05 but with different criteria
+    
+    Args:
+        output_spread_filter: Maximum output spread (max - min) for filtering groups
     """
     
     results = {
@@ -21,30 +29,41 @@ def run_g05_g06_detection(df, proximity_threshold=0.10):
     # Convert DataFrame to list of dictionaries
     data_list = df.to_dict('records')
     
-    # Group by proximity
-    proximity_groups = group_by_proximity(data_list, proximity_threshold)
+    # Group by proximity (still needed for temporal descending sequences)
+    # Note: This uses a small time window for finding temporal patterns
+    proximity_groups = group_by_proximity(data_list, 0.10)  # Fixed small window for temporal patterns
     
     if st.session_state.get('debug_g06', False):
         st.write(f"🔍 **G.05/G.06 Detection Debug**")
         st.write(f"  - Total proximity groups: {len(proximity_groups)}")
-        st.write(f"  - Proximity threshold: {proximity_threshold}")
+        st.write(f"  - Output spread filter: {output_spread_filter}")
     
     # Process each proximity group
     for group in proximity_groups:
+        # Calculate output spread for this group
+        output_values = [item['Output'] for item in group]
+        min_output = min(output_values)
+        max_output = max(output_values)
+        output_spread = max_output - min_output
+        
+        # Filter by output spread FIRST (main filtering criterion)
+        if output_spread > output_spread_filter:
+            results['rejected_groups'].append({
+                'outputs': output_values,
+                'reasons': [f'Output spread {output_spread:.3f} exceeds filter {output_spread_filter:.3f}'],
+                'output_range': f"{min_output:.3f} to {max_output:.3f} (spread: {output_spread:.3f})"
+            })
+            continue
+        
         # Check basic requirements
         has_anchor_epc = has_required_origin(group)
         
         if not has_anchor_epc:
             # Store rejected group info
-            output_values = [item['Output'] for item in group]
-            min_output = min(output_values)
-            max_output = max(output_values)
-            output_range_spread = max_output - min_output
-            
             results['rejected_groups'].append({
                 'outputs': output_values,
                 'reasons': ['No Anchor/EPC origin'],
-                'output_range': f"{min_output:.3f} to {max_output:.3f} (spread: {output_range_spread:.3f})"
+                'output_range': f"{min_output:.3f} to {max_output:.3f} (spread: {output_spread:.3f})"
             })
             continue
         
@@ -53,15 +72,10 @@ def run_g05_g06_detection(df, proximity_threshold=0.10):
         
         if not valid_sequences:
             # Store rejected group info
-            output_values = [item['Output'] for item in group]
-            min_output = min(output_values)
-            max_output = max(output_values)
-            output_range_spread = max_output - min_output
-            
             results['rejected_groups'].append({
                 'outputs': output_values,
                 'reasons': ['No valid descending sequences found'],
-                'output_range': f"{min_output:.3f} to {max_output:.3f} (spread: {output_range_spread:.3f})"
+                'output_range': f"{min_output:.3f} to {max_output:.3f} (spread: {output_spread:.3f})"
             })
             continue
         
