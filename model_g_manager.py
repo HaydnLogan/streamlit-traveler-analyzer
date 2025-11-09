@@ -706,19 +706,53 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                             
                             arrival_output = max(outputs)
                             
-                            # Get arrival datetime - use the item with max output
+                            # Get MOST RECENT arrival datetime from the pair (not necessarily max output)
                             arrival_datetime = None
+                            arrival_bracket = None
                             if 'sequence' in seq:
+                                # Find the item with the LATEST (most recent) arrival time
+                                max_arrival_time = None
                                 for item in seq['sequence']:
-                                    if item.get('Output') == arrival_output:
-                                        arrival_datetime = pd.to_datetime(item.get('Arrival'), errors='coerce')
-                                        break
+                                    item_arrival = pd.to_datetime(item.get('Arrival'), errors='coerce')
+                                    if item_arrival is not None:
+                                        if max_arrival_time is None or item_arrival > max_arrival_time:
+                                            max_arrival_time = item_arrival
+                                            arrival_datetime = item_arrival
+                                            # Try to extract bracket from Arrival column (e.g., [-1], [0], [-3])
+                                            arrival_str = str(item.get('Arrival', ''))
+                                            if '[' in arrival_str and ']' in arrival_str:
+                                                try:
+                                                    bracket_val = int(arrival_str.split('[')[1].split(']')[0])
+                                                    arrival_bracket = bracket_val
+                                                except:
+                                                    pass
+                            
+                            # Determine Type: Today, Recent, or Older
+                            # Today = arrival is today's date
+                            # Recent = bracketed value closest to [0], usually [-1] or [-3]
+                            # Older = everything else
+                            type_classification = 'Older'
+                            if arrival_datetime:
+                                today_date = pd.Timestamp.now().normalize()
+                                if arrival_datetime.normalize() == today_date:
+                                    type_classification = 'Today'
+                                elif arrival_bracket is not None:
+                                    # Recent if bracket is [-1] or if [-1] missing, next closest ([-3])
+                                    if arrival_bracket == -1:
+                                        type_classification = 'Recent'
+                                    elif arrival_bracket == -3:
+                                        # Check if this is the closest to [0] available
+                                        # In practice, if we see [-3], assume [-1] is missing
+                                        type_classification = 'Recent'
+                                    elif arrival_bracket == 0:
+                                        type_classification = 'Today'  # [0] is also current
                             
                             results_list.append({
                                 'Arrival_Output': arrival_output,
                                 'Arrival_DateTime': arrival_datetime,
+                                'Arrival_Bracket': arrival_bracket,  # Store for reference
                                 'Model': 'G.11 (Pair Detection sTF)',
-                                'Type': 'Today',
+                                'Type': type_classification,
                                 'Category': seq.get('classification', 'Unknown'),
                                 'Origins': seq.get('origins', ''),  # Already a string
                                 'Feed': _format_feed_column(seq.get('feeds', [])),
@@ -749,19 +783,48 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                             
                             arrival_output = max(outputs)
                             
-                            # Get arrival datetime - use the item with max output
+                            # Get MOST RECENT arrival datetime from the pair (not necessarily max output)
                             arrival_datetime = None
+                            arrival_bracket = None
                             if 'sequence' in seq:
+                                # Find the item with the LATEST (most recent) arrival time
+                                max_arrival_time = None
                                 for item in seq['sequence']:
-                                    if item.get('Output') == arrival_output:
-                                        arrival_datetime = pd.to_datetime(item.get('Arrival'), errors='coerce')
-                                        break
+                                    item_arrival = pd.to_datetime(item.get('Arrival'), errors='coerce')
+                                    if item_arrival is not None:
+                                        if max_arrival_time is None or item_arrival > max_arrival_time:
+                                            max_arrival_time = item_arrival
+                                            arrival_datetime = item_arrival
+                                            # Try to extract bracket from Arrival column (e.g., [-1], [0], [-3])
+                                            arrival_str = str(item.get('Arrival', ''))
+                                            if '[' in arrival_str and ']' in arrival_str:
+                                                try:
+                                                    bracket_val = int(arrival_str.split('[')[1].split(']')[0])
+                                                    arrival_bracket = bracket_val
+                                                except:
+                                                    pass
+                            
+                            # Determine Type: Today, Recent, or Older
+                            type_classification = 'Older'
+                            if arrival_datetime:
+                                today_date = pd.Timestamp.now().normalize()
+                                if arrival_datetime.normalize() == today_date:
+                                    type_classification = 'Today'
+                                elif arrival_bracket is not None:
+                                    # Recent if bracket is [-1] or if [-1] missing, next closest ([-3])
+                                    if arrival_bracket == -1:
+                                        type_classification = 'Recent'
+                                    elif arrival_bracket == -3:
+                                        type_classification = 'Recent'
+                                    elif arrival_bracket == 0:
+                                        type_classification = 'Today'
                             
                             results_list.append({
                                 'Arrival_Output': arrival_output,
                                 'Arrival_DateTime': arrival_datetime,
+                                'Arrival_Bracket': arrival_bracket,  # Store for reference
                                 'Model': 'G.11 (Pair Detection sTF)',
-                                'Type': 'Other Day',
+                                'Type': type_classification,
                                 'Category': seq.get('classification', 'Unknown'),
                                 'Origins': seq.get('origins', ''),  # Already a string
                                 'Feed': _format_feed_column(seq.get('feeds', [])),
@@ -844,12 +907,8 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                     cols.insert(outputs_idx + 1, 'Prox')
                     results_df = results_df[cols]
         
-        # Update Type column - simplify to avoid breaking the DataFrame
-        # For now, keep Today as-is and change "Other Day" to "Recent"
-        # Full Recent/Old logic requires 'Day' column which may not always be available
-        if not results_df.empty and 'Type' in results_df.columns:
-            # Simple mapping: keep "Today", change "Other Day" to "Recent"
-            results_df['Type'] = results_df['Type'].replace('Other Day', 'Recent')
+        # Type column now properly set in G.11 detection (Today/Recent/Older)
+        # No need to replace values here
         
         # Sort by Arrival_Output descending if the column exists
         if not results_df.empty and 'Arrival_Output' in results_df.columns:
@@ -857,6 +916,22 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
             results_df['Arrival_Output_Sort'] = results_df['Arrival_Output'].fillna(-999999)
             results_df = results_df.sort_values('Arrival_Output_Sort', ascending=False)
             results_df = results_df.drop('Arrival_Output_Sort', axis=1)
+        
+        # Apply highlighting for Today and Recent rows
+        if not results_df.empty and 'Type' in results_df.columns:
+            def highlight_today_recent(row):
+                """Highlight Today rows in yellow and Recent rows in light blue"""
+                if row['Type'] == 'Today':
+                    return ['background-color: #ffeb3b'] * len(row)  # Yellow
+                elif row['Type'] == 'Recent':
+                    return ['background-color: #bbdefb'] * len(row)  # Light blue
+                else:
+                    return [''] * len(row)
+            
+            # Store styled version for display
+            results_df_styled = results_df.style.apply(highlight_today_recent, axis=1)
+        else:
+            results_df_styled = results_df
 
         # Return format expected by main app
         return {
@@ -867,6 +942,7 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                 'total_sequences': total_sequences
             },
             'results_df': results_df,
+            'results_df_styled': results_df_styled,  # Include styled version
             'raw_results': all_results  # Include raw results for detailed access
         }
 
