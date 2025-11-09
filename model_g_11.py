@@ -9,6 +9,24 @@ v31i (11.8.25) - MAJOR OPTIMIZATION:
 - Neighbor detection now based on output proximity within same feed, not time
 - Removed _find_neighbors_in_proximity() function (obsolete)
 
+v31i BUGFIXES (11.9.25) - RECIPE DETECTION FIXED:
+- BUG 1 FIXED: Added _check_recipe_pairs_first() - was completely missing!
+  * Recipe_X2 pairs (39, 41) were never being checked
+  * Recipe_X1 pair (26, 55) was being missed (only checked for 36, 39)
+  * Recipe pairs were being caught by non-recipe checks and marked as non-recipes
+- BUG 2 FIXED: Reordered pair checks to prioritize recipes FIRST
+  * Ensures all recipes are always detected as recipes
+  * Prevents recipes from being caught by broader non-recipe patterns
+- BUG 3 FIXED: Added x2 pattern support to _generate_classification()
+  * Was missing, causing classification errors for x2 pairs
+- ENHANCEMENT: Updated _check_x1_pairs to support m# 26 in non-recipe checks
+  * Now checks for (26, 36, or 39) with pX2_1_0
+
+Recipe Detection Priority (NEW):
+1. Check ALL recipes first: GR (30,50), x0, x1 (36,43) (26,55), x2 (39,41)
+2. Then check non-recipe patterns: GR, x0, x1, Fogz, Zero, Premiums, DD
+3. This guarantees recipes are never missed or misclassified
+
 Detects various pair patterns requiring same feed (both items must have the same Feed value)
 """
 
@@ -26,6 +44,9 @@ RECIPE_X0_PAIRS = [
 ]
 RECIPE_X1_PAIRS = [(36, 43), (26, 55)]
 RECIPE_X2_PAIRS = [(39, 41)]
+
+# Flatten all recipe pairs for easy checking
+ALL_RECIPE_PAIRS = RECIPE_X0_PAIRS + RECIPE_X1_PAIRS + RECIPE_X2_PAIRS
 
 FOGZ_VALUES = {1, 2, 3, 5, 6}
 PX2_1_0 = {41, 43, 50, 60, 68, 77, 87, 96, 103, 107, 111}
@@ -46,6 +67,102 @@ NEIGHBOR_ORIGINS = {
     'Macedonia[1]': 15,
     'Macedonia[2]': 15
 }
+
+def _check_recipe_pairs_first(sequence):
+    """
+    PRIORITY CHECK: Check if pair matches ANY recipe pattern FIRST
+    This ensures recipes are always detected as recipes, not caught by broader patterns
+    
+    Checks in order:
+    1. Recipe GR: (30, 50)
+    2. Recipe X0: (22,60), (14,68), (10,77), (6,87), (5,96), (3,103), (2,107), (1,111)
+    3. Recipe X1: (36, 43), (26, 55)
+    4. Recipe X2: (39, 41)
+    """
+    if len(sequence) != 2:
+        return None
+
+    # G.11: Check if both feeds are the same
+    if sequence[0].get('Feed') != sequence[1].get('Feed'):
+        return None
+
+    m1 = _round_m(sequence[0]['M #'])
+    m2 = _round_m(sequence[1]['M #'])
+
+    if m1 is None or m2 is None:
+        return None
+
+    abs_m1, abs_m2 = abs(m1), abs(m2)
+    
+    # Create sorted tuple for comparison (order-independent)
+    m_set = {abs_m1, abs_m2}
+    
+    # Check GR Recipe: (30, 50)
+    if m_set == {30, 50}:
+        group_num, group_code = _classify_pair_group(
+            sequence[0]['Origin'], sequence[1]['Origin'],
+            sequence[0]['Arrival'], sequence[1]['Arrival']
+        )
+        if group_num is not None:
+            classification = _generate_classification(group_num, group_code, "GR", m1, m2, is_recipe=True)
+            return {
+                'type': 'GR',
+                'classification': classification,
+                'group': group_num,
+                'is_recipe': True
+            }
+    
+    # Check X0 Recipes: (22,60), (14,68), (10,77), (6,87), (5,96), (3,103), (2,107), (1,111)
+    # Note: (30, 50) already checked above, but also in RECIPE_X0_PAIRS - skip it here
+    x0_recipe_pairs_only = [(22, 60), (14, 68), (10, 77), (6, 87), (5, 96), (3, 103), (2, 107), (1, 111)]
+    for recipe_pair in x0_recipe_pairs_only:
+        if m_set == set(recipe_pair):
+            group_num, group_code = _classify_pair_group(
+                sequence[0]['Origin'], sequence[1]['Origin'],
+                sequence[0]['Arrival'], sequence[1]['Arrival']
+            )
+            if group_num is not None:
+                classification = _generate_classification(group_num, group_code, "x0", m1, m2, is_recipe=True)
+                return {
+                    'type': 'x0',
+                    'classification': classification,
+                    'group': group_num,
+                    'is_recipe': True
+                }
+    
+    # Check X1 Recipes: (36, 43), (26, 55)
+    for recipe_pair in RECIPE_X1_PAIRS:
+        if m_set == set(recipe_pair):
+            group_num, group_code = _classify_pair_group(
+                sequence[0]['Origin'], sequence[1]['Origin'],
+                sequence[0]['Arrival'], sequence[1]['Arrival']
+            )
+            if group_num is not None:
+                classification = _generate_classification(group_num, group_code, "x1", m1, m2, is_recipe=True)
+                return {
+                    'type': 'x1',
+                    'classification': classification,
+                    'group': group_num,
+                    'is_recipe': True
+                }
+    
+    # Check X2 Recipe: (39, 41) - THIS WAS COMPLETELY MISSING!
+    if m_set == {39, 41}:
+        group_num, group_code = _classify_pair_group(
+            sequence[0]['Origin'], sequence[1]['Origin'],
+            sequence[0]['Arrival'], sequence[1]['Arrival']
+        )
+        if group_num is not None:
+            classification = _generate_classification(group_num, group_code, "x2", m1, m2, is_recipe=True)
+            return {
+                'type': 'x2',
+                'classification': classification,
+                'group': group_num,
+                'is_recipe': True
+            }
+    
+    # No recipe match
+    return None
 
 def _is_anchor(origin):
     """Check if origin is an Anchor"""
@@ -181,10 +298,19 @@ def _generate_classification(group_num, group_code, pattern_type, m1, m2, is_rec
             direction = "DP"  # default
 
     elif pattern_type == "x1":
-        # x1 pair: (36 or 39) with pX2_1_0
-        if abs_m1 in {36, 39} and abs_m2 in PX2_1_0:
+        # x1 pair: (26, 36 or 39) with pX2_1_0
+        if abs_m1 in {26, 36, 39} and abs_m2 in PX2_1_0:
             direction = "DP"
-        elif abs_m1 in PX2_1_0 and abs_m2 in {36, 39}:
+        elif abs_m1 in PX2_1_0 and abs_m2 in {26, 36, 39}:
+            direction = "PD"
+        else:
+            direction = "DP"  # default
+
+    elif pattern_type == "x2":
+        # x2 pair: (39, 41) - Recipe only
+        if abs_m1 == 39 and abs_m2 == 41:
+            direction = "DP"
+        elif abs_m1 == 41 and abs_m2 == 39:
             direction = "PD"
         else:
             direction = "DP"  # default
@@ -235,7 +361,12 @@ def _generate_classification(group_num, group_code, pattern_type, m1, m2, is_rec
         return f"Grp {group_num} {group_code} {pattern_type} {direction}.{flip}{recipe_suffix}"
 
 def _check_gr_pairs(sequence):
-    """Check for G.11a GR pairs (30, 50) - SAME FEED ONLY"""
+    """
+    Check for G.11a NON-RECIPE GR pairs (30, 50) - SAME FEED ONLY
+    
+    NOTE: (30, 50) is ALWAYS a recipe, handled by _check_recipe_pairs_first
+    This function is kept for completeness but will typically return None
+    """
     if len(sequence) != 2:
         return None
 
@@ -250,28 +381,22 @@ def _check_gr_pairs(sequence):
         return None
 
     abs_m1, abs_m2 = abs(m1), abs(m2)
+    m_set = {abs_m1, abs_m2}
 
-    # Check if it's a (30, 50) pair
-    if {abs_m1, abs_m2} == {30, 50}:
-        group_num, group_code = _classify_pair_group(
-            sequence[0]['Origin'], sequence[1]['Origin'],
-            sequence[0]['Arrival'], sequence[1]['Arrival']
-        )
-        if group_num is not None:
-            # Check if it's a recipe pair
-            is_recipe = {abs_m1, abs_m2} in [{30, 50}]
-            classification = _generate_classification(group_num, group_code, "GR", m1, m2, is_recipe)
-            return {
-                'type': 'GR',
-                'classification': classification,
-                'group': group_num,
-                'is_recipe': is_recipe
-            }
-
+    # Skip if this is (30, 50) - it's ALWAYS a recipe, already checked
+    if m_set == {30, 50}:
+        return None  # Recipe already handled
+    
+    # No other GR patterns defined (GR is only (30, 50))
     return None
 
 def _check_x0_pairs(sequence):
-    """Check for G.11b x0 pairs - SAME FEED ONLY"""
+    """
+    Check for G.11b x0 NON-RECIPE pairs - SAME FEED ONLY
+    
+    NOTE: Recipe x0 pairs are handled by _check_recipe_pairs_first
+    This function handles non-recipe x0 patterns: dX0 with pX0
+    """
     if len(sequence) != 2:
         return None
 
@@ -286,28 +411,37 @@ def _check_x0_pairs(sequence):
         return None
 
     abs_m1, abs_m2 = abs(m1), abs(m2)
+    m_set = {abs_m1, abs_m2}
+    
+    # Skip if this is a recipe pair (already handled by _check_recipe_pairs_first)
+    for recipe_pair in RECIPE_X0_PAIRS:
+        if m_set == set(recipe_pair):
+            return None  # Recipe already checked
 
-    # Check if one is from dX0 and other from pX0
+    # Check if one is from dX0 and other from pX0 (non-recipe)
     if (abs_m1 in DX0 and abs_m2 in PX0) or (abs_m1 in PX0 and abs_m2 in DX0):
         group_num, group_code = _classify_pair_group(
             sequence[0]['Origin'], sequence[1]['Origin'],
             sequence[0]['Arrival'], sequence[1]['Arrival']
         )
         if group_num is not None:
-            # Check if it's a recipe pair
-            is_recipe = {abs_m1, abs_m2} in [set(pair) for pair in RECIPE_X0_PAIRS]
-            classification = _generate_classification(group_num, group_code, "x0", m1, m2, is_recipe)
+            classification = _generate_classification(group_num, group_code, "x0", m1, m2, is_recipe=False)
             return {
                 'type': 'x0',
                 'classification': classification,
                 'group': group_num,
-                'is_recipe': is_recipe
+                'is_recipe': False
             }
 
     return None
 
 def _check_x1_pairs(sequence):
-    """Check for G.11c x1 pairs - SAME FEED ONLY"""
+    """
+    Check for G.11c x1 NON-RECIPE pairs - SAME FEED ONLY
+    
+    NOTE: Recipe pairs (36,43) and (26,55) are now checked by _check_recipe_pairs_first
+    This function handles non-recipe x1 patterns: (26, 36, or 39) with pX2_1_0
+    """
     if len(sequence) != 2:
         return None
 
@@ -322,22 +456,28 @@ def _check_x1_pairs(sequence):
         return None
 
     abs_m1, abs_m2 = abs(m1), abs(m2)
-
-    # Check if one is 36 or 39 and other from pX2_1_0
-    if (abs_m1 in {36, 39} and abs_m2 in PX2_1_0) or (abs_m1 in PX2_1_0 and abs_m2 in {36, 39}):
+    m_set = {abs_m1, abs_m2}
+    
+    # Skip if this is a recipe pair (already handled by _check_recipe_pairs_first)
+    for recipe_pair in RECIPE_X1_PAIRS:
+        if m_set == set(recipe_pair):
+            return None  # Recipe already checked
+    
+    # Check non-recipe x1 pairs: (26, 36, or 39) with pX2_1_0
+    # Added 26 to support more x1 patterns!
+    if ((abs_m1 in {26, 36, 39} and abs_m2 in PX2_1_0) or 
+        (abs_m1 in PX2_1_0 and abs_m2 in {26, 36, 39})):
         group_num, group_code = _classify_pair_group(
             sequence[0]['Origin'], sequence[1]['Origin'],
             sequence[0]['Arrival'], sequence[1]['Arrival']
         )
         if group_num is not None:
-            # Check if it's a recipe pair
-            is_recipe = {abs_m1, abs_m2} in [set(pair) for pair in RECIPE_X1_PAIRS]
-            classification = _generate_classification(group_num, group_code, "x1", m1, m2, is_recipe)
+            classification = _generate_classification(group_num, group_code, "x1", m1, m2, is_recipe=False)
             return {
                 'type': 'x1',
                 'classification': classification,
                 'group': group_num,
-                'is_recipe': is_recipe
+                'is_recipe': False
             }
 
     return None
@@ -552,15 +692,16 @@ def run_g11_detection(df, output_spread_filter=3.0, enabled_groups=None, display
                 if output_spread > output_spread_filter:
                     continue  # Skip pairs with spread larger than filter
 
-                # Check each pair type
+                # Check each pair type - RECIPES FIRST (priority)
                 pair_checks = [
-                    _check_gr_pairs,
-                    _check_x0_pairs,
-                    _check_x1_pairs,
-                    _check_fogz_pairs,
-                    _check_zero_pairs,
-                    _check_premium_pairs,
-                    _check_dd_pairs
+                    _check_recipe_pairs_first,  # ← NEW: Check ALL recipes first!
+                    _check_gr_pairs,            # Non-recipe GR patterns
+                    _check_x0_pairs,            # Non-recipe x0 patterns
+                    _check_x1_pairs,            # Non-recipe x1 patterns
+                    _check_fogz_pairs,          # Fogz patterns (has recipe check inside)
+                    _check_zero_pairs,          # Zero patterns
+                    _check_premium_pairs,       # Premium patterns
+                    _check_dd_pairs             # DD patterns
                 ]
 
                 matched = False
