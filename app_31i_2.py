@@ -149,7 +149,7 @@ def render_unified_export(traveler_reports, report_time, asset_id=""):
 
 # Streamlit interface
 st.set_page_config(layout="wide")
-st.header("🧬 Data Processor + HOD/LOD + Model Detection v31i renew-cache")
+st.header("🧬 Data Processor + HOD/LOD + Model Detection v31i renew")
 
 # Asset ID Selector (above file uploads)
 st.markdown("### Asset Selection")
@@ -441,7 +441,18 @@ if bypass_traveler_file is not None:
                         st.write(f"📊 DataFrame exists: Shape = {g_results['results_df'].shape}")
                         if not g_results['results_df'].empty:
                             st.markdown("#### 📋 Cluster Table")
-                            st.dataframe(g_results['results_df'], use_container_width=True)
+                            # Color legend
+                            st.markdown("""
+                            **Legend:** 
+                            🟡 **Yellow** = Today  |  
+                            🔵 **Blue** = Recent ([-1] or [-3] bracket)  |  
+                            ⚪ **White** = Older
+                            """)
+                            # Use styled version if available (highlights Today/Recent rows)
+                            if 'results_df_styled' in g_results:
+                                st.dataframe(g_results['results_df_styled'], use_container_width=True)
+                            else:
+                                st.dataframe(g_results['results_df'], use_container_width=True)
                         else:
                             st.info("No sequences to display in cluster table (DataFrame is empty)")
                     else:
@@ -942,7 +953,18 @@ elif small_15m_file and big_15m_file and measurement_file:
                             st.write(f"📊 DataFrame exists: Shape = {g_results['results_df'].shape}")
                             if not g_results['results_df'].empty:
                                 st.markdown("#### 📋 Cluster Table")
-                                st.dataframe(g_results['results_df'], use_container_width=True)
+                                # Color legend
+                                st.markdown("""
+                                **Legend:** 
+                                🟡 **Yellow** = Today  |  
+                                🔵 **Blue** = Recent ([-1] or [-3] bracket)  |  
+                                ⚪ **White** = Older
+                                """)
+                                # Use styled version if available (highlights Today/Recent rows)
+                                if 'results_df_styled' in g_results:
+                                    st.dataframe(g_results['results_df_styled'], use_container_width=True)
+                                else:
+                                    st.dataframe(g_results['results_df'], use_container_width=True)
                             else:
                                 st.info("No Model G sequences detected matching criteria (DataFrame is empty)")
                         else:
