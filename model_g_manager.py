@@ -704,9 +704,8 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                                 g11_filtered_by_prox += 1
                                 continue
                             
-                            arrival_output = max(outputs)
-                            
-                            # Get MOST RECENT arrival datetime from the pair (not necessarily max output)
+                            # Get MOST RECENT arrival datetime and its corresponding output
+                            arrival_output = None
                             arrival_datetime = None
                             arrival_bracket = None
                             if 'sequence' in seq:
@@ -718,19 +717,22 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                                         if max_arrival_time is None or item_arrival > max_arrival_time:
                                             max_arrival_time = item_arrival
                                             arrival_datetime = item_arrival
-                                            # Try to extract bracket from Arrival column (e.g., [-1], [0], [-3])
-                                            arrival_str = str(item.get('Arrival', ''))
-                                            if '[' in arrival_str and ']' in arrival_str:
+                                            arrival_output = item.get('Output')  # Get output of most recent item
+                                            
+                                            # Extract bracket from Day column (not Arrival)
+                                            day_str = str(item.get('Day', ''))
+                                            if '[' in day_str and ']' in day_str:
                                                 try:
-                                                    bracket_val = int(arrival_str.split('[')[1].split(']')[0])
+                                                    bracket_val = int(day_str.split('[')[1].split(']')[0])
                                                     arrival_bracket = bracket_val
                                                 except:
                                                     pass
                             
+                            # Fallback if arrival_output wasn't set
+                            if arrival_output is None:
+                                arrival_output = max(outputs) if outputs else None
+                            
                             # Determine Type: Today, Recent, or Older
-                            # Today = arrival is today's date
-                            # Recent = bracketed value closest to [0], usually [-1] or [-3]
-                            # Older = everything else
                             type_classification = 'Older'
                             if arrival_datetime:
                                 today_date = pd.Timestamp.now().normalize()
@@ -741,8 +743,6 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                                     if arrival_bracket == -1:
                                         type_classification = 'Recent'
                                     elif arrival_bracket == -3:
-                                        # Check if this is the closest to [0] available
-                                        # In practice, if we see [-3], assume [-1] is missing
                                         type_classification = 'Recent'
                                     elif arrival_bracket == 0:
                                         type_classification = 'Today'  # [0] is also current
@@ -781,9 +781,8 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                                 g11_filtered_by_prox += 1
                                 continue
                             
-                            arrival_output = max(outputs)
-                            
-                            # Get MOST RECENT arrival datetime from the pair (not necessarily max output)
+                            # Get MOST RECENT arrival datetime and its corresponding output
+                            arrival_output = None
                             arrival_datetime = None
                             arrival_bracket = None
                             if 'sequence' in seq:
@@ -795,14 +794,20 @@ def run_model_g_detection(df, output_spread_filter=3.0, report_time=None, key_su
                                         if max_arrival_time is None or item_arrival > max_arrival_time:
                                             max_arrival_time = item_arrival
                                             arrival_datetime = item_arrival
-                                            # Try to extract bracket from Arrival column (e.g., [-1], [0], [-3])
-                                            arrival_str = str(item.get('Arrival', ''))
-                                            if '[' in arrival_str and ']' in arrival_str:
+                                            arrival_output = item.get('Output')  # Get output of most recent item
+                                            
+                                            # Extract bracket from Day column (not Arrival)
+                                            day_str = str(item.get('Day', ''))
+                                            if '[' in day_str and ']' in day_str:
                                                 try:
-                                                    bracket_val = int(arrival_str.split('[')[1].split(']')[0])
+                                                    bracket_val = int(day_str.split('[')[1].split(']')[0])
                                                     arrival_bracket = bracket_val
                                                 except:
                                                     pass
+                            
+                            # Fallback if arrival_output wasn't set
+                            if arrival_output is None:
+                                arrival_output = max(outputs) if outputs else None
                             
                             # Determine Type: Today, Recent, or Older
                             type_classification = 'Older'
