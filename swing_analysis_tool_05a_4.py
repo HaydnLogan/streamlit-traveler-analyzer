@@ -1025,7 +1025,7 @@ def main():
         "Swing Threshold (min move)",
         min_value=20,
         max_value=100,
-        value=30,
+        value=55,
         step=5
     )
     
