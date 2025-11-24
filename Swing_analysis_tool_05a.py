@@ -1072,8 +1072,25 @@ def main():
     
     # Traveler files (for Strategic Zones)
     st.markdown("---")
-    st.markdown("### 📊 Traveler Data (Required for Strategic Zones)")
+    st.markdown("### 📊 Traveler Data (Required for Strategic Zones Tab 8)")
     st.info("💡 These files enable Tab 8 - Strategic Zone recommendations")
+    
+    with st.expander("ℹ️ About These Files"):
+        st.markdown("""
+        **These Feed CSV files are for Tab 8 (Strategic Zones) ONLY.**
+        
+        They should contain traveler data with columns:
+        - M # (M number)
+        - R # (R number / reciprocal)
+        - Origin (Spain, Jupiter, Trinidad, etc.)
+        - Output (calculated price)
+        - Arrival (timestamp)
+        - Day (optional, like [0], [-1])
+        
+        **Note:** Tab 7 (Traveler Calculator) uses DIFFERENT files:
+        - HLC data (with columns like "Spain H", "Spain L", "Spain C")
+        - These are uploaded separately inside Tab 7
+        """)
     
     col1, col2, col3 = st.columns(3)
     
@@ -1608,8 +1625,18 @@ def main():
         Uses the pivot formula: **Output = (H + L + C) / 3 + M × (H - L)**
         """)
         
+        st.info("ℹ️ **Note:** This tab requires DIFFERENT files than the main upload section above.")
+        
         # File uploads for HLC and Measurement data
-        st.markdown("### Data Sources")
+        st.markdown("### Data Sources (Upload Here)")
+        
+        st.markdown("""
+        **Required format:**
+        - **HLC Data:** CSV/Excel with columns like "Spain H", "Spain L", "Spain C", "Jupiter H", etc.
+        - **Measurement:** Excel file with M# and R# lookup table
+        
+        ⚠️ These are DIFFERENT from the Feed CSV files used in Tab 8.
+        """)
         
         col1, col2 = st.columns(2)
         
@@ -1874,6 +1901,55 @@ def main():
                 
                 st.success(f"Loaded: Small feed ({len(small_df)} rows), Big feed ({len(big_df)} rows), Measurements ({len(measurement_df)} rows)")
                 
+                # Check and normalize column names
+                def normalize_column_names(df, file_name="data"):
+                    """Normalize column names to handle common variations"""
+                    rename_map = {}
+                    
+                    # Check for M # variations
+                    if 'M #' not in df.columns:
+                        for col in df.columns:
+                            if col.lower().replace(' ', '').replace('#', '') == 'm':
+                                rename_map[col] = 'M #'
+                                break
+                    
+                    # Check for R # variations  
+                    if 'R #' not in df.columns:
+                        for col in df.columns:
+                            if col.lower().replace(' ', '').replace('#', '') == 'r':
+                                rename_map[col] = 'R #'
+                                break
+                    
+                    # Case-insensitive check for other columns
+                    col_map = {
+                        'origin': 'Origin',
+                        'output': 'Output',
+                        'arrival': 'Arrival',
+                        'feed': 'Feed',
+                        'day': 'Day'
+                    }
+                    
+                    for col in df.columns:
+                        col_lower = col.lower()
+                        if col_lower in col_map and col != col_map[col_lower]:
+                            rename_map[col] = col_map[col_lower]
+                    
+                    if rename_map:
+                        st.info(f"📝 Normalizing column names in {file_name}: {rename_map}")
+                        df = df.rename(columns=rename_map)
+                    
+                    return df
+                
+                small_df = normalize_column_names(small_df, "Small Feed")
+                big_df = normalize_column_names(big_df, "Big Feed")
+                
+                # Show detected columns
+                with st.expander("🔍 Detected Columns"):
+                    st.markdown("**Small Feed:**")
+                    st.code(", ".join(small_df.columns.tolist()))
+                    st.markdown("**Big Feed:**")
+                    st.code(", ".join(big_df.columns.tolist()))
+                
                 # Get primary OHLC file for MA analysis
                 primary_tf = st.selectbox(
                     "Select primary OHLC timeframe for MA analysis",
@@ -1951,8 +2027,11 @@ def main():
                         missing_cols = [col for col in required_cols if col not in combined_travelers.columns]
                         
                         if missing_cols:
-                            st.error(f"Missing required columns in traveler data: {missing_cols}")
+                            st.error(f"❌ Missing required columns in traveler data: {missing_cols}")
                             st.markdown("**Required columns:** M #, R #, Origin, Output, Arrival, Feed")
+                            st.markdown("\n**Columns found in your files:**")
+                            st.code(", ".join(combined_travelers.columns.tolist()))
+                            st.markdown("\n💡 **Tip:** Check your CSV files and make sure column names match exactly (including spaces and #)")
                             return
                         
                         # Generate recommendations
