@@ -23,6 +23,7 @@ import sys
 
 # Add current directory to path for imports
 sys.path.insert(0, '/home/claude')
+sys.path.insert(0, '/mnt/user-data/outputs')
 
 # Import strategic zone detector
 from strategic_zone_detector import (
@@ -32,6 +33,9 @@ from strategic_zone_detector import (
     generate_zone_recommendations, format_recommendation_report,
     get_next_origin_updates
 )
+
+# Import reciprocal traveler generator
+from recip_traveler_generator import generate_recip_traveler_reports
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -1072,44 +1076,48 @@ def main():
     
     # Traveler files (for Strategic Zones)
     st.markdown("---")
-    st.markdown("### 📊 Traveler Data (Required for Strategic Zones Tab 8)")
-    st.info("💡 These files enable Tab 8 - Strategic Zone recommendations")
+    st.markdown("### 📊 Feed Data (For Strategic Zones Tab 8)")
+    st.info("💡 Upload RAW HLC feed data - the app will generate custom reciprocal traveler reports")
     
-    with st.expander("ℹ️ About These Files"):
+    with st.expander("ℹ️ About Feed Data Format"):
         st.markdown("""
-        **These Feed CSV files are for Tab 8 (Strategic Zones) ONLY.**
+        **These should be RAW HLC feed files from your trading system.**
         
-        They should contain traveler data with columns:
-        - M # (M number)
-        - R # (R number / reciprocal)
-        - Origin (Spain, Jupiter, Trinidad, etc.)
-        - Output (calculated price)
-        - Arrival (timestamp)
-        - Day (optional, like [0], [-1])
+        Required format:
+        - CSV files with columns: `time`, `Spain H`, `Spain L`, `Spain C`, `Jupiter H`, `Jupiter L`, etc.
+        - One row per timestamp
+        - Three columns per origin (H, L, C)
         
-        **Note:** Tab 7 (Traveler Calculator) uses DIFFERENT files:
-        - HLC data (with columns like "Spain H", "Spain L", "Spain C")
-        - These are uploaded separately inside Tab 7
+        The app will:
+        1. Extract Anchor and Epic origins only
+        2. Focus on Day [0] arrivals (today at report time, e.g., 18:00)
+        3. Include previous trading day (for weekend handling)
+        4. Generate travelers using Recipe M# pairs from G.11
+        5. Find reciprocal matches within Max Spread
+        
+        **This is DIFFERENT from Tab 7:**
+        - Tab 7 uses a separate HLC file upload inside the tab
+        - Both use the same HLC format, just uploaded in different places
         """)
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
         small_feed_file = st.file_uploader(
-            "Small Feed 15m CSV",
+            "Small Feed HLC CSV",
             type=['csv'],
             key="small_feed",
-            help="Required for traveler analysis and Recip detection"
+            help="Raw HLC data with columns like 'Spain H', 'Spain L', 'Spain C'"
         )
         if small_feed_file:
             st.success(f"✅ {small_feed_file.name}")
     
     with col2:
         big_feed_file = st.file_uploader(
-            "Big Feed 15m CSV",
+            "Big Feed HLC CSV",
             type=['csv'],
             key="big_feed",
-            help="Required for traveler analysis and Recip detection"
+            help="Raw HLC data with columns like 'Jupiter H', 'Jupiter L', 'Jupiter C'"
         )
         if big_feed_file:
             st.success(f"✅ {big_feed_file.name}")
@@ -1119,7 +1127,7 @@ def main():
             "Measurement File",
             type=['xlsx', 'xls'],
             key="measurement",
-            help="Excel file with M# values and R# relationships"
+            help="Excel file with M# and R# relationships"
         )
         if measurement_file:
             st.success(f"✅ {measurement_file.name}")
@@ -1892,89 +1900,29 @@ def main():
         else:
             # All files present, proceed with analysis
             try:
-                st.markdown("### 📊 Loading Traveler Data...")
+                st.markdown("### 📊 Loading Feed Data...")
                 
-                # Load feeds
-                small_df = pd.read_csv(small_feed_file)
-                big_df = pd.read_csv(big_feed_file)
+                # Load HLC feeds
+                small_hlc_df = pd.read_csv(small_feed_file)
+                big_hlc_df = pd.read_csv(big_feed_file)
                 measurement_df = pd.read_excel(measurement_file)
                 
-                st.success(f"Loaded: Small feed ({len(small_df)} rows), Big feed ({len(big_df)} rows), Measurements ({len(measurement_df)} rows)")
+                st.success(f"Loaded: Small feed ({len(small_hlc_df)} rows), Big feed ({len(big_hlc_df)} rows), Measurements ({len(measurement_df)} rows)")
                 
-                # Check and normalize column names
-                def normalize_column_names(df, file_name="data"):
-                    """Normalize column names to handle common variations"""
-                    rename_map = {}
-                    
-                    # Check for M # variations
-                    if 'M #' not in df.columns:
-                        for col in df.columns:
-                            if col.lower().replace(' ', '').replace('#', '') == 'm':
-                                rename_map[col] = 'M #'
-                                break
-                    
-                    # Check for R # variations  
-                    if 'R #' not in df.columns:
-                        for col in df.columns:
-                            if col.lower().replace(' ', '').replace('#', '') == 'r':
-                                rename_map[col] = 'R #'
-                                break
-                    
-                    # Case-insensitive check for other columns
-                    col_map = {
-                        'origin': 'Origin',
-                        'output': 'Output',
-                        'arrival': 'Arrival',
-                        'feed': 'Feed',
-                        'day': 'Day'
-                    }
-                    
-                    for col in df.columns:
-                        col_lower = col.lower()
-                        if col_lower in col_map and col != col_map[col_lower]:
-                            rename_map[col] = col_map[col_lower]
-                    
-                    if rename_map:
-                        st.info(f"📝 Normalizing column names in {file_name}: {rename_map}")
-                        df = df.rename(columns=rename_map)
-                    
-                    return df
-                
-                small_df = normalize_column_names(small_df, "Small Feed")
-                big_df = normalize_column_names(big_df, "Big Feed")
-                
-                # Show detected columns
-                with st.expander("🔍 Detected Columns"):
+                # Show detected HLC columns
+                with st.expander("🔍 Detected HLC Columns"):
                     st.markdown("**Small Feed:**")
-                    st.code(", ".join(small_df.columns.tolist()))
+                    hlc_cols_small = [col for col in small_hlc_df.columns if col.endswith((' H', ' L', ' C'))]
+                    origins_small = list(set([col[:-2] for col in hlc_cols_small if col.endswith(' H')]))
+                    st.code(f"Origins: {', '.join(origins_small)}")
+                    
                     st.markdown("**Big Feed:**")
-                    st.code(", ".join(big_df.columns.tolist()))
-                
-                # Get primary OHLC file for MA analysis
-                primary_tf = st.selectbox(
-                    "Select primary OHLC timeframe for MA analysis",
-                    list(loaded_files.keys()),
-                    key="strategic_ohlc_select"
-                )
-                
-                primary_ohlc = loaded_files[primary_tf]
-                
-                # Detect HUGE HMAs
-                huge_hmas = detect_huge_hmas(primary_ohlc)
-                high_rank_mas = get_high_rank_mas(primary_ohlc, min_rank=800)
-                
-                if huge_hmas:
-                    st.info(f"✨ Found {len(huge_hmas)} HUGE HMAs (h1-h20)")
-                
-                st.info(f"📊 Detected {len(high_rank_mas)} high-rank MAs (rank ≥ 800)")
-                
-                # Show top high-rank MAs
-                with st.expander("📋 High-Rank MAs"):
-                    for ma in high_rank_mas[:15]:
-                        st.text(f"  {ma['column']:20s} - Rank: {ma['rank']}")
+                    hlc_cols_big = [col for col in big_hlc_df.columns if col.endswith((' H', ' L', ' C'))]
+                    origins_big = list(set([col[:-2] for col in hlc_cols_big if col.endswith(' H')]))
+                    st.code(f"Origins: {', '.join(origins_big)}")
                 
                 st.markdown("---")
-                st.markdown("### ⚙️ Analysis Settings")
+                st.markdown("### ⚙️ Report Settings")
                 
                 col1, col2, col3 = st.columns(3)
                 
@@ -1991,191 +1939,295 @@ def main():
                         report_time = datetime.combine(report_date, report_time_input)
                     else:
                         report_time = datetime.now()
+                    
+                    st.info(f"📅 Report: {report_time.strftime('%Y-%m-%d %H:%M')}")
                 
                 with col2:
-                    max_zones = st.slider("Max Zones to Show", 1, 6, 4, key="max_zones")
-                    recip_max_spread = st.slider("Recip Max Spread", 0.5, 5.0, 3.0, 0.5, key="recip_spread")
+                    recip_max_spread = st.slider("Recip Max Spread", 0.5, 10.0, 3.0, 0.5, key="recip_spread")
+                    st.markdown("*Maximum output spread for reciprocal matches*")
                 
                 with col3:
+                    max_zones = st.slider("Max Zones to Show", 1, 6, 4, key="max_zones")
                     zone_tolerance = st.slider("Zone Tolerance (±)", 12, 48, 24, 6, key="zone_tol")
+                
+                st.markdown("---")
+                
+                # Generate Custom Recip Traveler Report button
+                if st.button("🎯 Generate Custom Recip Traveler Report", key="gen_recip_report", type="primary"):
+                    with st.spinner("Generating custom reciprocal traveler reports..."):
+                        
+                        # Generate the reports
+                        report_results = generate_recip_traveler_reports(
+                            small_hlc_df=small_hlc_df,
+                            big_hlc_df=big_hlc_df,
+                            measurement_df=measurement_df,
+                            report_time=report_time,
+                            max_spread=recip_max_spread
+                        )
+                        
+                        # Store in session state
+                        st.session_state['recip_report_results'] = report_results
+                        st.session_state['combined_travelers'] = report_results['combined_travelers']
+                        
+                        st.success("✅ Custom reciprocal traveler reports generated!")
+                
+                # Show results if available
+                if 'recip_report_results' in st.session_state:
+                    results = st.session_state['recip_report_results']
+                    
+                    st.markdown("---")
+                    st.markdown("### 📊 Reciprocal Traveler Report Summary")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("Small Feed Travelers", len(results['small_report']))
+                        st.metric("Small Feed Recip Matches", len(results['small_matches']))
+                    
+                    with col2:
+                        st.metric("Big Feed Travelers", len(results['big_report']))
+                        st.metric("Big Feed Recip Matches", len(results['big_matches']))
+                    
+                    with col3:
+                        st.metric("Total Travelers", len(results['combined_travelers']))
+                        st.metric("Total Recip Matches", len(results['small_matches']) + len(results['big_matches']))
+                    
+                    # Show reciprocal matches
+                    if results['small_matches'] or results['big_matches']:
+                        with st.expander("🎯 View Reciprocal Matches", expanded=True):
+                            if results['small_matches']:
+                                st.markdown("**Small Feed Matches:**")
+                                for i, match in enumerate(results['small_matches'], 1):
+                                    st.markdown(f"**Match #{i}:** {match['Origin1']} m#{match['M1']:>3} ↔ {match['Origin2']} m#{match['M2']:>3} | Zone: {match['Zone_Price']:.2f} | Spread: {match['Output_Spread']:.2f}")
+                            
+                            if results['big_matches']:
+                                st.markdown("**Big Feed Matches:**")
+                                for i, match in enumerate(results['big_matches'], 1):
+                                    st.markdown(f"**Match #{i}:** {match['Origin1']} m#{match['M1']:>3} ↔ {match['Origin2']} m#{match['M2']:>3} | Zone: {match['Zone_Price']:.2f} | Spread: {match['Output_Spread']:.2f}")
+                    else:
+                        st.info("No reciprocal matches found within current spread settings. Try increasing Recip Max Spread.")
+                    
+                    # Download traveler reports
+                    st.markdown("---")
+                    st.markdown("### 📥 Download Traveler Reports")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        # Small feed CSV
+                        small_csv = results['small_report'].to_csv(index=False)
+                        st.download_button(
+                            "📥 Small Feed Report",
+                            data=small_csv,
+                            file_name=f"small_feed_recip_{report_time.strftime('%Y%m%d_%H%M')}.csv",
+                            mime="text/csv"
+                        )
+                    
+                    with col2:
+                        # Big feed CSV
+                        big_csv = results['big_report'].to_csv(index=False)
+                        st.download_button(
+                            "📥 Big Feed Report",
+                            data=big_csv,
+                            file_name=f"big_feed_recip_{report_time.strftime('%Y%m%d_%H%M')}.csv",
+                            mime="text/csv"
+                        )
+                    
+                    with col3:
+                        # Combined CSV
+                        combined_csv = results['combined_travelers'].to_csv(index=False)
+                        st.download_button(
+                            "📥 Combined Report",
+                            data=combined_csv,
+                            file_name=f"combined_recip_{report_time.strftime('%Y%m%d_%H%M')}.csv",
+                            mime="text/csv"
+                        )
+                
+                # Strategic Zone Analysis (only if recip report generated)
+                if 'combined_travelers' in st.session_state and not st.session_state['combined_travelers'].empty:
+                    st.markdown("---")
+                    st.markdown("### 🎯 Strategic Zone Analysis")
+                    st.info("💡 Now analyzing reciprocal matches for high-probability zones...")
+                    
+                    # Get primary OHLC for MA analysis
+                    primary_tf = st.selectbox(
+                        "Select OHLC timeframe for MA analysis",
+                        list(loaded_files.keys()),
+                        key="strategic_ohlc_select"
+                    )
+                    
+                    primary_ohlc = loaded_files[primary_tf]
+                    
+                    # Detect HUGE HMAs
+                    huge_hmas = detect_huge_hmas(primary_ohlc)
+                    high_rank_mas = get_high_rank_mas(primary_ohlc, min_rank=800)
+                    
+                    if huge_hmas:
+                        st.info(f"✨ Found {len(huge_hmas)} HUGE HMAs (h1-h20)")
+                    
+                    st.info(f"📊 Detected {len(high_rank_mas)} high-rank MAs (rank ≥ 800)")
+                    
+                    # Show top high-rank MAs
+                    with st.expander("📋 High-Rank MAs"):
+                        for ma in high_rank_mas[:15]:
+                            st.text(f"  {ma['column']:20s} - Rank: {ma['rank']}")
+                    
                     current_price_input = st.number_input(
                         "Current Price",
                         value=25000.0,
                         step=1.0,
                         key="current_price_strat"
                     )
-                
-                st.markdown("---")
-                
-                if st.button("🎯 Generate Strategic Zone Recommendations", key="gen_strategic_zones"):
-                    with st.spinner("Analyzing markets for high-probability zones..."):
-                        
-                        # Process travelers from both feeds
-                        st.info("Processing traveler data...")
-                        
-                        # Combine feeds with Feed label
-                        small_df_labeled = small_df.copy()
-                        small_df_labeled['Feed'] = 'Small'
-                        
-                        big_df_labeled = big_df.copy()
-                        big_df_labeled['Feed'] = 'Big'
-                        
-                        combined_travelers = pd.concat([small_df_labeled, big_df_labeled], ignore_index=True)
-                        
-                        # Ensure required columns exist
-                        required_cols = ['M #', 'R #', 'Origin', 'Output', 'Arrival', 'Feed']
-                        missing_cols = [col for col in required_cols if col not in combined_travelers.columns]
-                        
-                        if missing_cols:
-                            st.error(f"❌ Missing required columns in traveler data: {missing_cols}")
-                            st.markdown("**Required columns:** M #, R #, Origin, Output, Arrival, Feed")
-                            st.markdown("\n**Columns found in your files:**")
-                            st.code(", ".join(combined_travelers.columns.tolist()))
-                            st.markdown("\n💡 **Tip:** Check your CSV files and make sure column names match exactly (including spaces and #)")
-                            return
-                        
-                        # Generate recommendations
-                        recommendations = generate_zone_recommendations(
-                            ohlc_df=primary_ohlc,
-                            travelers_df=combined_travelers,
-                            report_time=report_time,
-                            current_price=current_price_input,
-                            max_zones=max_zones,
-                            zone_tolerance=zone_tolerance,
-                            recip_max_spread=recip_max_spread
-                        )
-                        
-                        if not recommendations:
-                            st.warning("No strategic zones identified with current parameters.")
-                            st.info("Try adjusting Recip Max Spread or Zone Tolerance")
-                            return
-                        
-                        # Display recommendations
-                        st.success(f"✅ Identified {len(recommendations)} high-probability zones")
-                        
-                        for i, rec in enumerate(recommendations, 1):
-                            # Create colored header based on confidence
-                            if rec['confidence'] == 'HIGH':
-                                header_color = '🟢'
-                            elif rec['confidence'] == 'MEDIUM':
-                                header_color = '🟡'
-                            else:
-                                header_color = '⚪'
+                    
+                    st.markdown("---")
+                    
+                    if st.button("🎯 Generate Strategic Zone Recommendations", key="gen_strategic_zones"):
+                        with st.spinner("Analyzing markets for high-probability zones..."):
                             
-                            with st.expander(f"{header_color} ZONE #{i} - {rec['confidence']} CONFIDENCE (Score: {rec['zone_score']:.0f})", expanded=i==1):
-                                # Main zone info
-                                col1, col2, col3 = st.columns(3)
+                            combined_travelers = st.session_state['combined_travelers']
+                            
+                            # Generate recommendations using the combined traveler report
+                            recommendations = generate_zone_recommendations(
+                                ohlc_df=primary_ohlc,
+                                travelers_df=combined_travelers,
+                                report_time=report_time,
+                                current_price=current_price_input,
+                                max_zones=max_zones,
+                                zone_tolerance=zone_tolerance,
+                                recip_max_spread=recip_max_spread
+                            )
+                            
+                            if not recommendations:
+                                st.warning("No strategic zones identified with current parameters.")
+                                st.info("Try adjusting Recip Max Spread or Zone Tolerance")
+                            else:
+                                # Display recommendations
+                                st.success(f"✅ Identified {len(recommendations)} high-probability zones")
+                                
+                                for i, rec in enumerate(recommendations, 1):
+                                    # Create colored header based on confidence
+                                    if rec['confidence'] == 'HIGH':
+                                        header_color = '🟢'
+                                    elif rec['confidence'] == 'MEDIUM':
+                                        header_color = '🟡'
+                                    else:
+                                        header_color = '⚪'
+                                    
+                                    with st.expander(f"{header_color} ZONE #{i} - {rec['confidence']} CONFIDENCE (Score: {rec['zone_score']:.0f})", expanded=i==1):
+                                        # Main zone info
+                                        col1, col2, col3 = st.columns(3)
+                                        
+                                        with col1:
+                                            st.metric("Direction", rec['direction'])
+                                        
+                                        with col2:
+                                            st.metric("Target Price", f"{rec['zone_price']:.2f}")
+                                        
+                                        with col3:
+                                            st.metric("Distance", f"{rec['distance_from_current']:.0f} units")
+                                        
+                                        # Recip pair details
+                                        st.markdown("#### Primary Signal: Recip Pair")
+                                        recip = rec['recip_info']
+                                        
+                                        recip_detail = {
+                                            'Origin 1': recip['origin1'],
+                                            'M# 1': int(recip['m1']),
+                                            'R# 1': recip['r1'],
+                                            'Output 1': f"{recip['output1']:.2f}",
+                                            'Day 1': recip['day1'],
+                                            '': '↔',
+                                            'Origin 2': recip['origin2'],
+                                            'M# 2': int(recip['m2']),
+                                            'R# 2': recip['r2'],
+                                            'Output 2': f"{recip['output2']:.2f}",
+                                            'Day 2': recip['day2']
+                                        }
+                                        
+                                        st.json(recip_detail)
+                                        
+                                        st.markdown(f"**Output Spread:** {recip['output_spread']:.2f} units")
+                                        
+                                        if recip['is_recipe']:
+                                            st.markdown(f"✨ **RECIPE PAIR:** {recip['recipe_type']}")
+                                        
+                                        # Confluence factors
+                                        st.markdown("#### Confluence Factors")
+                                        
+                                        for factor in rec['confluence_factors']:
+                                            if factor['type'] == 'Recip Pair':
+                                                st.markdown(f"🎯 **{factor['description']}** (+{factor['score']} points)")
+                                            elif factor['type'] == 'Wildcard':
+                                                st.markdown(f"⚡ **{factor['description']}** (+{factor['score']} points)")
+                                            elif factor['type'] == 'High-Rank MA':
+                                                st.markdown(f"📈 **{factor['description']}** (+{factor['score']} points)")
+                                
+                                # Next origin updates
+                                st.markdown("---")
+                                st.markdown("### ⏰ Next Origin Updates")
+                                st.markdown("Monitor these times for wildcard emergence and confluence")
+                                
+                                next_updates = get_next_origin_updates(report_time)
+                                
+                                update_data = []
+                                for update in next_updates:
+                                    update_data.append({
+                                        'Origin': update['origin'].title(),
+                                        'Next Update': update['time'].strftime('%Y-%m-%d %H:%M'),
+                                        'Hours Until': f"{update['hours_until']:.1f}h"
+                                    })
+                        
+                                
+                                st.dataframe(pd.DataFrame(update_data), use_container_width=True)
+                                
+                                # Export
+                                st.markdown("---")
+                                
+                                # Format as text report
+                                text_report = format_recommendation_report(recommendations, report_time, current_price_input)
+                                
+                                col1, col2 = st.columns(2)
                                 
                                 with col1:
-                                    st.metric("Direction", rec['direction'])
+                                    st.download_button(
+                                        "📥 Download Text Report",
+                                        data=text_report,
+                                        file_name=f"strategic_zones_{report_time.strftime('%Y%m%d_%H%M')}.txt",
+                                        mime="text/plain"
+                                    )
                                 
                                 with col2:
-                                    st.metric("Target Price", f"{rec['zone_price']:.2f}")
-                                
-                                with col3:
-                                    st.metric("Distance", f"{rec['distance_from_current']:.0f} units")
-                                
-                                # Recip pair details
-                                st.markdown("#### Primary Signal: Recip Pair")
-                                recip = rec['recip_info']
-                                
-                                recip_detail = {
-                                    'Origin 1': recip['origin1'],
-                                    'M# 1': int(recip['m1']),
-                                    'R# 1': recip['r1'],
-                                    'Output 1': f"{recip['output1']:.2f}",
-                                    'Day 1': recip['day1'],
-                                    '': '↔',
-                                    'Origin 2': recip['origin2'],
-                                    'M# 2': int(recip['m2']),
-                                    'R# 2': recip['r2'],
-                                    'Output 2': f"{recip['output2']:.2f}",
-                                    'Day 2': recip['day2']
-                                }
-                                
-                                st.json(recip_detail)
-                                
-                                st.markdown(f"**Output Spread:** {recip['output_spread']:.2f} units")
-                                
-                                if recip['is_recipe']:
-                                    st.markdown(f"✨ **RECIPE PAIR:** {recip['recipe_type']}")
-                                
-                                # Confluence factors
-                                st.markdown("#### Confluence Factors")
-                                
-                                for factor in rec['confluence_factors']:
-                                    if factor['type'] == 'Recip Pair':
-                                        st.markdown(f"🎯 **{factor['description']}** (+{factor['score']} points)")
-                                    elif factor['type'] == 'Wildcard':
-                                        st.markdown(f"⚡ **{factor['description']}** (+{factor['score']} points)")
-                                    elif factor['type'] == 'High-Rank MA':
-                                        st.markdown(f"📈 **{factor['description']}** (+{factor['score']} points)")
-                        
-                        # Next origin updates
-                        st.markdown("---")
-                        st.markdown("### ⏰ Next Origin Updates")
-                        st.markdown("Monitor these times for wildcard emergence and confluence")
-                        
-                        next_updates = get_next_origin_updates(report_time)
-                        
-                        update_data = []
-                        for update in next_updates:
-                            update_data.append({
-                                'Origin': update['origin'].title(),
-                                'Next Update': update['time'].strftime('%Y-%m-%d %H:%M'),
-                                'Hours Until': f"{update['hours_until']:.1f}h"
-                            })
-                        
-                        st.dataframe(pd.DataFrame(update_data), use_container_width=True)
-                        
-                        # Export
-                        st.markdown("---")
-                        
-                        # Format as text report
-                        text_report = format_recommendation_report(recommendations, report_time, current_price_input)
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.download_button(
-                                "📥 Download Text Report",
-                                data=text_report,
-                                file_name=f"strategic_zones_{report_time.strftime('%Y%m%d_%H%M')}.txt",
-                                mime="text/plain"
-                            )
-                        
-                        with col2:
-                            # Export as Excel
-                            excel_buffer = io.BytesIO()
-                            
-                            with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-                                # Summary sheet
-                                summary_data = []
-                                for i, rec in enumerate(recommendations, 1):
-                                    summary_data.append({
-                                        'Zone #': i,
-                                        'Confidence': rec['confidence'],
-                                        'Score': rec['zone_score'],
-                                        'Direction': rec['direction'],
-                                        'Target Price': rec['zone_price'],
-                                        'Distance': rec['distance_from_current'],
-                                        'Recip Origin 1': rec['recip_info']['origin1'],
-                                        'Recip M#1': rec['recip_info']['m1'],
-                                        'Recip Origin 2': rec['recip_info']['origin2'],
-                                        'Recip M#2': rec['recip_info']['m2'],
-                                        'Output Spread': rec['recip_info']['output_spread'],
-                                        'Is Recipe': rec['recip_info']['is_recipe'],
-                                        'Confluence Factors': len(rec['confluence_factors'])
-                                    })
-                                
-                                pd.DataFrame(summary_data).to_excel(writer, sheet_name='Summary', index=False)
-                            
-                            st.download_button(
-                                "📥 Download Excel Report",
-                                data=excel_buffer.getvalue(),
-                                file_name=f"strategic_zones_{report_time.strftime('%Y%m%d_%H%M')}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            )
+                                    # Export as Excel
+                                    excel_buffer = io.BytesIO()
+                                    
+                                    with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+                                        # Summary sheet
+                                        summary_data = []
+                                        for i, rec in enumerate(recommendations, 1):
+                                            summary_data.append({
+                                                'Zone #': i,
+                                                'Confidence': rec['confidence'],
+                                                'Score': rec['zone_score'],
+                                                'Direction': rec['direction'],
+                                                'Target Price': rec['zone_price'],
+                                                'Distance': rec['distance_from_current'],
+                                                'Recip Origin 1': rec['recip_info']['origin1'],
+                                                'Recip M#1': rec['recip_info']['m1'],
+                                                'Recip Origin 2': rec['recip_info']['origin2'],
+                                                'Recip M#2': rec['recip_info']['m2'],
+                                                'Output Spread': rec['recip_info']['output_spread'],
+                                                'Is Recipe': rec['recip_info']['is_recipe'],
+                                                'Confluence Factors': len(rec['confluence_factors'])
+                                            })
+                                        
+                                        pd.DataFrame(summary_data).to_excel(writer, sheet_name='Summary', index=False)
+                                    
+                                    st.download_button(
+                                        "📥 Download Excel Report",
+                                        data=excel_buffer.getvalue(),
+                                        file_name=f"strategic_zones_{report_time.strftime('%Y%m%d_%H%M')}.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    )
             
             except Exception as e:
                 st.error(f"Error in Strategic Zones analysis: {str(e)}")
