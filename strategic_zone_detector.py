@@ -155,11 +155,20 @@ def get_ma_rank(col_name):
     return tf_score + type_bonus + period_bonus
 
 
-def get_high_rank_mas(df, min_rank=800):
+def get_high_rank_mas(df, min_rank=800, max_results=None):
     """
     Get all high-rank MAs (HUGE HMAs and very high timeframe MAs).
     
     HUGE HMAs (h1-h20) are prioritized with rank 2000+
+    
+    Parameters:
+    -----------
+    df : DataFrame
+        OHLC data with MA columns
+    min_rank : int
+        Minimum rank to include (default 800)
+    max_results : int or None
+        Maximum number of results to return (default None = all)
     """
     high_rank_mas = []
     
@@ -186,6 +195,11 @@ def get_high_rank_mas(df, min_rank=800):
     
     # Sort by rank descending
     high_rank_mas.sort(key=lambda x: x['rank'], reverse=True)
+    
+    # Apply max_results limit if specified
+    if max_results and len(high_rank_mas) > max_results:
+        high_rank_mas = high_rank_mas[:max_results]
+    
     return high_rank_mas
 
 
@@ -521,6 +535,12 @@ def generate_zone_recommendations(
     """
     recommendations = []
     
+    # PERFORMANCE: Limit travelers_df size to prevent timeout
+    # If more than 50,000 travelers, sample to most recent
+    if len(travelers_df) > 50000:
+        print(f"⚠️ Large traveler set ({len(travelers_df)} rows). Sampling most recent 50,000...")
+        travelers_df = travelers_df.sort_values('Arrival', ascending=False).head(50000)
+    
     # Find Recip pairs
     recip_pairs = find_recip_pairs(
         travelers_df,
@@ -531,11 +551,11 @@ def generate_zone_recommendations(
     if not recip_pairs:
         return []
     
-    # Get high-rank MAs
-    high_rank_mas = get_high_rank_mas(ohlc_df, min_rank=800)
+    # Get high-rank MAs (limit to prevent slowdown)
+    high_rank_mas = get_high_rank_mas(ohlc_df, min_rank=800, max_results=20)
     
-    # Analyze each Recip pair as potential zone
-    for recip in recip_pairs[:10]:  # Top 10 recips
+    # Analyze each Recip pair as potential zone (limit to top 15 to prevent timeout)
+    for recip in recip_pairs[:15]:  # Reduced from 10 to 15, but still manageable
         zone_price = recip['avg_output']
         distance_from_current = zone_price - current_price
         
@@ -567,8 +587,8 @@ def generate_zone_recommendations(
                 'm_num': wildcard['m_num']
             })
         
-        # Check for HUGE HMA confluence
-        for ma_info in high_rank_mas[:15]:  # Top 15 high-rank MAs
+        # Check for HUGE HMA confluence (limit to top 10 to prevent timeout)
+        for ma_info in high_rank_mas[:10]:  # Reduced from 15 to 10
             ma_col = ma_info['column']
             
             # Get MA value at most recent candle
