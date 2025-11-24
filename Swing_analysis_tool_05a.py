@@ -1073,6 +1073,7 @@ def main():
     # Traveler files (for Strategic Zones)
     st.markdown("---")
     st.markdown("### 📊 Traveler Data (Required for Strategic Zones)")
+    st.info("💡 These files enable Tab 8 - Strategic Zone recommendations")
     
     col1, col2, col3 = st.columns(3)
     
@@ -1081,16 +1082,20 @@ def main():
             "Small Feed 15m CSV",
             type=['csv'],
             key="small_feed",
-            help="Required for traveler analysis"
+            help="Required for traveler analysis and Recip detection"
         )
+        if small_feed_file:
+            st.success(f"✅ {small_feed_file.name}")
     
     with col2:
         big_feed_file = st.file_uploader(
             "Big Feed 15m CSV",
             type=['csv'],
             key="big_feed",
-            help="Required for traveler analysis"
+            help="Required for traveler analysis and Recip detection"
         )
+        if big_feed_file:
+            st.success(f"✅ {big_feed_file.name}")
     
     with col3:
         measurement_file = st.file_uploader(
@@ -1099,6 +1104,8 @@ def main():
             key="measurement",
             help="Excel file with M# values and R# relationships"
         )
+        if measurement_file:
+            st.success(f"✅ {measurement_file.name}")
     
     # Load files
     files = {
@@ -1145,7 +1152,17 @@ def main():
     ])
     
     if min_files_met:
-        st.success(f"✅ Minimum files loaded! Strategic Zones analysis available.")
+        st.success(f"✅ **Strategic Zones Ready!** All required files loaded ({len(loaded_files)} OHLC + 3 traveler files)")
+    elif len(loaded_files) > 0:
+        missing = []
+        if not small_feed_file:
+            missing.append("Small Feed CSV")
+        if not big_feed_file:
+            missing.append("Big Feed CSV")
+        if not measurement_file:
+            missing.append("Measurement File")
+        if missing:
+            st.warning(f"⚠️ For Strategic Zones, please also upload: {', '.join(missing)}")
     
     # Analysis tabs
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
@@ -1832,10 +1849,22 @@ def main():
             for file_type, status in files_status.items():
                 st.markdown(f"- {file_type}: {status}")
             
-            return
-        
-        # Load traveler data
-        try:
+            st.info("👆 Please upload all required files above to enable Strategic Zones analysis")
+            
+        elif not (small_feed_file and big_feed_file and measurement_file):
+            # Double-check that all traveler files are uploaded
+            st.error("⚠️ Missing traveler files!")
+            st.markdown("Please upload:")
+            if not small_feed_file:
+                st.markdown("- ❌ Small Feed 15m CSV")
+            if not big_feed_file:
+                st.markdown("- ❌ Big Feed 15m CSV")
+            if not measurement_file:
+                st.markdown("- ❌ Measurement File (Excel)")
+            
+        else:
+            # All files present, proceed with analysis
+            try:
             st.markdown("### 📊 Loading Traveler Data...")
             
             # Load feeds
@@ -2068,11 +2097,12 @@ def main():
                             file_name=f"strategic_zones_{report_time.strftime('%Y%m%d_%H%M')}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
-        
-        except Exception as e:
-            st.error(f"Error in Strategic Zones analysis: {str(e)}")
-            import traceback
-            st.code(traceback.format_exc())
+            
+            except Exception as e:
+                st.error(f"Error in Strategic Zones analysis: {str(e)}")
+                import traceback
+                with st.expander("🔍 Error Details"):
+                    st.code(traceback.format_exc())
 
 
 if __name__ == "__main__":
