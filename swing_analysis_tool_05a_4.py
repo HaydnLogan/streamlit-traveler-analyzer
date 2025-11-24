@@ -34,8 +34,8 @@ from strategic_zone_detector import (
     get_next_origin_updates
 )
 
-# Import reciprocal traveler generator
-from recip_traveler_generator import generate_recip_traveler_reports
+# Import reciprocal traveler generator (FAST VERSION)
+from recip_traveler_generator_FAST import generate_recip_traveler_reports
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -1025,7 +1025,7 @@ def main():
         "Swing Threshold (min move)",
         min_value=20,
         max_value=100,
-        value=55,
+        value=30,
         step=5
     )
     
@@ -1936,7 +1936,7 @@ def main():
                 st.markdown("---")
                 st.markdown("### ⚙️ Report Settings")
                 
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
                     report_time_mode = st.radio(
@@ -1955,10 +1955,14 @@ def main():
                     st.info(f"📅 Report: {report_time.strftime('%Y-%m-%d %H:%M')}")
                 
                 with col2:
+                    lookback_days = st.slider("Lookback Days", 1, 60, 20, 1, key="lookback_days")
+                    st.markdown("*How many days to look back (default: 20)*")
+                
+                with col3:
                     recip_max_spread = st.slider("Recip Max Spread", 0.5, 10.0, 3.0, 0.5, key="recip_spread")
                     st.markdown("*Maximum output spread for reciprocal matches*")
                 
-                with col3:
+                with col4:
                     max_zones = st.slider("Max Zones to Show", 1, 6, 4, key="max_zones")
                     zone_tolerance = st.slider("Zone Tolerance (±)", 12, 48, 24, 6, key="zone_tol")
                 
@@ -1974,7 +1978,8 @@ def main():
                             big_hlc_df=big_hlc_df,
                             measurement_df=measurement_df,
                             report_time=report_time,
-                            max_spread=recip_max_spread
+                            max_spread=recip_max_spread,
+                            lookback_days=lookback_days
                         )
                         
                         # Store in session state
