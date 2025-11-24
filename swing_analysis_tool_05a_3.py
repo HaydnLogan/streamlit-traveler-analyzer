@@ -1177,17 +1177,20 @@ def main():
     ])
     
     if min_files_met:
-        st.success(f"✅ **Strategic Zones Ready!** All required files loaded ({len(loaded_files)} OHLC + 3 traveler files)")
+        st.success(f"✅ **Tab 8 - Strategic Zones READY!** All required files loaded ({len(loaded_files)} OHLC + 3 feed files)")
+        st.info("👉 Click the '🎯 Strategic Zones' tab below to generate custom reciprocal traveler reports")
     elif len(loaded_files) > 0:
         missing = []
         if not small_feed_file:
-            missing.append("Small Feed CSV")
+            missing.append("Small Feed HLC CSV")
         if not big_feed_file:
-            missing.append("Big Feed CSV")
+            missing.append("Big Feed HLC CSV")
         if not measurement_file:
             missing.append("Measurement File")
         if missing:
-            st.warning(f"⚠️ For Strategic Zones, please also upload: {', '.join(missing)}")
+            st.warning(f"⚠️ **Tab 8 needs:** {', '.join(missing)}")
+    else:
+        st.info("ℹ️ Upload OHLC and Feed files above to enable Tab 8 - Strategic Zones")
     
     # Analysis tabs
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
@@ -1649,29 +1652,29 @@ def main():
         col1, col2 = st.columns(2)
         
         with col1:
-            hlc_file = st.file_uploader(
+            tab7_hlc_file = st.file_uploader(
                 "Upload HLC Data (CSV with origin H/L/C columns)",
                 type=['csv', 'xlsx', 'xls'],
                 key="hlc_upload"
             )
         
         with col2:
-            measurement_file = st.file_uploader(
+            tab7_measurement_file = st.file_uploader(
                 "Upload Measurement File (Excel with M values)",
                 type=['xlsx', 'xls'],
                 key="measurement_upload"
             )
         
-        if hlc_file is not None and measurement_file is not None:
+        if tab7_hlc_file is not None and tab7_measurement_file is not None:
             try:
                 # Load HLC data
-                if hlc_file.name.endswith('.csv'):
-                    hlc_df = pd.read_csv(hlc_file)
+                if tab7_hlc_file.name.endswith('.csv'):
+                    hlc_df = pd.read_csv(tab7_hlc_file)
                 else:
-                    hlc_df = pd.read_excel(hlc_file)
+                    hlc_df = pd.read_excel(tab7_hlc_file)
                 
                 # Load measurement data
-                measurement_df = pd.read_excel(measurement_file)
+                measurement_df = pd.read_excel(tab7_measurement_file)
                 
                 st.success(f"Loaded HLC data: {len(hlc_df)} rows, Measurements: {len(measurement_df)} rows")
                 
@@ -1862,6 +1865,15 @@ def main():
         - ⚡ Wildcard M# emergence (0, ±40, ±54)
         - 🔄 MA role transitions (resistance ↔ support)
         """)
+        
+        # DEBUG: Show file status
+        with st.expander("🔍 Debug: File Upload Status"):
+            st.markdown("**Main Section Files:**")
+            st.markdown(f"- Small Feed: {'✅ ' + small_feed_file.name if small_feed_file else '❌ Not uploaded'}")
+            st.markdown(f"- Big Feed: {'✅ ' + big_feed_file.name if big_feed_file else '❌ Not uploaded'}")
+            st.markdown(f"- Measurement: {'✅ ' + measurement_file.name if measurement_file else '❌ Not uploaded'}")
+            st.markdown(f"- OHLC Files: {len(loaded_files)} files loaded")
+            st.markdown(f"\n**min_files_met:** {min_files_met}")
         
         # Check minimum files
         if not min_files_met:
