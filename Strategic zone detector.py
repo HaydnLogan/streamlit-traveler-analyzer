@@ -53,24 +53,35 @@ def detect_huge_hmas(df):
     """
     Detect HUGE HMA columns (h1-h20 pattern).
     These are higher-rank MAs than regular EMAs, SMAs, or smaller HMAs.
+    
+    Format: "h{number}{suffix?} {timeframe} {period}"
+    Examples: "h1 3m 1.5k", "h14 1m 2.5k", "h7a 6m 3k"
     """
     huge_hmas = []
     
     for col in df.columns:
-        # Match h followed by 1-2 digits, optionally followed by 'a' or 'b'
-        match = re.match(r'^h(\d{1,2})([ab]?)$', col, re.IGNORECASE)
+        if not isinstance(col, str):
+            continue
+            
+        col_stripped = col.strip()
+        
+        # Match: h{number}{suffix?} followed by space and rest
+        match = re.match(r'^h(\d{1,2})([ab]?)\s+(.+)$', col_stripped, re.IGNORECASE)
         if match:
             number = int(match.group(1))
             suffix = match.group(2)
+            rest = match.group(3)  # e.g., "3m 1.5k", "1m 2.5k"
+            
             if 1 <= number <= 20:
                 huge_hmas.append({
                     'column': col,
                     'number': number,
                     'suffix': suffix,
-                    'rank': 1000 + number  # High rank score
+                    'timeframe_period': rest,
+                    'rank': 2000 + number  # HIGHEST rank (2000+)
                 })
     
-    # Sort by number
+    # Sort by number and suffix
     huge_hmas.sort(key=lambda x: (x['number'], x['suffix']))
     return huge_hmas
 
@@ -81,16 +92,22 @@ def get_ma_rank(col_name):
     Higher rank = more important MA.
     
     Ranking:
-    - HUGE HMAs (h1-h20): 1000+
+    - HUGE HMAs (h1-h20 format): 2000-2020 (HIGHEST PRIORITY)
     - Very high timeframe Hull (12Hr+, daily+, weekly, monthly): 800-900
     - High period Hull (500+, 800): 700-800
     - Standard MAs: < 700
     """
-    # Check for HUGE HMA
-    match = re.match(r'^h(\d{1,2})([ab]?)$', col_name, re.IGNORECASE)
+    if not isinstance(col_name, str):
+        return 0
+    
+    col_stripped = col_name.strip()
+    
+    # Check for HUGE HMA format: "h{number}{suffix?} {timeframe} {period}"
+    match = re.match(r'^h(\d{1,2})([ab]?)\s+(.+)$', col_stripped, re.IGNORECASE)
     if match:
         number = int(match.group(1))
-        return 1000 + number
+        if 1 <= number <= 20:
+            return 2000 + number  # HIGHEST RANK
     
     # Parse standard MA format
     if ' ' not in col_name:
@@ -139,15 +156,32 @@ def get_ma_rank(col_name):
 
 
 def get_high_rank_mas(df, min_rank=800):
-    """Get all high-rank MAs (HUGE HMAs and very high timeframe MAs)."""
+    """
+    Get all high-rank MAs (HUGE HMAs and very high timeframe MAs).
+    
+    HUGE HMAs (h1-h20) are prioritized with rank 2000+
+    """
     high_rank_mas = []
     
+    # First, get HUGE HMAs
+    huge_hmas = detect_huge_hmas(df)
+    for hma in huge_hmas:
+        high_rank_mas.append({
+            'column': hma['column'],
+            'rank': hma['rank'],
+            'type': 'HUGE_HMA',
+            'number': hma['number'],
+            'suffix': hma['suffix']
+        })
+    
+    # Then get other high-rank MAs
     for col in df.columns:
         rank = get_ma_rank(col)
-        if rank >= min_rank:
+        if rank >= min_rank and rank < 2000:  # Not already included as HUGE HMA
             high_rank_mas.append({
                 'column': col,
-                'rank': rank
+                'rank': rank,
+                'type': 'HIGH_TF_MA'
             })
     
     # Sort by rank descending
@@ -534,19 +568,37 @@ def generate_zone_recommendations(
             })
         
         # Check for HUGE HMA confluence
-        for ma_info in high_rank_mas[:10]:  # Top 10 high-rank MAs
+        for ma_info in high_rank_mas[:15]:  # Top 15 high-rank MAs
             ma_col = ma_info['column']
             
             # Get MA value at most recent candle
             recent_ma_val = ohlc_df[ma_col].dropna().iloc[-1] if ma_col in ohlc_df.columns else None
             
             if recent_ma_val and abs(recent_ma_val - zone_price) <= zone_tolerance:
-                ma_score = min(ma_info['rank'] // 20, 50)  # Scale rank to score
+                # HUGE HMAs get much higher scores
+                if ma_info.get('type') == 'HUGE_HMA':
+                    # h1-h20: rank 2000+, score based on which h# it is
+                    # Lower h# = more significant (h1, h2, h3 > h15, h16)
+                    h_num = ma_info.get('number', 20)
+                    base_huge_score = 100  # Base score for HUGE HMA
+                    # Bonus for lower numbers (h1=+50, h10=+20, h20=0)
+                    priority_bonus = max(0, 50 - (h_num - 1) * 2.5)
+                    ma_score = int(base_huge_score + priority_bonus)
+                else:
+                    # Regular high-rank MA
+                    ma_score = min(ma_info['rank'] // 20, 50)
+                
                 zone_score += ma_score
                 
-                ma_desc = f"{ma_col} @ {recent_ma_val:.2f} (rank {ma_info['rank']})"
+                ma_type = ma_info.get('type', 'High-Rank MA')
+                if ma_type == 'HUGE_HMA':
+                    h_display = f"h{ma_info['number']}{ma_info.get('suffix', '')}"
+                    ma_desc = f"🔥 {h_display} ({ma_col}) @ {recent_ma_val:.2f} (rank {ma_info['rank']})"
+                else:
+                    ma_desc = f"{ma_col} @ {recent_ma_val:.2f} (rank {ma_info['rank']})"
+                
                 confluence_factors.append({
-                    'type': 'High-Rank MA',
+                    'type': ma_type,
                     'description': ma_desc,
                     'score': ma_score,
                     'rank': ma_info['rank']
