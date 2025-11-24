@@ -147,7 +147,9 @@ def generate_custom_recip_report(hlc_df, measurement_df, report_time, feed_label
         time_col = hlc_df.columns[0]
         hlc_df = hlc_df.rename(columns={time_col: 'time'})
     
-    hlc_df['time'] = pd.to_datetime(hlc_df['time'], errors='coerce')
+    # Handle mixed timezones by converting to UTC first, then removing timezone
+    hlc_df['time'] = pd.to_datetime(hlc_df['time'], errors='coerce', utc=True)
+    hlc_df['time'] = hlc_df['time'].dt.tz_localize(None)  # Remove timezone info
     
     # Extract origins from HLC columns
     origins = extract_origins_from_hlc(hlc_df)
