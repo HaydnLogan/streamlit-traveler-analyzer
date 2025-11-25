@@ -4,13 +4,15 @@ v05e_5. CRITICAL FIX for M # filtering in two-pass processing.
 - Added diagnostic output showing M # availability and overlap with valid lists
 - This fixes the root cause: valid lists specify M #s, but find_valid_m_values searches by M value
 - Pre-filtering ensures only relevant M values (corresponding to desired M #s) are searched
+*Result: Still 0 results.  Shows how many Measurement file unique M #s.
+Shows M #s available, but still no results. 
 
 v05e_4. Adds three enhancements to two-pass cluster processing:
 1. Processing Summary - Shows Pass 1 vs Pass 2 counts, M numbers, origins, and feeds
 2. Export Functionality - Download buttons for All, Pass 1 only, and Pass 2 only data
-3. Visual Comparison Mode - Side-by-side view of Pass 1 (recent 2 days) vs Pass 2 (all scope)
-   
+3. Visual Comparison Mode - Side-by-side view of Pass 1 (recent 2 days) vs Pass 2 (all scope) 
 Also fixes M # type mismatch issue causing 0 results (now converts to int for comparison).
+*Result: Still does not work. The table generation process completes but shows 0 results and no processing summary displays.
 
 v053_3. The table generation process completes but shows 0 results. Next step is to add processing summaries for the two-pass-modes to see which HLC 
 were processed.
