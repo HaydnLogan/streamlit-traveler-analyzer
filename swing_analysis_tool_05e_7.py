@@ -1661,7 +1661,7 @@ def main():
         st.header("🧭 Traveler (Pivot) Calculator")
         st.markdown("""
         Calculate travelers that produce outputs at specific price targets.
-        Uses the pivot formula: **Output = (H + L + C) / 3 + M × (H - L)**
+        Uses the pivot formula: **Output = (H + L + C) / 3 + M * (H - L)**
         """)
         
         st.info("ℹ️ **Note:** This tab requires DIFFERENT files than the main upload section above.")
