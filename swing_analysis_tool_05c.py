@@ -18,6 +18,7 @@ import datetime as dt
 from datetime import datetime, timedelta, time
 from typing import List, Dict, Tuple, Optional
 import io
+import time as time_module  # For timing cluster table generation
 import re
 import sys
 
@@ -2009,7 +2010,7 @@ def main():
                         st.metric("Total Travelers", len(results['combined_travelers']))
                         st.metric("Total Recip Matches", len(results['small_matches']) + len(results['big_matches']))
                     
-                    # Show reciprocal matches in Cluster Table
+                    # Show reciprocal matches in Cluster Table (G.11 Format)
                     if results['small_matches'] or results['big_matches']:
                         st.markdown("---")
                         st.markdown("#### 📋 Reciprocal Cluster Table")
@@ -2022,7 +2023,7 @@ def main():
                         ⚪ **White** = Older
                         """)
                         
-                        # Build cluster table from matches
+                        # Build cluster table from matches (G.11 format)
                         cluster_rows = []
                         
                         for match in results['small_matches'] + results['big_matches']:
@@ -2052,30 +2053,29 @@ def main():
                                 if is_recipe:
                                     break
                             
+                            # Build row in G.11 format
                             cluster_rows.append({
-                                'Zone_Price': match['Zone_Price'],
+                                'Arrival_Output': match['Zone_Price'],  # Average output
+                                'Arrival_DateTime': match.get('Arrival1', ''),  # Use first arrival time
+                                'Arrival_Bracket': match['Day1'],  # Primary day bracket
+                                'Model': 'Recip Match',
                                 'Type': match_type,
+                                'Category': f"M#{int(match['M1'])} ↔ M#{int(match['M2'])}",
+                                'Origins': f"{match['Origin1']}, {match['Origin2']}",
                                 'Feed': match['Feed'],
-                                'Origin_1': match['Origin1'],
-                                'M#_1': int(match['M1']),
-                                'R#_1': int(match['R1']),
-                                'Output_1': match['Output1'],
-                                'Day_1': match['Day1'],
-                                'Origin_2': match['Origin2'],
-                                'M#_2': int(match['M2']),
-                                'R#_2': int(match['R2']),
-                                'Output_2': match['Output2'],
-                                'Day_2': match['Day2'],
-                                'Spread': match['Output_Spread'],
-                                'Recipe': 'Yes' if is_recipe else 'No',
-                                'Recipe_Type': recipe_type if is_recipe else '-'
+                                'M_#s': f"{int(match['M1'])}, {int(match['M2'])}",
+                                'Outputs': f"{match['Output1']:.2f}, {match['Output2']:.2f}",
+                                'Prox': match['Output_Spread'],
+                                'Pattern_Type': recipe_type if is_recipe else 'Standard',
+                                'Group': 'N/A',
+                                'Is_Recip': 'Yes'
                             })
                         
                         # Create DataFrame
                         cluster_df = pd.DataFrame(cluster_rows)
                         
-                        # Sort by Zone_Price (descending)
-                        cluster_df = cluster_df.sort_values('Zone_Price', ascending=False)
+                        # Sort by Arrival_Output (descending)
+                        cluster_df = cluster_df.sort_values('Arrival_Output', ascending=False)
                         
                         # Apply highlighting function
                         def highlight_cluster_rows(row):
@@ -2091,7 +2091,7 @@ def main():
                         # Display cluster table
                         st.dataframe(cluster_df_styled, use_container_width=True, height=400)
                         
-                        st.caption(f"📊 Total Reciprocal Matches: {len(cluster_df)} | Recipe Pairs: {cluster_df['Recipe'].value_counts().get('Yes', 0)}")
+                        st.caption(f"📊 Total Reciprocal Matches: {len(cluster_df)} | Recipe Pairs: {sum(1 for r in cluster_rows if r['Pattern_Type'] not in ['Standard', 'N/A'])}")
                     
                     else:
                         st.info("No reciprocal matches found within current spread settings. Try increasing Recip Max Spread.")
@@ -2105,20 +2105,92 @@ def main():
                     
                     if st.button("🎯 Generate FOGZ / Large Discounts / Recips PD Tables", key="gen_cluster_tables", type="secondary"):
                         with st.spinner("Generating cluster tables..."):
-                            from cluster_table_generator import generate_all_cluster_tables
-                            
-                            cluster_results = generate_all_cluster_tables(
-                                small_hlc_df=small_hlc_df,
-                                big_hlc_df=big_hlc_df,
-                                measurement_df=measurement_df,
-                                report_time=report_time,
-                                max_spread=recip_max_spread,
-                                lookback_days=lookback_days
+                            import time as time_module
+                            from cluster_table_generator import (
+                                generate_fogz_table,
+                                generate_large_discounts_table,
+                                generate_recips_pd_table
                             )
+                            from recip_traveler_generator_FAST import extract_origins_from_hlc
+                            
+                            # Extract origins
+                            small_origins = extract_origins_from_hlc(small_hlc_df)
+                            big_origins = extract_origins_from_hlc(big_hlc_df)
+                            
+                            cluster_results = {}
+                            total_start = time_module.time()
+                            
+                            # Generate FOGZ table
+                            st.info("⏳ Generating FOGZ table...")
+                            fogz_start = time_module.time()
+                            fogz_small = generate_fogz_table(
+                                small_hlc_df, small_origins, measurement_df, report_time, 'Small', recip_max_spread, lookback_days
+                            )
+                            fogz_big = generate_fogz_table(
+                                big_hlc_df, big_origins, measurement_df, report_time, 'Big', recip_max_spread, lookback_days
+                            )
+                            fogz_combined = pd.concat([fogz_small, fogz_big], ignore_index=True) if len(fogz_small) > 0 or len(fogz_big) > 0 else pd.DataFrame()
+                            if len(fogz_combined) > 0:
+                                fogz_combined = fogz_combined.sort_values('Arrival_Output', ascending=False)
+                            fogz_time = time_module.time() - fogz_start
+                            st.success(f"✅ FOGZ complete: {len(fogz_combined)} matches in {fogz_time:.2f}s")
+                            
+                            # Generate Large Discounts table
+                            st.info("⏳ Generating Large Discounts table...")
+                            ld_start = time_module.time()
+                            ld_small = generate_large_discounts_table(
+                                small_hlc_df, small_origins, measurement_df, report_time, 'Small', recip_max_spread, lookback_days
+                            )
+                            ld_big = generate_large_discounts_table(
+                                big_hlc_df, big_origins, measurement_df, report_time, 'Big', recip_max_spread, lookback_days
+                            )
+                            ld_combined = pd.concat([ld_small, ld_big], ignore_index=True) if len(ld_small) > 0 or len(ld_big) > 0 else pd.DataFrame()
+                            if len(ld_combined) > 0:
+                                ld_combined = ld_combined.sort_values('Arrival_Output', ascending=False)
+                            ld_time = time_module.time() - ld_start
+                            st.success(f"✅ Large Discounts complete: {len(ld_combined)} matches in {ld_time:.2f}s")
+                            
+                            # Generate Recips PD table
+                            st.info("⏳ Generating Recips PD table...")
+                            recips_start = time_module.time()
+                            recips_small = generate_recips_pd_table(
+                                small_hlc_df, small_origins, measurement_df, report_time, 'Small', recip_max_spread, lookback_days
+                            )
+                            recips_big = generate_recips_pd_table(
+                                big_hlc_df, big_origins, measurement_df, report_time, 'Big', recip_max_spread, lookback_days
+                            )
+                            recips_combined = pd.concat([recips_small, recips_big], ignore_index=True) if len(recips_small) > 0 or len(recips_big) > 0 else pd.DataFrame()
+                            if len(recips_combined) > 0:
+                                recips_combined = recips_combined.sort_values('Arrival_Output', ascending=False)
+                            recips_time = time_module.time() - recips_start
+                            st.success(f"✅ Recips PD complete: {len(recips_combined)} matches in {recips_time:.2f}s")
+                            
+                            total_time = time_module.time() - total_start
+                            
+                            # Store results
+                            cluster_results = {
+                                'fogz_small': fogz_small,
+                                'fogz_big': fogz_big,
+                                'fogz_combined': fogz_combined,
+                                'ld_small': ld_small,
+                                'ld_big': ld_big,
+                                'ld_combined': ld_combined,
+                                'recips_small': recips_small,
+                                'recips_big': recips_big,
+                                'recips_combined': recips_combined,
+                                'timings': {
+                                    'fogz': fogz_time,
+                                    'large_discounts': ld_time,
+                                    'recips_pd': recips_time,
+                                    'total': total_time
+                                }
+                            }
                             
                             # Store in session state
                             st.session_state['cluster_tables'] = cluster_results
-                            st.success("✅ Cluster tables generated!")
+                            
+                            st.success(f"✅ All cluster tables generated in {total_time:.2f}s!")
+                            st.info(f"⏱️ **Timing Breakdown:** FOGZ: {fogz_time:.2f}s | Large Discounts: {ld_time:.2f}s | Recips PD: {recips_time:.2f}s")
                     
                     # Display cluster tables if generated
                     if 'cluster_tables' in st.session_state:
@@ -2147,7 +2219,8 @@ def main():
                                 
                                 styled_fogz = cluster_results['fogz_combined'].style.apply(highlight_cluster_rows, axis=1)
                                 st.dataframe(styled_fogz, use_container_width=True, height=400)
-                                st.caption(f"📊 Total FOGZ Matches: {len(cluster_results['fogz_combined'])} | Small: {len(cluster_results['fogz_small'])} | Big: {len(cluster_results['fogz_big'])}")
+                                timing_text = f" | ⏱️ Generated in {cluster_results.get('timings', {}).get('fogz', 0):.2f}s" if 'timings' in cluster_results else ""
+                                st.caption(f"📊 Total FOGZ Matches: {len(cluster_results['fogz_combined'])} | Small: {len(cluster_results['fogz_small'])} | Big: {len(cluster_results['fogz_big'])}{timing_text}")
                             else:
                                 st.info("No FOGZ matches found within current spread settings.")
                         
@@ -2165,7 +2238,8 @@ def main():
                                 
                                 styled_ld = cluster_results['ld_combined'].style.apply(highlight_cluster_rows, axis=1)
                                 st.dataframe(styled_ld, use_container_width=True, height=400)
-                                st.caption(f"📊 Total Large Discount Matches: {len(cluster_results['ld_combined'])} | Small: {len(cluster_results['ld_small'])} | Big: {len(cluster_results['ld_big'])}")
+                                timing_text = f" | ⏱️ Generated in {cluster_results.get('timings', {}).get('large_discounts', 0):.2f}s" if 'timings' in cluster_results else ""
+                                st.caption(f"📊 Total Large Discount Matches: {len(cluster_results['ld_combined'])} | Small: {len(cluster_results['ld_small'])} | Big: {len(cluster_results['ld_big'])}{timing_text}")
                             else:
                                 st.info("No Large Discount matches found within current spread settings.")
                         
@@ -2191,7 +2265,8 @@ def main():
                                 
                                 styled_recips = cluster_results['recips_combined'].style.apply(highlight_cluster_rows, axis=1)
                                 st.dataframe(styled_recips, use_container_width=True, height=400)
-                                st.caption(f"📊 Total Recip PD Matches: {len(cluster_results['recips_combined'])} | Small: {len(cluster_results['recips_small'])} | Big: {len(cluster_results['recips_big'])}")
+                                timing_text = f" | ⏱️ Generated in {cluster_results.get('timings', {}).get('recips_pd', 0):.2f}s" if 'timings' in cluster_results else ""
+                                st.caption(f"📊 Total Recip PD Matches: {len(cluster_results['recips_combined'])} | Small: {len(cluster_results['recips_small'])} | Big: {len(cluster_results['recips_big'])}{timing_text}")
                             else:
                                 st.info("No Recip PD matches found within current spread settings.")
                     
