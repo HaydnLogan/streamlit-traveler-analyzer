@@ -2010,91 +2010,8 @@ def main():
                         st.metric("Total Travelers", len(results['combined_travelers']))
                         st.metric("Total Recip Matches", len(results['small_matches']) + len(results['big_matches']))
                     
-                    # Show reciprocal matches in Cluster Table (G.11 Format)
-                    if results['small_matches'] or results['big_matches']:
-                        st.markdown("---")
-                        st.markdown("#### 📋 Reciprocal Cluster Table")
-                        
-                        # Color legend
-                        st.markdown("""
-                        **Legend:** 
-                        🟡 **Yellow** = Day [0] (Today)  |  
-                        🔵 **Blue** = Day [-1] or [-2] (Recent)  |  
-                        ⚪ **White** = Older
-                        """)
-                        
-                        # Build cluster table from matches (G.11 format)
-                        cluster_rows = []
-                        
-                        for match in results['small_matches'] + results['big_matches']:
-                            # Determine type based on days
-                            days = [match['Day1'], match['Day2']]
-                            if '[0]' in days:
-                                match_type = 'Today'
-                            elif any(d in ['[-1]', '[-2]'] for d in days):
-                                match_type = 'Recent'
-                            else:
-                                match_type = 'Older'
-                            
-                            # Check if Recipe pair
-                            m1_abs = abs(match['M1'])
-                            m2_abs = abs(match['M2'])
-                            is_recipe = False
-                            recipe_type = ''
-                            
-                            # Check all recipe types
-                            from recip_traveler_generator_FAST import RECIPE_PAIRS
-                            for recipe_name, pairs in RECIPE_PAIRS.items():
-                                for pair in pairs:
-                                    if (m1_abs, m2_abs) == pair or (m2_abs, m1_abs) == pair:
-                                        is_recipe = True
-                                        recipe_type = recipe_name
-                                        break
-                                if is_recipe:
-                                    break
-                            
-                            # Build row in G.11 format
-                            cluster_rows.append({
-                                'Arrival_Output': match['Zone_Price'],  # Average output
-                                'Arrival_DateTime': match.get('Arrival1', ''),  # Use first arrival time
-                                'Arrival_Bracket': match['Day1'],  # Primary day bracket
-                                'Model': 'Recip Match',
-                                'Type': match_type,
-                                'Category': f"M#{int(match['M1'])} ↔ M#{int(match['M2'])}",
-                                'Origins': f"{match['Origin1']}, {match['Origin2']}",
-                                'Feed': match['Feed'],
-                                'M_#s': f"{int(match['M1'])}, {int(match['M2'])}",
-                                'Outputs': f"{match['Output1']:.2f}, {match['Output2']:.2f}",
-                                'Prox': match['Output_Spread'],
-                                'Pattern_Type': recipe_type if is_recipe else 'Standard',
-                                'Group': 'N/A',
-                                'Is_Recip': 'Yes'
-                            })
-                        
-                        # Create DataFrame
-                        cluster_df = pd.DataFrame(cluster_rows)
-                        
-                        # Sort by Arrival_Output (descending)
-                        cluster_df = cluster_df.sort_values('Arrival_Output', ascending=False)
-                        
-                        # Apply highlighting function
-                        def highlight_cluster_rows(row):
-                            if row['Type'] == 'Today':
-                                return ['background-color: #fff9c4'] * len(row)  # Light yellow
-                            elif row['Type'] == 'Recent':
-                                return ['background-color: #bbdefb'] * len(row)  # Light blue
-                            else:
-                                return [''] * len(row)
-                        
-                        cluster_df_styled = cluster_df.style.apply(highlight_cluster_rows, axis=1)
-                        
-                        # Display cluster table
-                        st.dataframe(cluster_df_styled, use_container_width=True, height=400)
-                        
-                        st.caption(f"📊 Total Reciprocal Matches: {len(cluster_df)} | Recipe Pairs: {sum(1 for r in cluster_rows if r['Pattern_Type'] not in ['Standard', 'N/A'])}")
-                    
-                    else:
-                        st.info("No reciprocal matches found within current spread settings. Try increasing Recip Max Spread.")
+                    # OLD RECIPROCAL CLUSTER TABLE REMOVED
+                    # (Replaced by three specialized cluster tables below)
                     
                     # ========================================
                     # THREE CLUSTER TABLES: FOGZ, Large Discounts, Recips PD
@@ -2501,3 +2418,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
