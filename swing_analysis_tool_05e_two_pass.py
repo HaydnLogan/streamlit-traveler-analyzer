@@ -1,5 +1,6 @@
 """
 Swing Analysis Tool 05e - Two pass logic for tab 8 traveler reports
+This First iteration does not work.  Produces error:  Error in process_cluster_tables_two_pass: too many values to unpack (expected 2).
 =============================================
 Features:
 - 4-file OHLC upload (3m, 5m, 6m, 15m) - CSV and Excel support
