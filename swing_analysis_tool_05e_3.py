@@ -42,7 +42,7 @@ from strategic_zone_detector import (
 from recip_traveler_generator_FAST import generate_recip_traveler_reports
 
 # Import custom range calculator with two-pass cluster processing
-from custom_range_calculator_1125_2 import (
+from custom_range_calculator_1125_3 import (
     process_cluster_tables_two_pass,
     match_cluster_table_entries,
     clean_timestamp
@@ -1019,7 +1019,7 @@ def find_ma_confluence_at_swings(df, swings_df, ma_columns, zone_size=24):
 # ============================================================================
 
 def main():
-    st.title("📊 Market Swing Analysis Tool 05e Two Pass")
+    st.title("📊 Market Swing Analysis Tool 05e_3 Two Pass")
     st.markdown("**Integrated Version** - Swing Detection, MA Analysis, NY Session, Traveler/Pivot Calculations")
     st.markdown("---")
     
