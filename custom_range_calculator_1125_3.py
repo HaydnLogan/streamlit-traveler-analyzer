@@ -1,8 +1,9 @@
 """
-1125 update to version 0813.  Adds first and second pass for Swing Analysys Tool. 
-This First iteration does not work.  Produces error:  Error in process_cluster_tables_two_pass: too many values to unpack (expected 2).
+v1125_3.  Table generation process completes but shows 0 results. 
+v1125_2.  This First iteration does not work.  Produces error:  Error in process_cluster_tables_two_pass: too many values to unpack (expected 2).
+v1125 update to version 0813.  Adds first and second pass for Swing Analysys Tool. 
 
-0813 update to version 0810.  It is still fast, prints 16,000 lines in under 17 seconds, was under 10 seconds with errors.
+v0813 update to version v0810.  It is still fast, prints 16,000 lines in under 17 seconds, was under 10 seconds with errors.
 This fixes the missing Macedonia[-1], Macedonia[-2], Wasp-12b[-1], Wasp-12b[-2]. (under 10 seconds)
 Now addresses Input @ 1800 value for each csv, and Input @ Report for each csv.  Input @ 18:00 renamed to Input @ Start.
 Input @ start shows 2 values, one for each csv, which is correct..  
