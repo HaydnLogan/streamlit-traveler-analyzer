@@ -309,11 +309,13 @@ def find_reciprocal_matches(traveler_df: pd.DataFrame, max_spread: float = 3.0) 
                         'M1': t1['M #'],
                         'R1': t1['R #'],
                         'Output1': t1['Output'],
+                        'Arrival1': t1['Arrival'],  # FIXED: Added arrival time
                         'Day1': t1['Day'],
                         'Origin2': t2['Origin'],
                         'M2': t2['M #'],
                         'R2': t2['R #'],
                         'Output2': t2['Output'],
+                        'Arrival2': t2['Arrival'],  # FIXED: Added arrival time
                         'Day2': t2['Day'],
                         'Output_Spread': output_spread,
                         'Zone_Price': zone_price,
