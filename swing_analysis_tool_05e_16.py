@@ -2875,7 +2875,6 @@ def main():
                         
                         try:
                             import io
-                            from datetime import datetime
                             
                             # Create Excel file with multiple sheets
                             output = io.BytesIO()
