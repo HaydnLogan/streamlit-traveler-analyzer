@@ -2302,7 +2302,7 @@ def main():
                         ld_prep, ld_summary = process_cluster_tables_two_pass(
                             measurement_df=measurement_df,
                             small_df=small_hlc_df,
-                            big_df=big_df,
+                            big_df=big_hlc_df,
                             report_time=report_time,
                             scope_days=lookback_days,
                             valid_list_pass1=LD_PASS1,
