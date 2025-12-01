@@ -2403,33 +2403,11 @@ def main():
                             )
                             cluster_results['fogz_combined'] = fogz_matches
                             st.success(f"[OK] FOGZ matches: {len(fogz_matches)} found")
-                            
-                            # NEW MODEL: Lrg Disc, Fogz DD (FOGZ Pass 1 matched with LD Pass 2)
-                            st.info("⏳ Matching Lrg Disc, Fogz DD entries (FOGZ Today/Recent + LD Historic)...")
-                            # Combine FOGZ and LD prep data for this special model
-                            if not ld_prep.empty:
-                                # Combine prep tables
-                                combined_prep = pd.concat([fogz_prep, ld_prep], ignore_index=True)
-                                
-                                # Match FOGZ Pass 1 with LD Pass 2
-                                fogz_dd_matches = match_cluster_table_entries(
-                                    prep_df=combined_prep,
-                                    valid_list_pass1=FOGZ_PASS1,  # FOGZ M#s in Pass 1
-                                    valid_list_pass2=LD_PASS1,  # Large Discount M#s {36, -36, 38, -38, 39, -39}
-                                    max_output_spread=max_spread,
-                                    allow_mixed_feed=(match_type_selection == "Allow mixed feed"),
-                                    table_name="Fogz DD",  # Shown as "Fogz DD" in Category column
-                                    feed_opens=fogz_summary.get('feed_opens', {})
-                                )
-                                cluster_results['fogz_dd_combined'] = fogz_dd_matches
-                                st.success(f"[OK] Fogz DD matches: {len(fogz_dd_matches)} found")
-                            else:
-                                cluster_results['fogz_dd_combined'] = pd.DataFrame()
-                                st.warning("⚠️ No LD prep data available for Fogz DD matching")
                         else:
                             st.warning("WARNING: No FOGZ prep entries found")
                             prep_tables['fogz_prep'] = pd.DataFrame()
                             cluster_results['fogz_combined'] = pd.DataFrame()
+                            cluster_results['fogz_dd_combined'] = pd.DataFrame()  # Initialize here too
                         
                         fogz_time = time_module.time() - fogz_start
                         
@@ -2522,6 +2500,9 @@ def main():
                             st.warning("WARNING: No Large Discounts prep entries found")
                             prep_tables['ld_prep'] = ld_prep
                             cluster_results['ld_combined'] = pd.DataFrame()
+                            # If ld_prep is empty, we can't generate Fogz DD either
+                            if 'fogz_dd_combined' not in cluster_results:
+                                cluster_results['fogz_dd_combined'] = pd.DataFrame()
                         
                         ld_time = time_module.time() - ld_start
                         
@@ -2632,8 +2613,39 @@ def main():
                             st.warning("WARNING: No Recips PD prep entries found")
                             prep_tables['recips_prep'] = recips_prep
                             cluster_results['recips_combined'] = pd.DataFrame()
+                            cluster_results['recips_dp_combined'] = pd.DataFrame()
                         
                         recips_time = time_module.time() - recips_start
+                        
+                        # ========================================
+                        # NEW MODEL: FOGZ DD (FOGZ + Large Discounts cross-match)
+                        # ========================================
+                        # Generate Fogz DD AFTER both fogz_prep and ld_prep exist
+                        st.info("⏳ Generating Fogz DD matches (FOGZ Today/Recent + LD)...")
+                        
+                        if not fogz_prep.empty and not ld_prep.empty:
+                            # Combine FOGZ and LD prep data for this special model
+                            combined_prep = pd.concat([fogz_prep, ld_prep], ignore_index=True)
+                            
+                            # Match FOGZ Pass 1 with LD Pass 1 (both use their Pass 1 M#s)
+                            fogz_dd_matches = match_cluster_table_entries(
+                                prep_df=combined_prep,
+                                valid_list_pass1=FOGZ_PASS1,  # FOGZ M#s in Pass 1
+                                valid_list_pass2=LD_PASS1,  # Large Discount M#s {36, -36, 38, -38, 39, -39}
+                                max_output_spread=max_spread,
+                                allow_mixed_feed=(match_type_selection == "Allow mixed feed"),
+                                table_name="Fogz DD",  # Shown as "Fogz DD" in Category column
+                                feed_opens=fogz_summary.get('feed_opens', {})
+                            )
+                            cluster_results['fogz_dd_combined'] = fogz_dd_matches
+                            st.success(f"[OK] Fogz DD matches: {len(fogz_dd_matches)} found")
+                        else:
+                            cluster_results['fogz_dd_combined'] = pd.DataFrame()
+                            if fogz_prep.empty:
+                                st.warning("⚠️ No FOGZ prep data available for Fogz DD matching")
+                            if ld_prep.empty:
+                                st.warning("⚠️ No LD prep data available for Fogz DD matching")
+                        
                         
                         # ========================================
                         # FINALIZE
@@ -2794,11 +2806,11 @@ def main():
                     st.markdown("###  Matched Results (Final Cluster Tables)")
                     
                     # Excel Export Button
-                    if (('fogz_combined' in cluster_results and len(cluster_results['fogz_combined']) > 0) or
-                        ('fogz_dd_combined' in cluster_results and len(cluster_results['fogz_dd_combined']) > 0) or
-                        ('ld_combined' in cluster_results and len(cluster_results['ld_combined']) > 0) or
-                        ('recips_combined' in cluster_results and len(cluster_results['recips_combined']) > 0) or
-                        ('recips_dp_combined' in cluster_results and len(cluster_results['recips_dp_combined']) > 0)):
+                    if (('fogz_combined' in cluster_results and len(cluster_results.get('fogz_combined', [])) > 0) or
+                        ('fogz_dd_combined' in cluster_results and len(cluster_results.get('fogz_dd_combined', [])) > 0) or
+                        ('ld_combined' in cluster_results and len(cluster_results.get('ld_combined', [])) > 0) or
+                        ('recips_combined' in cluster_results and len(cluster_results.get('recips_combined', [])) > 0) or
+                        ('recips_dp_combined' in cluster_results and len(cluster_results.get('recips_dp_combined', [])) > 0)):
                         
                         try:
                             import io
@@ -2807,32 +2819,32 @@ def main():
                             output = io.BytesIO()
                             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                                 # Write individual tables
-                                if 'fogz_combined' in cluster_results and len(cluster_results['fogz_combined']) > 0:
+                                if 'fogz_combined' in cluster_results and len(cluster_results.get('fogz_combined', [])) > 0:
                                     cluster_results['fogz_combined'].to_excel(writer, sheet_name='Fogz PD', index=False)
                                 
-                                if 'fogz_dd_combined' in cluster_results and len(cluster_results['fogz_dd_combined']) > 0:
+                                if 'fogz_dd_combined' in cluster_results and len(cluster_results.get('fogz_dd_combined', [])) > 0:
                                     cluster_results['fogz_dd_combined'].to_excel(writer, sheet_name='Fogz DD', index=False)
                                 
-                                if 'ld_combined' in cluster_results and len(cluster_results['ld_combined']) > 0:
+                                if 'ld_combined' in cluster_results and len(cluster_results.get('ld_combined', [])) > 0:
                                     cluster_results['ld_combined'].to_excel(writer, sheet_name='Lrg Disc PD', index=False)
                                 
-                                if 'recips_combined' in cluster_results and len(cluster_results['recips_combined']) > 0:
+                                if 'recips_combined' in cluster_results and len(cluster_results.get('recips_combined', [])) > 0:
                                     cluster_results['recips_combined'].to_excel(writer, sheet_name='Recips PD', index=False)
                                 
-                                if 'recips_dp_combined' in cluster_results and len(cluster_results['recips_dp_combined']) > 0:
+                                if 'recips_dp_combined' in cluster_results and len(cluster_results.get('recips_dp_combined', [])) > 0:
                                     cluster_results['recips_dp_combined'].to_excel(writer, sheet_name='Recips DP', index=False)
                                 
                                 # Combine all tables
                                 all_tables = []
-                                if 'fogz_combined' in cluster_results and len(cluster_results['fogz_combined']) > 0:
+                                if 'fogz_combined' in cluster_results and len(cluster_results.get('fogz_combined', [])) > 0:
                                     all_tables.append(cluster_results['fogz_combined'])
-                                if 'fogz_dd_combined' in cluster_results and len(cluster_results['fogz_dd_combined']) > 0:
+                                if 'fogz_dd_combined' in cluster_results and len(cluster_results.get('fogz_dd_combined', [])) > 0:
                                     all_tables.append(cluster_results['fogz_dd_combined'])
-                                if 'ld_combined' in cluster_results and len(cluster_results['ld_combined']) > 0:
+                                if 'ld_combined' in cluster_results and len(cluster_results.get('ld_combined', [])) > 0:
                                     all_tables.append(cluster_results['ld_combined'])
-                                if 'recips_combined' in cluster_results and len(cluster_results['recips_combined']) > 0:
+                                if 'recips_combined' in cluster_results and len(cluster_results.get('recips_combined', [])) > 0:
                                     all_tables.append(cluster_results['recips_combined'])
-                                if 'recips_dp_combined' in cluster_results and len(cluster_results['recips_dp_combined']) > 0:
+                                if 'recips_dp_combined' in cluster_results and len(cluster_results.get('recips_dp_combined', [])) > 0:
                                     all_tables.append(cluster_results['recips_dp_combined'])
                                 
                                 if all_tables:
@@ -2915,7 +2927,7 @@ def main():
                     
                     # NEW: Fogz DD Table
                     with st.expander(" Fogz DD Matched Results (FOGZ + Large Discounts)", expanded=False):
-                        if 'fogz_dd_combined' in cluster_results and len(cluster_results['fogz_dd_combined']) > 0:
+                        if 'fogz_dd_combined' in cluster_results and len(cluster_results.get('fogz_dd_combined', [])) > 0:
                             st.markdown("""
                             **Legend:** 
                             🟡 **Yellow** = Day [0] (Today)  |  
@@ -2997,7 +3009,7 @@ def main():
                     
                     # NEW: Recips DP Table (reverse arrival order)
                     with st.expander(" Recips DP Matched Results (Premium→Discount)", expanded=False):
-                        if 'recips_dp_combined' in cluster_results and len(cluster_results['recips_dp_combined']) > 0:
+                        if 'recips_dp_combined' in cluster_results and len(cluster_results.get('recips_dp_combined', [])) > 0:
                             st.markdown("""
                             **Legend:** 
                             🟡 **Yellow** = Day [0] (Today)  |  
