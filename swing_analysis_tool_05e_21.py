@@ -2126,6 +2126,8 @@ def main():
                 
                 segment_size = 75
                 num_segments = 1
+                combine_segments = True  # Default value
+                
                 if segment_window:
                     col_seg1, col_seg2 = st.columns(2)
                     with col_seg1:
@@ -2149,6 +2151,9 @@ def main():
                         st.info(f"Will generate {num_segments} separate reports per table")
                     else:
                         st.info(f"Will process {num_segments} segments and combine results")
+                else:
+                    # When segment_window is False, set segment_size to None
+                    segment_size = None
                 
                 st.markdown("---")
                 
@@ -2314,181 +2319,180 @@ def main():
 if __name__ == "__main__":
     main()
 
-"""
-================================================================================
-FILE NOTES - SWING ANALYSIS TOOL
-================================================================================
-
-RECENT UPDATES - V21:
-====================
-
-✅ **ALL 23 MODELS INTEGRATED**
-- Created model_definitions_v21.py with all model definitions
-- Created model_processor_v21.py for batch processing
-- Created excel_exporter_v21.py for enhanced exports
-- Streamlined architecture: Main tool reduced from 3069 to 2317 lines
-
-✅ **ITEM 1 - MODEL ORGANIZATION**
-- All 23 models organized in categories:
-  * FOGZ Models (1-3)
-  * Large Discount Models (4-6)
-  * Reciprocal Models (7-8)
-  * Premium/Discount Patterns (9-18)
-  * Premium/Premium Patterns (19-23)
-- Special matching logic for Models #4, #20, #22
-- Single button processes all models with progress tracking
-
-✅ **ITEM 2 - WASP-12b/MACEDONIA IDENTIFICATION**
-- Labels preserved: "Wasp-12b", "Wasp-12b [1]", "Wasp-12b [2]"
-- Same for Macedonia: "Macedonia", "Macedonia [1]", "Macedonia [2]"
-
-✅ **ITEM 3 - CATEGORY COLUMN FIX**
-- Removed duplicate arrival_order suffix
-- Example: "Fogz PD PD" → "Fogz PD" ✓
-
-✅ **ITEM 4 - OPEN VALUES CORRECTION**
-- Now uses [0] day's open (most recent trading day start before Report Time)
-- Previous: Always used Sunday anchor
-- New: Uses actual day's 18:00 before Report Time
-
-✅ **ITEM 5 - ARRIVAL ORDER**
-- Pass 1 always shown first in all paired columns
-- Newest arrival first convention maintained
-
-✅ **ITEM 6 - MATCH COLUMN REPURPOSED**
-- Shows direction + signage identification:
-  * Direction: "up" (|m1| > |m2|), "down" (|m1| < |m2|), "OPP" (opposites)
-  * Signage: "flip" (different signs), "same" (same signs)
-  * Examples: "flip up", "same down", "flip OPP"
-
-✅ **ITEM 7 - EXCEL ENHANCEMENTS**
-- Report Time displayed in sheet headers
-- Filename uses report datetime (not current time)
-- Highlighting applied to Arrival_Brackets column:
-  * 🟡 Yellow for [0] (Today)
-  * 🔵 Blue for [-1], [-2], [-3] (Recent)
-- All model sheets + Combined sheet included
-
-✅ **ITEM 8 - FILE NOTES**
-- Moved to bottom of file with RECENT UPDATES section
-- Clean separation of current updates from historical changes
-
-
-PREVIOUS VERSIONS:
-==================
-v05e_20. ACTION ITEMS 1-6: Enhanced display and new models.
-
-ACTION ITEM 1 - OPEN COLUMN ENHANCEMENT:
-- Shows actual open value (input_@start) instead of just "Open" text
-- Adds 'sm' or 'bg' suffix to indicate feed (e.g., "24,964.75 sm")
-- Open rows highlighted yellow (planned for future enhancement)
-
-ACTION ITEM 2 - ARRIVAL_BRACKETS UPDATE:
-- Now shows both members like Origins and M_#s
-- Format: "[0], [-1]" instead of just "[0]"
-- Renamed from Arrival_Bracket to Arrival_Brackets
-- Highlighting applies only to Arrival_Brackets column, not whole row
-
-ACTION ITEM 3 - PASS 1 RESTRICTIONS:
-- Wasp-12b and Macedonia now restricted to [0], [-1], or [-3] in Pass 1
-- Ensures only Today and most Recent arrivals are included
-
-ACTION ITEM 4 - WASP-12B IDENTIFICATION:
-- Updated labels to "Wasp-12b [1]" and "Wasp-12b [2]"
-- Same for Macedonia: "Macedonia [1]" and "Macedonia [2]"
-
-ACTION ITEM 5 - MODEL NAME UPDATES:
-- "FOGZ" → "Fogz PD"
-- "Large Discounts" → "Lrg Disc PD"
-- "Recips PD" remains the same
-
-ACTION ITEM 6 - NEW MODELS:
-- "Lrg Disc, Fogz DD": FOGZ M#s (Pass 1) matched with Large Discounts M#s (Pass 2)
-  * Category shown as "Fogz DD"
-- "Recips DP": Reverse of Recips PD (Premium first, then Discount)
-  * PRecip List (abs > 40) in Pass 1
-  * DRecip List (abs < 40) in Pass 2
-  * Uses same reciprocal pairing list as Recips PD
-
-v05e_19b. BUG FIX: Uses calculator v1125_19b with corrected group counting.
-
-FIXED: Duplicate matching M#s with different Groups are now counted correctly.
-
-EXAMPLE BUG (now fixed):
-  When M#-5 from Kepler-62 matches M#-40 twice with different second origins:
-  - Kepler-62 → Jupiter (M#-40) = 4. AA
-  - Kepler-62 → Kepler-62 (M#-40) = 1. SAA
-  
-  OLD v19: Only counted first (AA), showed "2 Pr SAA" instead of "3 Pr SAA"
-  NEW v19b: Counts both, correctly shows "3 Pr SAA" ✓
-
-v05e_19. SIMPLIFIED PAIR COUNTING - Multi-column display (uses calculator v1125_19).
-
-NEW APPROACH: Six separate columns for transparent pair counting - much clearer!
-
-REMOVED: Complex "winning group" logic from v18
-ADDED: Six new columns showing group counts side-by-side
-
-COLUMN STRUCTURE (left to right):
-1. Open - Marks feed open (existing)
-2. Zone - Blank placeholder
-3. Confluence - Blank placeholder  
-4. Pairs - Total unique matches (e.g., "5 Pr")
-5. 1. SAA - SAA match count (e.g., "3 Pr SAA")
-6. 2. STT - STT match count (e.g., "2 Pr STT")
-7. 3. TA/AT - TA/AT combined count (e.g., "1 Pr TA/AT")
-8. 4. AA - AA match count (e.g., "2 Pr AA")
-9. 5 to 7 - Groups 5-7 combined count (e.g., "4 Pr")
-10. All existing columns (Arrival_Output, etc.)
-
-BENEFITS:
-- No confusing "winning group" rules
-- All counts visible at a glance
-- Easy to spot patterns (e.g., high SAA + low AA)
-- Blank cells when count is 0
-
-EXAMPLE - Kepler-62 (5 unique: 3 SAA, 2 AA):
-  Pairs | 1. SAA    | 2. STT | 3. TA/AT | 4. AA    | 5 to 7
-  ------|-----------|--------|----------|----------|--------
-  5 Pr  | 3 Pr SAA  | (blank)| (blank)  | 2 Pr AA  | (blank)
-
-EXAMPLE - Kepler-44 (5 unique: 1 SAA, 4 AA):
-  Pairs | 1. SAA    | 2. STT | 3. TA/AT | 4. AA    | 5 to 7
-  ------|-----------|--------|----------|----------|--------
-  5 Pr  | 1 Pr SAA  | (blank)| (blank)  | 4 Pr AA  | (blank)
-
-v05e_18. UPDATED PAIR COUNTING LOGIC for Confluence column (uses calculator v1125_18).
-
-1. THREE NEW COLUMNS ADDED (at beginning of matched tables):
-   - **Open:** Marks output closest to feed's Open value
-     * Shows "Open" text next to the output nearest to that feed's start
-     * One marker per feed (Small and/or Big)
-     * Helps identify which matches are closest to feed open
-   - **Zone:** Empty placeholder for future use
-   - **Confluence:** Shows multiple pair information (see below)
-
-2. CONFLUENCE DETECTION (multiple pairs):
-   - Detects multiple pairs at same:
-     * Arrival_Output
-     * Arrival_DateTime  
-     * Feed
-   - Example from FOGZ rows 165-168:
-     * M#5 at 24404.915 on 2025-11-23 18:00 (Small feed)
-     * Matches with: -40, -50, -55 (3 pairs)
-     * Groups: SAA, AA, AT (varying Anchors)
-     * Result: "3 pr AA"
-   - Label format: "[N] pr [GROUP]"
-     * N = number of pairs (2, 3, 4, etc.)
-     * GROUP = SAA (same anchor), AA (varying anchors), etc.
-   - Applied as final step after matching
-
-3. PASS FEED OPENS:
-   - Retrieves feed_opens from processing summaries
-   - Passes to match function: fogz_summary.get('feed_opens', {})
-   - Same for LD and Recips
-   - Enables Open marker calculation
-
-4. COLUMN ORDER:
-   - First three: Open, Zone, Confluence
-   - Then: All existing columns (Arrival_Output, etc.)
-"""
+# ==============================================================================
+# ================================================================================
+# FILE NOTES - SWING ANALYSIS TOOL
+# ================================================================================
+#
+# RECENT UPDATES - V21:
+# ====================
+#
+# ✅ **ALL 23 MODELS INTEGRATED**
+# - Created model_definitions_v21.py with all model definitions
+# - Created model_processor_v21.py for batch processing
+# - Created excel_exporter_v21.py for enhanced exports
+# - Streamlined architecture: Main tool reduced from 3069 to 2317 lines
+#
+# ✅ **ITEM 1 - MODEL ORGANIZATION**
+# - All 23 models organized in categories:
+#   * FOGZ Models (1-3)
+#   * Large Discount Models (4-6)
+#   * Reciprocal Models (7-8)
+#   * Premium/Discount Patterns (9-18)
+#   * Premium/Premium Patterns (19-23)
+# - Special matching logic for Models #4, #20, #22
+# - Single button processes all models with progress tracking
+#
+# ✅ **ITEM 2 - WASP-12b/MACEDONIA IDENTIFICATION**
+# - Labels preserved: "Wasp-12b", "Wasp-12b [1]", "Wasp-12b [2]"
+# - Same for Macedonia: "Macedonia", "Macedonia [1]", "Macedonia [2]"
+#
+# ✅ **ITEM 3 - CATEGORY COLUMN FIX**
+# - Removed duplicate arrival_order suffix
+# - Example: "Fogz PD PD" → "Fogz PD" ✓
+#
+# ✅ **ITEM 4 - OPEN VALUES CORRECTION**
+# - Now uses [0] day's open (most recent trading day start before Report Time)
+# - Previous: Always used Sunday anchor
+# - New: Uses actual day's 18:00 before Report Time
+#
+# ✅ **ITEM 5 - ARRIVAL ORDER**
+# - Pass 1 always shown first in all paired columns
+# - Newest arrival first convention maintained
+#
+# ✅ **ITEM 6 - MATCH COLUMN REPURPOSED**
+# - Shows direction + signage identification:
+#   * Direction: "up" (|m1| > |m2|), "down" (|m1| < |m2|), "OPP" (opposites)
+#   * Signage: "flip" (different signs), "same" (same signs)
+#   * Examples: "flip up", "same down", "flip OPP"
+#
+# ✅ **ITEM 7 - EXCEL ENHANCEMENTS**
+# - Report Time displayed in sheet headers
+# - Filename uses report datetime (not current time)
+# - Highlighting applied to Arrival_Brackets column:
+#   * 🟡 Yellow for [0] (Today)
+#   * 🔵 Blue for [-1], [-2], [-3] (Recent)
+# - All model sheets + Combined sheet included
+#
+# ✅ **ITEM 8 - FILE NOTES**
+# - Moved to bottom of file with RECENT UPDATES section
+# - Clean separation of current updates from historical changes
+#
+#
+# PREVIOUS VERSIONS:
+# ==================
+# v05e_20. ACTION ITEMS 1-6: Enhanced display and new models.
+#
+# ACTION ITEM 1 - OPEN COLUMN ENHANCEMENT:
+# - Shows actual open value (input_@start) instead of just "Open" text
+# - Adds 'sm' or 'bg' suffix to indicate feed (e.g., "24,964.75 sm")
+# - Open rows highlighted yellow (planned for future enhancement)
+#
+# ACTION ITEM 2 - ARRIVAL_BRACKETS UPDATE:
+# - Now shows both members like Origins and M_#s
+# - Format: "[0], [-1]" instead of just "[0]"
+# - Renamed from Arrival_Bracket to Arrival_Brackets
+# - Highlighting applies only to Arrival_Brackets column, not whole row
+#
+# ACTION ITEM 3 - PASS 1 RESTRICTIONS:
+# - Wasp-12b and Macedonia now restricted to [0], [-1], or [-3] in Pass 1
+# - Ensures only Today and most Recent arrivals are included
+#
+# ACTION ITEM 4 - WASP-12B IDENTIFICATION:
+# - Updated labels to "Wasp-12b [1]" and "Wasp-12b [2]"
+# - Same for Macedonia: "Macedonia [1]" and "Macedonia [2]"
+#
+# ACTION ITEM 5 - MODEL NAME UPDATES:
+# - "FOGZ" → "Fogz PD"
+# - "Large Discounts" → "Lrg Disc PD"
+# - "Recips PD" remains the same
+#
+# ACTION ITEM 6 - NEW MODELS:
+# - "Lrg Disc, Fogz DD": FOGZ M#s (Pass 1) matched with Large Discounts M#s (Pass 2)
+#   * Category shown as "Fogz DD"
+# - "Recips DP": Reverse of Recips PD (Premium first, then Discount)
+#   * PRecip List (abs > 40) in Pass 1
+#   * DRecip List (abs < 40) in Pass 2
+#   * Uses same reciprocal pairing list as Recips PD
+#
+# v05e_19b. BUG FIX: Uses calculator v1125_19b with corrected group counting.
+#
+# FIXED: Duplicate matching M#s with different Groups are now counted correctly.
+#
+# EXAMPLE BUG (now fixed):
+#   When M#-5 from Kepler-62 matches M#-40 twice with different second origins:
+#   - Kepler-62 → Jupiter (M#-40) = 4. AA
+#   - Kepler-62 → Kepler-62 (M#-40) = 1. SAA
+#
+#   OLD v19: Only counted first (AA), showed "2 Pr SAA" instead of "3 Pr SAA"
+#   NEW v19b: Counts both, correctly shows "3 Pr SAA" ✓
+#
+# v05e_19. SIMPLIFIED PAIR COUNTING - Multi-column display (uses calculator v1125_19).
+#
+# NEW APPROACH: Six separate columns for transparent pair counting - much clearer!
+#
+# REMOVED: Complex "winning group" logic from v18
+# ADDED: Six new columns showing group counts side-by-side
+#
+# COLUMN STRUCTURE (left to right):
+# 1. Open - Marks feed open (existing)
+# 2. Zone - Blank placeholder
+# 3. Confluence - Blank placeholder  
+# 4. Pairs - Total unique matches (e.g., "5 Pr")
+# 5. 1. SAA - SAA match count (e.g., "3 Pr SAA")
+# 6. 2. STT - STT match count (e.g., "2 Pr STT")
+# 7. 3. TA/AT - TA/AT combined count (e.g., "1 Pr TA/AT")
+# 8. 4. AA - AA match count (e.g., "2 Pr AA")
+# 9. 5 to 7 - Groups 5-7 combined count (e.g., "4 Pr")
+# 10. All existing columns (Arrival_Output, etc.)
+#
+# BENEFITS:
+# - No confusing "winning group" rules
+# - All counts visible at a glance
+# - Easy to spot patterns (e.g., high SAA + low AA)
+# - Blank cells when count is 0
+#
+# EXAMPLE - Kepler-62 (5 unique: 3 SAA, 2 AA):
+#   Pairs | 1. SAA    | 2. STT | 3. TA/AT | 4. AA    | 5 to 7
+#   ------|-----------|--------|----------|----------|--------
+#   5 Pr  | 3 Pr SAA  | (blank)| (blank)  | 2 Pr AA  | (blank)
+#
+# EXAMPLE - Kepler-44 (5 unique: 1 SAA, 4 AA):
+#   Pairs | 1. SAA    | 2. STT | 3. TA/AT | 4. AA    | 5 to 7
+#   ------|-----------|--------|----------|----------|--------
+#   5 Pr  | 1 Pr SAA  | (blank)| (blank)  | 4 Pr AA  | (blank)
+#
+# v05e_18. UPDATED PAIR COUNTING LOGIC for Confluence column (uses calculator v1125_18).
+#
+# 1. THREE NEW COLUMNS ADDED (at beginning of matched tables):
+#    - **Open:** Marks output closest to feed's Open value
+#      * Shows "Open" text next to the output nearest to that feed's start
+#      * One marker per feed (Small and/or Big)
+#      * Helps identify which matches are closest to feed open
+#    - **Zone:** Empty placeholder for future use
+#    - **Confluence:** Shows multiple pair information (see below)
+#
+# 2. CONFLUENCE DETECTION (multiple pairs):
+#    - Detects multiple pairs at same:
+#      * Arrival_Output
+#      * Arrival_DateTime  
+#      * Feed
+#    - Example from FOGZ rows 165-168:
+#      * M#5 at 24404.915 on 2025-11-23 18:00 (Small feed)
+#      * Matches with: -40, -50, -55 (3 pairs)
+#      * Groups: SAA, AA, AT (varying Anchors)
+#      * Result: "3 pr AA"
+#    - Label format: "[N] pr [GROUP]"
+#      * N = number of pairs (2, 3, 4, etc.)
+#      * GROUP = SAA (same anchor), AA (varying anchors), etc.
+#    - Applied as final step after matching
+#
+# 3. PASS FEED OPENS:
+#    - Retrieves feed_opens from processing summaries
+#    - Passes to match function: fogz_summary.get('feed_opens', {})
+#    - Same for LD and Recips
+#    - Enables Open marker calculation
+#
+# 4. COLUMN ORDER:
+#    - First three: Open, Zone, Confluence
+#    - Then: All existing columns (Arrival_Output, etc.)
