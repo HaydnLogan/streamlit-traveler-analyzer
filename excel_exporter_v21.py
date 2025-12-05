@@ -5,6 +5,8 @@ This module handles Excel export for all model results with:
 - Report Time in sheet headers
 - Report datetime in filename
 - Highlighting (yellow for [0], blue for [-1][-2][-3])
+- Freeze panes at row 3
+- Autofilter on row 3
 """
 
 import pandas as pd
@@ -12,6 +14,7 @@ import io
 from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
+from openpyxl.utils import get_column_letter
 
 
 def export_all_models_to_excel(all_results, report_time):
@@ -74,7 +77,7 @@ def export_all_models_to_excel(all_results, report_time):
             combined_ws['A2'] = f"All Models Combined | {len(combined_df)} total matches"
             combined_ws['A2'].font = combined_ws['A2'].font.copy(italic=True)
     
-    # Reopen workbook to apply highlighting
+    # Reopen workbook to apply highlighting, freeze panes, and filters
     output.seek(0)
     workbook = load_workbook(output)
     
@@ -82,12 +85,23 @@ def export_all_models_to_excel(all_results, report_time):
     yellow_fill = PatternFill(start_color='FFF9C4', end_color='FFF9C4', fill_type='solid')
     blue_fill = PatternFill(start_color='BBDEFB', end_color='BBDEFB', fill_type='solid')
     
-    # Apply highlighting to each sheet
+    # Apply highlighting, freeze panes, and filters to each sheet
     for sheet_name in workbook.sheetnames:
         worksheet = workbook[sheet_name]
         
-        # Find Arrival_Brackets column (data starts at row 4 due to headers)
-        header_row = 4  # Row 1-2 are custom headers, row 3 is blank, row 4 is column headers
+        # ISSUE 4: Freeze row 3 (header row with column names)
+        # Row 1 = Report Time, Row 2 = Timing info, Row 3 = Column headers
+        worksheet.freeze_panes = 'A4'  # Freeze everything above row 4
+        
+        # ISSUE 4: Add autofilter to row 3 (column headers)
+        # Find the last column with data
+        max_col = worksheet.max_column
+        if max_col > 0:
+            last_col_letter = get_column_letter(max_col)
+            worksheet.auto_filter.ref = f'A3:{last_col_letter}3'  # A3 to last column in row 3
+        
+        # ISSUE 3 FIX: Find Arrival_Brackets column (data starts at row 4)
+        header_row = 3  # Row 3 contains column headers (Row 1 = Report Time, Row 2 = Timing)
         
         # Find column index for Arrival_Brackets
         arrival_brackets_col = None
@@ -98,16 +112,18 @@ def export_all_models_to_excel(all_results, report_time):
         
         if arrival_brackets_col:
             # Apply highlighting based on Arrival_Brackets values
-            for row in worksheet.iter_rows(min_row=header_row+1, max_row=worksheet.max_row):
-                cell = row[arrival_brackets_col - 1]  # -1 because enumerate starts at 1
-                value = str(cell.value) if cell.value else ''
-                
-                # Check for [0] - yellow
-                if '[0]' in value:
-                    cell.fill = yellow_fill
-                # Check for [-1], [-2], [-3] - blue
-                elif any(x in value for x in ['[-1]', '[-2]', '[-3]']):
-                    cell.fill = blue_fill
+            # Start from row 4 (first data row after headers)
+            for row in worksheet.iter_rows(min_row=4, max_row=worksheet.max_row):
+                if len(row) >= arrival_brackets_col:
+                    cell = row[arrival_brackets_col - 1]  # -1 because enumerate starts at 1
+                    value = str(cell.value) if cell.value else ''
+                    
+                    # Check for [0] - yellow
+                    if '[0]' in value:
+                        cell.fill = yellow_fill
+                    # Check for [-1], [-2], [-3] - blue
+                    elif any(x in value for x in ['[-1]', '[-2]', '[-3]']):
+                        cell.fill = blue_fill
     
     # Save modified workbook
     output_final = io.BytesIO()
