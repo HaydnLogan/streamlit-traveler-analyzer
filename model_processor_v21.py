@@ -117,6 +117,21 @@ def process_all_models(
                 feed_selection=feed_selection
             )
             
+            # ITEM 2 FIX: Apply Pass 1 Day restrictions for Premium-Premium models (19-23)
+            # These models should only use [0], [-1], [-2], [-3] in Pass 1
+            prem_prem_models = {
+                'Prem x0s PP', 'Prem x1s PP', 'Prem xD0s PP', 'Prem xD1s PP', 'Prem xCs PP'
+            }
+            
+            if model_name in prem_prem_models:
+                # Restrict Pass 1 to recent days only
+                allowed_pass1_days = {'[0]', '[-1]', '[-2]', '[-3]'}
+                
+                # Filter Pass 1 results to only include allowed days
+                if not prep_df.empty and 'Day' in prep_df.columns:
+                    # Keep only Pass 1 arrivals with allowed Day values
+                    prep_df = prep_df[prep_df['Day'].isin(allowed_pass1_days)]
+            
             # Store prep table and summary
             prep_tables[model_name] = prep_df
             summaries[model_name] = summary
