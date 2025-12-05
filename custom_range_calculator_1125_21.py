@@ -1334,9 +1334,10 @@ def match_cluster_table_entries(prep_df, valid_list_pass1, valid_list_pass2, max
             
             for (arrival_output, feed, base_origin, base_m, dt), group_df in grouped:
                 if len(group_df) >= 1:  # Process all groups, even single pairs
-                    # ISSUE 2 FIX: Count total PAIRS (rows) instead of unique matching M#s
-                    # Each row represents a pair, so 4 rows = 4 Pr
-                    num_pairs = len(group_df)
+                    # Count UNIQUE matching M#s (Pass 2 M# values)
+                    # User expectation: Kepler-44 with M#s {-50, -68, -41} = 3 Pr (not 4 rows)
+                    unique_match_ms = group_df['_match_m'].unique()
+                    num_unique_matches = len(unique_match_ms)
                     
                     # Count how many of each Group classification among the matches
                     # IMPORTANT: A matching M# can appear multiple times with different Groups
@@ -1375,9 +1376,9 @@ def match_cluster_table_entries(prep_df, valid_list_pass1, valid_list_pass2, max
                     
                     # Apply counts to ALL rows in this group
                     for idx in group_df.index:
-                        # Pairs column - total number of pairs (rows in this group)
-                        if num_pairs > 0:
-                            matches_df.loc[idx, 'Pairs'] = f"{num_pairs} Pr"
+                        # Pairs column - count of unique matching M#s
+                        if num_unique_matches > 0:
+                            matches_df.loc[idx, 'Pairs'] = f"{num_unique_matches} Pr"
                         
                         # 1. SAA column
                         if group_counts['SAA'] > 0:
