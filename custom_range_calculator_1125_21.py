@@ -1327,10 +1327,12 @@ def match_cluster_table_entries(prep_df, valid_list_pass1, valid_list_pass2, max
             matches_df['_match_m'] = matches_df['M_#s'].apply(extract_match_m)
             matches_df['_base_origin'] = matches_df['Origins'].apply(extract_base_origin)
             
-            # Group by Feed1, base origin, base M#, and Arrival_DateTime
-            grouped = matches_df.groupby(['Feed1', '_base_origin', '_base_m', 'Arrival_DateTime'])
+            # ISSUE 2 FIX: Group by Arrival_Output AND Feed1, base origin, base M#, Arrival_DateTime
+            # This ensures that pairs at the same output are counted together, but
+            # separate Pass 1 arrivals (different origins) at the same output are counted separately
+            grouped = matches_df.groupby(['Arrival_Output', 'Feed1', '_base_origin', '_base_m', 'Arrival_DateTime'])
             
-            for (feed, base_origin, base_m, dt), group_df in grouped:
+            for (arrival_output, feed, base_origin, base_m, dt), group_df in grouped:
                 if len(group_df) >= 1:  # Process all groups, even single pairs
                     # Count UNIQUE matching M#s
                     unique_match_ms = group_df['_match_m'].unique()
