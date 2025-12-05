@@ -1334,9 +1334,9 @@ def match_cluster_table_entries(prep_df, valid_list_pass1, valid_list_pass2, max
             
             for (arrival_output, feed, base_origin, base_m, dt), group_df in grouped:
                 if len(group_df) >= 1:  # Process all groups, even single pairs
-                    # Count UNIQUE matching M#s
-                    unique_match_ms = group_df['_match_m'].unique()
-                    num_unique_matches = len(unique_match_ms)
+                    # ISSUE 2 FIX: Count total PAIRS (rows) instead of unique matching M#s
+                    # Each row represents a pair, so 4 rows = 4 Pr
+                    num_pairs = len(group_df)
                     
                     # Count how many of each Group classification among the matches
                     # IMPORTANT: A matching M# can appear multiple times with different Groups
@@ -1375,9 +1375,9 @@ def match_cluster_table_entries(prep_df, valid_list_pass1, valid_list_pass2, max
                     
                     # Apply counts to ALL rows in this group
                     for idx in group_df.index:
-                        # Pairs column - total unique matches
-                        if num_unique_matches > 0:
-                            matches_df.loc[idx, 'Pairs'] = f"{num_unique_matches} Pr"
+                        # Pairs column - total number of pairs (rows in this group)
+                        if num_pairs > 0:
+                            matches_df.loc[idx, 'Pairs'] = f"{num_pairs} Pr"
                         
                         # 1. SAA column
                         if group_counts['SAA'] > 0:
@@ -1455,27 +1455,6 @@ def match_cluster_table_entries(prep_df, valid_list_pass1, valid_list_pass2, max
         return pd.DataFrame()
 
 """ RECENT UPDATES
-V21 UPDATES: Enhanced models, fixed open values, and improved matching.
-
-ITEM 2 - WASP-12b/MACEDONIA IDENTIFICATION:
-- Labels preserved as "Wasp-12b", "Wasp-12b [1]", "Wasp-12b [2]"
-- Same for Macedonia
-
-ITEM 3 - CATEGORY COLUMN FIX:
-- Removed duplicate arrival_order suffix (e.g., "Fogz PD PD" → "Fogz PD")
-
-ITEM 4 - OPEN VALUES CORRECTION:
-- Now uses [0] day's open (most recent trading day start before Report Time)
-- Previous: Always used Sunday anchor
-- New: Uses actual day's 18:00 before Report Time
-
-ITEM 5 - ARRIVAL ORDER:
-- Pass 1 always shown first in all paired columns
-
-ITEM 6 - MATCH COLUMN REPURPOSED:
-- Shows direction + signage (e.g., "flip up", "same down", "flip OPP")
-_________________________________________________
-
 v1125_20. ACTION ITEMS 1-4: Enhanced display and data handling.
 
 ACTION ITEM 1 - OPEN COLUMN:
@@ -1512,5 +1491,79 @@ TECHNICAL CHANGE:
   Instead of: unique(match_m) → take first row's Group
   Now: unique(match_m, group) combinations → count all
 
+v1125_19. SIMPLIFIED PAIR COUNTING - Multi-column transparent display.
 
+NEW APPROACH: Separate columns for each group category - much clearer!
+
+REMOVED: Complex "winning group" logic from v18
+ADDED: Six new columns showing counts transparently
+
+COLUMN STRUCTURE (left to right):
+1. Open - Marks feed open (existing)
+2. Zone - Blank placeholder
+3. Confluence - Blank placeholder  
+4. Pairs - Total unique matches (e.g., "5 Pr")
+5. 1. SAA - Count of SAA matches (e.g., "3 Pr SAA")
+6. 2. STT - Count of STT matches (e.g., "2 Pr STT")
+7. 3. TA/AT - Count of TA or AT matches combined (e.g., "1 Pr TA/AT")
+8. 4. AA - Count of AA matches (e.g., "2 Pr AA")
+9. 5 to 7 - Count of oA, Ao, oo matches combined (e.g., "4 Pr")
+10. Then all existing columns (Arrival_Output, etc.)
+
+LOGIC:
+- Groups by: Feed, Base Origin, Base M#, Arrival_DateTime
+- Counts UNIQUE matching M#s for each group
+- Tracks Group classification for each unique match
+- Displays counts in separate columns (no minimum threshold)
+- All rows in same group get SAME values in these columns
+- Blank if count is 0
+
+EXAMPLE - Kepler-62 (5 unique: 3 SAA, 2 AA):
+  Pairs    1. SAA      2. STT  3. TA/AT  4. AA      5 to 7
+  ------   ----------  ------  --------  ---------  ------
+  5 Pr     3 Pr SAA    (blank) (blank)   2 Pr AA    (blank)
+
+EXAMPLE - Kepler-44 (5 unique: 1 SAA, 4 AA):
+  Pairs    1. SAA      2. STT  3. TA/AT  4. AA      5 to 7
+  ------   ----------  ------  --------  ---------  ------
+  5 Pr     1 Pr SAA    (blank) (blank)   4 Pr AA    (blank)
+
+Much easier to read and understand!
+
+1. ADDED THREE NEW COLUMNS (at beginning of matched tables):
+   - 'Open' column: Marks the output closest to each feed's Open value
+     * Finds which Arrival_Output is nearest to the feed's start/open
+     * Marks it with "Open" text
+     * One per feed (Small, Big)
+   - 'Zone' column: Empty for now (placeholder for future use)
+   - 'Confluence' column: Shows multiple pair information
+
+2. CONFLUENCE DETECTION (multiple pairs):
+   - Detects when multiple pairs share same:
+     * Arrival_Output (e.g., 24404.915)
+     * Arrival_DateTime (e.g., 2025-11-23 18:00)
+     * Feed (Feed1)
+   - Labels with number of pairs: "2 pr", "3 pr", "4 pr", etc.
+   - Adds group classification:
+     * "SAA" if all pairs are Same Anchor
+     * "AA" if varying Anchors
+     * Other group codes as appropriate
+   - Example: "3 pr AA" = 3 pairs with varying Anchors
+   - Applied as final step after matching completes
+
+3. IMPLEMENTATION DETAILS:
+   - feed_opens parameter added to match_cluster_table_entries()
+   - feed_opens dictionary tracked in process_cluster_tables_two_pass()
+   - Feed open values captured for each feed: {'Small': value, 'Big': value}
+   - Open marker: Calculates distance_to_open for each feed's matches
+   - Confluence: Groups by (Arrival_Output, Arrival_DateTime, Feed1)
+   - Column order: Open, Zone, Confluence, then all other columns
+
+4. CONFLUENCE GROUP LOGIC:
+   - Single group: Uses that group code (e.g., "3 pr SAA")
+   - Mixed groups:
+     * All SAA → "X pr SAA"
+     * All AA → "X pr AA"
+     * Mixed Anchor-related (SAA, AA, TA, AT, oA, Ao) → "X pr AA"
+     * Otherwise → "X pr"
 """
