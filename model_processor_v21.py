@@ -117,21 +117,6 @@ def process_all_models(
                 feed_selection=feed_selection
             )
             
-            # ITEM 2 FIX: Apply Pass 1 Day restrictions for Premium-Premium models (19-23)
-            # These models should only use [0], [-1], [-2], [-3] in Pass 1
-            prem_prem_models = {
-                'Prem x0s PP', 'Prem x1s PP', 'Prem xD0s PP', 'Prem xD1s PP', 'Prem xCs PP'
-            }
-            
-            if model_name in prem_prem_models:
-                # Restrict Pass 1 to recent days only
-                allowed_pass1_days = {'[0]', '[-1]', '[-2]', '[-3]'}
-                
-                # Filter Pass 1 results to only include allowed days
-                if not prep_df.empty and 'Day' in prep_df.columns:
-                    # Keep only Pass 1 arrivals with allowed Day values
-                    prep_df = prep_df[prep_df['Day'].isin(allowed_pass1_days)]
-            
             # Store prep table and summary
             prep_tables[model_name] = prep_df
             summaries[model_name] = summary
@@ -153,6 +138,38 @@ def process_all_models(
                     table_name=model_config['display_name'],
                     feed_opens=summary.get('feed_opens', {})
                 )
+                
+                # ISSUE 1 FIX: Apply Pass 1 Day restrictions for Premium-Premium models (19-23)
+                # Filter MATCHES to only keep pairs where Pass 1 (first arrival) is from recent days
+                prem_prem_models = {
+                    'Prem x0s PP', 'Prem x1s PP', 'Prem xD0s PP', 'Prem xD1s PP', 'Prem xCs PP'
+                }
+                
+                if model_name in prem_prem_models and not matched_df.empty:
+                    # Check if Arrival_Brackets column exists (it should after matching)
+                    if 'Arrival_Brackets' in matched_df.columns:
+                        # Extract first bracket (Pass 1 arrival day) from Arrival_Brackets
+                        # Format: "[0], [-1]" or "[-2], [-3]" etc.
+                        def get_first_day(brackets_str):
+                            """Extract first day bracket from string like '[0], [-1]'"""
+                            try:
+                                if pd.isna(brackets_str):
+                                    return None
+                                first_bracket = brackets_str.split(',')[0].strip()
+                                return first_bracket
+                            except:
+                                return None
+                        
+                        matched_df['_first_day'] = matched_df['Arrival_Brackets'].apply(get_first_day)
+                        
+                        # Keep only matches where first day is [0], [-1], [-2], or [-3]
+                        allowed_days = {'[0]', '[-1]', '[-2]', '[-3]'}
+                        matched_df = matched_df[matched_df['_first_day'].isin(allowed_days)]
+                        
+                        # Clean up temporary column
+                        if '_first_day' in matched_df.columns:
+                            matched_df = matched_df.drop(columns=['_first_day'])
+                
                 
                 # Apply special matching logic if specified
                 if model_config.get('special_matching') and not matched_df.empty:
