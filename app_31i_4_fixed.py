@@ -28,7 +28,7 @@ import io
 from typing import Optional
 from pandas import ExcelWriter
 from custom_range_calculator_0813 import apply_custom_ranges_advanced, apply_full_range_advanced
-from hod_lod_processor import (
+from hod_lod_processor_02 import (
     process_hod_lod_mode, 
     is_complete_trading_day, 
     get_trading_day_bounds
