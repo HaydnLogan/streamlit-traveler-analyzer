@@ -832,6 +832,24 @@ elif small_15m_file and big_15m_file and measurement_file:
                 hod_small = small_df if small_df is not None else pd.DataFrame()
                 hod_big = big_df if big_df is not None else pd.DataFrame()
             
+            # DIAGNOSTIC OUTPUT
+            st.markdown("#### 🔍 HOD/LOD Diagnostic Information")
+            diag_col1, diag_col2, diag_col3 = st.columns(3)
+            with diag_col1:
+                st.metric("Small Feed Rows", len(hod_small))
+                if not hod_small.empty and 'time' in hod_small.columns:
+                    st.caption(f"Time dtype: {hod_small['time'].dtype}")
+                    st.caption(f"Time range: {hod_small['time'].min()} to {hod_small['time'].max()}")
+            with diag_col2:
+                st.metric("Big Feed Rows", len(hod_big))
+                if not hod_big.empty and 'time' in hod_big.columns:
+                    st.caption(f"Time dtype: {hod_big['time'].dtype}")
+                    st.caption(f"Time range: {hod_big['time'].min()} to {hod_big['time'].max()}")
+            with diag_col3:
+                st.metric("Report Time", report_time.strftime("%Y-%m-%d %H:%M"))
+                st.caption(f"Days to analyze: {hod_lod_num_days}")
+                st.caption(f"Day start hour: {day_start_hour}")
+            
             # Process HOD/LOD mode
             hod_lod_results = process_hod_lod_mode(
                 measurement_df=measurements_df,
