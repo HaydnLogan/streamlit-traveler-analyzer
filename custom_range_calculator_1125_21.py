@@ -1338,7 +1338,13 @@ def match_cluster_table_entries(prep_df, valid_list_pass1, valid_list_pass2, max
                     # User expectation: Kepler-44 with M#s {-50, -68, -41} = 3 Pr (not 4 rows)
                     unique_match_ms = group_df['_match_m'].unique()
                     num_unique_matches = len(unique_match_ms)
-                    
+
+                    # DIAGNOSTIC: Print grouping info
+                    if table_name == "Lrg Disc PD":
+                        print(f"\nDIAGNOSTIC: Grouped {len(grouped)} groups")
+                        for key, gdf in list(grouped)[:5]:  # First 5 groups
+                            print(f"  Group: origin={key[2]}, M#={key[3]}, rows={len(gdf)}")
+        
                     # Count how many of each Group classification among the matches
                     # IMPORTANT: A matching M# can appear multiple times with different Groups
                     # (e.g., M#-40 from Kepler-62 to Jupiter = AA, but M#-40 from Kepler-62 to Kepler-62 = SAA)
