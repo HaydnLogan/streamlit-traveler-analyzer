@@ -504,19 +504,22 @@ elif small_15m_file and big_15m_file and measurement_file:
         small_feeds_dict = {}  # For separate processing
         
         if small_3m_file:
-            df_3m = pd.read_csv(small_3m_file, parse_dates=['time'])
+            df_3m = pd.read_csv(small_3m_file)
+            df_3m['time'] = pd.to_datetime(df_3m['time'].str.replace(r'[-+]\d{2}:\d{2}$', '', regex=True))
             small_feeds.append(df_3m)
             small_feeds_dict['3m'] = df_3m
             small_feed_info.append(f"3m: {len(df_3m)} rows")
         
         if small_5m_file:
-            df_5m = pd.read_csv(small_5m_file, parse_dates=['time'])
+            df_5m = pd.read_csv(small_5m_file)
+            df_5m['time'] = pd.to_datetime(df_5m['time'].str.replace(r'[-+]\d{2}:\d{2}$', '', regex=True))
             small_feeds.append(df_5m)
             small_feeds_dict['5m'] = df_5m
             small_feed_info.append(f"5m: {len(df_5m)} rows")
         
         if small_15m_file:
-            df_15m = pd.read_csv(small_15m_file, parse_dates=['time'])
+            df_15m = pd.read_csv(small_15m_file)
+            df_15m['time'] = pd.to_datetime(df_15m['time'].str.replace(r'[-+]\d{2}:\d{2}$', '', regex=True))
             small_feeds.append(df_15m)
             small_feeds_dict['15m'] = df_15m
             small_feed_info.append(f"15m: {len(df_15m)} rows")
@@ -542,19 +545,22 @@ elif small_15m_file and big_15m_file and measurement_file:
         big_feeds_dict = {}  # For separate processing
         
         if big_3m_file:
-            df_3m = pd.read_csv(big_3m_file, parse_dates=['time'])
+            df_3m = pd.read_csv(big_3m_file)
+            df_3m['time'] = pd.to_datetime(df_3m['time'].str.replace(r'[-+]\d{2}:\d{2}$', '', regex=True))
             big_feeds.append(df_3m)
             big_feeds_dict['3m'] = df_3m
             big_feed_info.append(f"3m: {len(df_3m)} rows")
         
         if big_5m_file:
-            df_5m = pd.read_csv(big_5m_file, parse_dates=['time'])
+            df_5m = pd.read_csv(big_5m_file)
+            df_5m['time'] = pd.to_datetime(df_5m['time'].str.replace(r'[-+]\d{2}:\d{2}$', '', regex=True))
             big_feeds.append(df_5m)
             big_feeds_dict['5m'] = df_5m
             big_feed_info.append(f"5m: {len(df_5m)} rows")
         
         if big_15m_file:
-            df_15m = pd.read_csv(big_15m_file, parse_dates=['time'])
+            df_15m = pd.read_csv(big_15m_file)
+            df_15m['time'] = pd.to_datetime(df_15m['time'].str.replace(r'[-+]\d{2}:\d{2}$', '', regex=True))
             big_feeds.append(df_15m)
             big_feeds_dict['15m'] = df_15m
             big_feed_info.append(f"15m: {len(df_15m)} rows")
