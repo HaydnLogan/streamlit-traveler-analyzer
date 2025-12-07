@@ -43,7 +43,7 @@ def find_hod_lod_for_day(small_df, big_df, day_start, day_end):
     def filter_day_data(df, day_start, day_end):
         """Filter dataframe to trading day window"""
         df = df.copy()
-        # Only strip timezone if column is not already datetime
+        # Strip timezone suffix and convert to naive datetime (handles mixed timezones)
         if not pd.api.types.is_datetime64_any_dtype(df['time']):
             df['time'] = pd.to_datetime(df['time'].str.replace(r'[-+]\d{2}:\d{2}$', '', regex=True), errors='coerce')
         return df[(df['time'] >= day_start) & (df['time'] <= day_end)]
@@ -72,46 +72,22 @@ def find_hod_lod_for_day(small_df, big_df, day_start, day_end):
     }
     
     # Find small feed HOD/LOD
-    if not small_day.empty:
-        # Get all high columns (ending with ' H')
-        high_cols = [col for col in small_day.columns if col.endswith(' H')]
-        # Get all low columns (ending with ' L')
-        low_cols = [col for col in small_day.columns if col.endswith(' L')]
-        
-        if high_cols:
-            # Find the maximum value across all high columns
-            small_day['max_high'] = small_day[high_cols].max(axis=1)
-            small_high_idx = small_day['max_high'].idxmax()
-            results['small_hod'] = small_day.loc[small_high_idx, 'max_high']
-            results['small_hod_time'] = small_day.loc[small_high_idx, 'time']
-        
-        if low_cols:
-            # Find the minimum value across all low columns
-            small_day['min_low'] = small_day[low_cols].min(axis=1)
-            small_low_idx = small_day['min_low'].idxmin()
-            results['small_lod'] = small_day.loc[small_low_idx, 'min_low']
-            results['small_lod_time'] = small_day.loc[small_low_idx, 'time']
+    if not small_day.empty and 'high' in small_day.columns and 'low' in small_day.columns:
+        small_high_idx = small_day['high'].idxmax()
+        small_low_idx = small_day['low'].idxmin()
+        results['small_hod'] = small_day.loc[small_high_idx, 'high']
+        results['small_hod_time'] = small_day.loc[small_high_idx, 'time']
+        results['small_lod'] = small_day.loc[small_low_idx, 'low']
+        results['small_lod_time'] = small_day.loc[small_low_idx, 'time']
     
     # Find big feed HOD/LOD
-    if not big_day.empty:
-        # Get all high columns (ending with ' H')
-        high_cols = [col for col in big_day.columns if col.endswith(' H')]
-        # Get all low columns (ending with ' L')
-        low_cols = [col for col in big_day.columns if col.endswith(' L')]
-        
-        if high_cols:
-            # Find the maximum value across all high columns
-            big_day['max_high'] = big_day[high_cols].max(axis=1)
-            big_high_idx = big_day['max_high'].idxmax()
-            results['big_hod'] = big_day.loc[big_high_idx, 'max_high']
-            results['big_hod_time'] = big_day.loc[big_high_idx, 'time']
-        
-        if low_cols:
-            # Find the minimum value across all low columns
-            big_day['min_low'] = big_day[low_cols].min(axis=1)
-            big_low_idx = big_day['min_low'].idxmin()
-            results['big_lod'] = big_day.loc[big_low_idx, 'min_low']
-            results['big_lod_time'] = big_day.loc[big_low_idx, 'time']
+    if not big_day.empty and 'high' in big_day.columns and 'low' in big_day.columns:
+        big_high_idx = big_day['high'].idxmax()
+        big_low_idx = big_day['low'].idxmin()
+        results['big_hod'] = big_day.loc[big_high_idx, 'high']
+        results['big_hod_time'] = big_day.loc[big_high_idx, 'time']
+        results['big_lod'] = big_day.loc[big_low_idx, 'low']
+        results['big_lod_time'] = big_day.loc[big_low_idx, 'time']
     
     # Determine overall HOD (highest of both feeds)
     if results['small_hod'] is not None and results['big_hod'] is not None:
