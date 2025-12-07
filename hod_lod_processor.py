@@ -43,25 +43,14 @@ def find_hod_lod_for_day(small_df, big_df, day_start, day_end):
     def filter_day_data(df, day_start, day_end):
         """Filter dataframe to trading day window"""
         df = df.copy()
-        # Convert to datetime and strip timezone info (make naive)
-        df['time'] = pd.to_datetime(df['time'], errors='coerce')
-        if df['time'].dt.tz is not None:
-            df['time'] = df['time'].dt.tz_localize(None)
+        # Only strip timezone if column is not already datetime
+        if not pd.api.types.is_datetime64_any_dtype(df['time']):
+            df['time'] = pd.to_datetime(df['time'].str.replace(r'[-+]\d{2}:\d{2}$', '', regex=True), errors='coerce')
         return df[(df['time'] >= day_start) & (df['time'] <= day_end)]
     
     # Filter both feeds to the trading day
     small_day = filter_day_data(small_df, day_start, day_end)
     big_day = filter_day_data(big_df, day_start, day_end)
-    
-    # Diagnostic output (comment out in production)
-    if not small_day.empty:
-        high_cols = [col for col in small_day.columns if col.endswith(' H')]
-        low_cols = [col for col in small_day.columns if col.endswith(' L')]
-        st.write(f"🔍 Small feed: {len(small_day)} rows, {len(high_cols)} H cols, {len(low_cols)} L cols")
-    if not big_day.empty:
-        high_cols = [col for col in big_day.columns if col.endswith(' H')]
-        low_cols = [col for col in big_day.columns if col.endswith(' L')]
-        st.write(f"🔍 Big feed: {len(big_day)} rows, {len(high_cols)} H cols, {len(low_cols)} L cols")
     
     results = {
         'day_start': day_start,
