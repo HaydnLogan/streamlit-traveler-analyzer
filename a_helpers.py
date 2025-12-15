@@ -126,7 +126,7 @@ GROUP_2A_TRAVELERS = {101, -101}
 #     -62, -67, -71, -74, -78.01, -80, -83.0, -85, -86.5, -89, -90.5, -92, -93.5,
 #     -95, -95.5, -96.1, -97.1, -97.2, -98.1, -98.2, -99.1, -98.2, -101
 # }
-Temp Group 2b reduction
+# Temp Group 2b reduction
 GROUP_2B_TRAVELERS = {101, -101}
 
 
@@ -1313,6 +1313,7 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
 
 
 
