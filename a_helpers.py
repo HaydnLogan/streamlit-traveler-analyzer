@@ -115,7 +115,7 @@ GROUP_1B_TRAVELERS = {
 # }
 
 # Temp Group 2a reduction
-GROUP_2A_TRAVELERS = {101}
+GROUP_2A_TRAVELERS = {101, -101}
 
 
 # Group 2b (Indigo Family, P & D) Aug 2025
@@ -127,7 +127,7 @@ GROUP_2A_TRAVELERS = {101}
 #     -95, -95.5, -96.1, -97.1, -97.2, -98.1, -98.2, -99.1, -98.2, -101
 # }
 Temp Group 2b reduction
-GROUP_2B_TRAVELERS = {101}
+GROUP_2B_TRAVELERS = {101, -101}
 
 
 def generate_master_traveler_list(data, measurements, small_df, report_time, start_hour=17, fast_mode=True):
@@ -1313,6 +1313,7 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
 
 
 
