@@ -87,7 +87,7 @@ GROUP_1A_TRAVELERS = {
     95.5, 95, 93.5, 92, 91, 90.5, 89, 88, 87, 86.5, 86, 85, 83, 82, 80, 79, 78.01, 
     77, 76, 74, 73, 71, 70, 68, 67, 65, 63, 62, 60, 59, 57, 56, 55, 54, 52, 50, 49, 
     47, 45, 43, 42, 41, 40, 39, 38, 37, 36, 33, 31, 30, 27, 26, 25, 24, 22, 21, 15, 
-    14, 12, 10, 6, 5, 4, 3, 2, 1, 0, 
+    14, 12, 10, 6, 5, 4, 3, 2, 1, 0 
 }
 
 # Group 1b (Green Family, X0p & d) - Additional 30 values including decimals and middle ranges
@@ -126,6 +126,7 @@ GROUP_2A_TRAVELERS = {101, -101}
 #     -62, -67, -71, -74, -78.01, -80, -83.0, -85, -86.5, -89, -90.5, -92, -93.5,
 #     -95, -95.5, -96.1, -97.1, -97.2, -98.1, -98.2, -99.1, -98.2, -101
 # }
+
 # Temp Group 2b reduction
 GROUP_2B_TRAVELERS = {101, -101}
 
@@ -1313,6 +1314,7 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
 
 
 
