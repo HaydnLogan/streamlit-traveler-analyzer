@@ -97,7 +97,8 @@ GROUP_1A_TRAVELERS = {
 #     -40, -41, -43, -50, -55, -60, -68, -77, -87, -96, -103, -107, -111
 # }
 # Group 1b temp, split the measurements
-GROUP_1B_TRAVELERS = {-1, -2, -3, -4, -5, -6, -10, -12, -14, -15, 
+GROUP_1B_TRAVELERS = {
+    -1, -2, -3, -4, -5, -6, -10, -12, -14, -15, 
     -21, -22, -24, -25, -26, -27, -30, -31, -33, -36, -37, -38, -39, -40, -41, -42, 
     -43, -45, -47, -49, -50, -52, -54, -55, -56, -57, -59, -60, -62, -63, -65, -67, 
     -68, -70, -71, -73, -74, -76, -77, -78.01, -79, -80, -82, -83, -85, -86, -86.5, 
@@ -1312,6 +1313,7 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
+
 
 
 
