@@ -266,17 +266,32 @@ st.markdown("### 🌍 Origin Filtering")
 
 # Extract all origins from uploaded CSVs
 all_origins = set()
+files_checked = 0
+files_with_origins = 0
 
-for file_obj in [small_3m_file, small_5m_file, small_15m_file, big_3m_file, big_5m_file, big_15m_file]:
+for file_obj, name in [(small_3m_file, '3m small'), (small_5m_file, '5m small'), (small_15m_file, '15m small'), 
+                        (big_3m_file, '3m big'), (big_5m_file, '5m big'), (big_15m_file, '15m big')]:
     if file_obj is not None:
+        files_checked += 1
         try:
             temp_df = pd.read_csv(file_obj)
-            if 'origin' in temp_df.columns:
-                origins_in_file = temp_df['origin'].dropna().unique().tolist()
-                all_origins.update(origins_in_file)
+            
+            # Check for origin column (case-insensitive)
+            origin_col = None
+            for col in temp_df.columns:
+                if col.lower() == 'origin':
+                    origin_col = col
+                    break
+            
+            if origin_col:
+                origins_in_file = temp_df[origin_col].dropna().unique().tolist()
+                if len(origins_in_file) > 0:
+                    all_origins.update(origins_in_file)
+                    files_with_origins += 1
+            
             file_obj.seek(0)  # Reset file pointer
         except Exception as e:
-            st.warning(f"Could not read origins from file: {e}")
+            st.warning(f"Could not read origins from {name}: {e}")
 
 # Categorize origins (case-insensitive matching)
 EPIC_NAMES = {name.lower() for name in EPIC_ORIGINS}
@@ -292,18 +307,47 @@ anchor_origins.sort()
 other_origins.sort()
 
 if all_origins:
-    st.info(f"Detected {len(all_origins)} origins: {len(epic_origins)} Epic, {len(anchor_origins)} Anchor, {len(other_origins)} Other")
+    st.success(f"✅ Detected {len(all_origins)} origins from {files_with_origins} file(s): {len(epic_origins)} Epic, {len(anchor_origins)} Anchor, {len(other_origins)} Other")
+    
+    # Debug expander to show detected origins
+    with st.expander("🔍 Show detected origins", expanded=False):
+        if epic_origins:
+            st.write(f"**Epic Origins ({len(epic_origins)}):** {', '.join(epic_origins)}")
+        if anchor_origins:
+            st.write(f"**Anchor Origins ({len(anchor_origins)}):** {', '.join(anchor_origins)}")
+        if other_origins:
+            st.write(f"**Other Origins ({len(other_origins)}):** {', '.join(other_origins)}")
+            
+elif files_checked > 0:
+    st.warning(f"⚠️ Checked {files_checked} file(s) but found no 'origin' column or no origin data. Origin filtering will be disabled.")
+    
+    # Debug expander
+    with st.expander("🔍 Troubleshooting - Show file columns", expanded=False):
+        st.write("Checking for 'origin' column in uploaded files...")
+        for file_obj, name in [(small_3m_file, '3m small'), (small_5m_file, '5m small'), (small_15m_file, '15m small'), 
+                                (big_3m_file, '3m big'), (big_5m_file, '5m big'), (big_15m_file, '15m big')]:
+            if file_obj is not None:
+                try:
+                    temp_df = pd.read_csv(file_obj)
+                    st.write(f"**{name}:** Columns found: {list(temp_df.columns)}")
+                    file_obj.seek(0)
+                except Exception as e:
+                    st.write(f"**{name}:** Error reading file: {e}")
 else:
-    st.info("Upload feed files to detect available origins")
+    st.info("Upload feed files to enable origin filtering")
 
 col_filter1, col_filter2 = st.columns([2, 1])
 with col_filter1:
     filter_origins = st.checkbox(
         "Filter Origins (Faster processing, smaller results)", 
         value=False, 
-        key="filter_origins_main"
+        key="filter_origins_main",
+        disabled=(len(all_origins) == 0)
     )
-    st.caption("Process only selected origins. All priority origins (Epic + Anchor) selected by default.")
+    if len(all_origins) > 0:
+        st.caption("Process only selected origins. All priority origins (Epic + Anchor) selected by default.")
+    else:
+        st.caption("Origin filtering unavailable - no origins detected in uploaded files.")
 
 allowed_origins = None
 if filter_origins and all_origins:
@@ -349,9 +393,12 @@ if filter_origins and all_origins:
     
     st.info(f"Processing {len(allowed_origins)} origins ({epic_count} Epic + {anchor_count} Anchor + {other_count} Other)")
 elif filter_origins and not all_origins:
-    st.warning("No origins detected yet. Upload feed files first.")
+    st.warning("Origin filtering enabled but no origins detected. Processing will continue with all data.")
 else:
-    st.info("Processing ALL origins (may take longer with large results)")
+    if all_origins:
+        st.info(f"Processing ALL {len(all_origins)} origins (may take longer with large results)")
+    else:
+        st.info("Processing all data (no origin filtering available)")
 
 st.markdown("---")
 
