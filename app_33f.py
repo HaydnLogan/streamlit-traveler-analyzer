@@ -460,7 +460,7 @@ def create_multi_day_excel(all_day_reports, asset_id, trading_day_base):
 
 
 # === Unified Export Helper ===
-def render_unified_export(traveler_reports, report_time, asset_id=""):
+def render_unified_export(traveler_reports, report_time, asset_id="", window_radius=None):
     if not traveler_reports:
         return
 
@@ -470,6 +470,9 @@ def render_unified_export(traveler_reports, report_time, asset_id=""):
     # Add asset_id to filename if provided
     asset_prefix = f"{asset_id.lower()}_" if asset_id else ""
     report_datetime_str = report_time.strftime("%d-%b-%y_%H-%M")
+    
+    # Add window radius to filename if provided
+    window_suffix = f"_{int(window_radius)}_window" if window_radius is not None else ""
 
     def _coerce_arrival_datetime(df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -512,7 +515,7 @@ def render_unified_export(traveler_reports, report_time, asset_id=""):
                 st.warning(f"Highlighting skipped for '{tab_name}': {e}")
 
     output.seek(0)
-    filename = f"{asset_prefix}traveler_report_{report_datetime_str}.xlsx"
+    filename = f"{asset_prefix}traveler_report_{report_datetime_str}{window_suffix}.xlsx"
     st.download_button(
         label="📥 Download Unified Excel Report",
         data=output,
@@ -1376,7 +1379,7 @@ if st.button("🚀 Process Data"):
                     trading_day
                 )
                 
-                filename = f"{asset_id.lower()}_traveler_reports_for_{trading_day_str}.xlsx"
+                filename = f"{asset_id.lower()}_traveler_reports_for_{trading_day_str}_{int(window_radius_multi)}_window.xlsx"
                 
                 st.download_button(
                     label="📥 Download Multi-Day Report",
@@ -1635,7 +1638,9 @@ if st.button("🚀 Process Data"):
     
     # === EXPORT (only for non-multi modes) ===
     if traveler_reports and not use_full_range_multi:
-        render_unified_export(traveler_reports, report_time, asset_id)
+        # Determine window radius to pass (only for Full Range single mode)
+        wr_to_pass = window_radius if use_full_range_single else None
+        render_unified_export(traveler_reports, report_time, asset_id, window_radius=wr_to_pass)
 
 st.markdown("---")
 st.caption("🌌 Traveler Report Generator v33f | Full Range (single), Full Range (multiple), Custom Ranges, HOD/LOD Mode with Origin Filtering + HOD/LOD Zones")
