@@ -1174,14 +1174,25 @@ if st.button("🚀 Process Data"):
                 # Get feeds for HOD/LOD calculation
                 sm_feed_for_hod = None
                 bg_feed_for_hod = None
+                
+                # Select first available non-empty small feed
                 if small_feeds_dict:
-                    sm_feed_for_hod = small_feeds_dict.get('15m') or small_feeds_dict.get('5m') or small_feeds_dict.get('3m')
-                elif small_df is not None:
+                    for tf in ['15m', '5m', '3m']:
+                        df = small_feeds_dict.get(tf)
+                        if df is not None and not df.empty:
+                            sm_feed_for_hod = df
+                            break
+                elif small_df is not None and not small_df.empty:
                     sm_feed_for_hod = small_df
-                    
+                
+                # Select first available non-empty big feed
                 if big_feeds_dict:
-                    bg_feed_for_hod = big_feeds_dict.get('15m') or big_feeds_dict.get('5m') or big_feeds_dict.get('3m')
-                elif big_df is not None:
+                    for tf in ['15m', '5m', '3m']:
+                        df = big_feeds_dict.get(tf)
+                        if df is not None and not df.empty:
+                            bg_feed_for_hod = df
+                            break
+                elif big_df is not None and not big_df.empty:
                     bg_feed_for_hod = big_df
                 
                 # Add HOD/LOD columns to full results before splitting into groups
@@ -1318,10 +1329,22 @@ if st.button("🚀 Process Data"):
                     # Use the first available timeframe's feed data
                     sm_feed_for_hod = None
                     bg_feed_for_hod = None
+                    
+                    # Select first available non-empty small feed
                     if small_feeds_dict:
-                        sm_feed_for_hod = small_feeds_dict.get('15m') or small_feeds_dict.get('5m') or small_feeds_dict.get('3m')
+                        for tf in ['15m', '5m', '3m']:
+                            df = small_feeds_dict.get(tf)
+                            if df is not None and not df.empty:
+                                sm_feed_for_hod = df
+                                break
+                    
+                    # Select first available non-empty big feed
                     if big_feeds_dict:
-                        bg_feed_for_hod = big_feeds_dict.get('15m') or big_feeds_dict.get('5m') or big_feeds_dict.get('3m')
+                        for tf in ['15m', '5m', '3m']:
+                            df = big_feeds_dict.get(tf)
+                            if df is not None and not df.empty:
+                                bg_feed_for_hod = df
+                                break
                     
                     # Add HOD/LOD columns
                     combined = add_hod_lod_columns(combined, sm_feed_for_hod, bg_feed_for_hod, trading_day_start)
