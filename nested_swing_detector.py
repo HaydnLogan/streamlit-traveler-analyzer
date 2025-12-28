@@ -9,6 +9,42 @@ and major turning points.
 
 import pandas as pd
 from typing import List, Dict, Tuple, Optional
+from datetime import datetime
+
+
+def parse_timestamp_naive(timestamp):
+    """
+    Parse timestamp and return naive datetime (remove timezone info).
+    
+    This is the preferred method for swing analysis to avoid timezone
+    comparison issues.
+    
+    Args:
+        timestamp: Can be string, datetime, or pd.Timestamp
+    
+    Returns:
+        Naive datetime object (timezone-unaware)
+    """
+    try:
+        if isinstance(timestamp, str):
+            # Handle ISO format with timezone
+            if 'T' in timestamp:
+                # Parse ISO format and remove timezone
+                dt = pd.to_datetime(timestamp)
+                return dt.replace(tzinfo=None)
+            else:
+                # Simple format without timezone
+                return pd.to_datetime(timestamp)
+        elif isinstance(timestamp, pd.Timestamp):
+            # Remove timezone from pandas Timestamp
+            return timestamp.replace(tzinfo=None)
+        elif isinstance(timestamp, datetime):
+            # Remove timezone from datetime
+            return timestamp.replace(tzinfo=None)
+        else:
+            return timestamp
+    except:
+        return timestamp
 
 
 def detect_nested_swings(
@@ -29,9 +65,9 @@ def detect_nested_swings(
     
     Returns:
         List of swing dictionaries with:
-            - from_time: Origin timestamp
+            - from_time: Origin timestamp (naive datetime)
             - from_price: Origin price
-            - to_time: Extreme timestamp
+            - to_time: Extreme timestamp (naive datetime)
             - to_price: Extreme price
             - swing_size: Size in points
             - direction: 'Up' or 'Down'
@@ -39,7 +75,11 @@ def detect_nested_swings(
     active_swings = []
     completed_swings = []
     
+    trading_day_df = trading_day_df.copy()
     trading_day_df = trading_day_df.reset_index(drop=True)
+    
+    # Strip timezone from all timestamps
+    trading_day_df['time'] = trading_day_df['time'].apply(parse_timestamp_naive)
     
     for idx, row in trading_day_df.iterrows():
         current_time = row['time']
@@ -266,6 +306,13 @@ def analyze_swings(
     Returns:
         Tuple of (nested_swings, major_turning_points)
     """
+    # Strip timezone from input times and dataframe
+    start_time = parse_timestamp_naive(start_time)
+    end_time = parse_timestamp_naive(end_time)
+    
+    df = df.copy()
+    df['time'] = df['time'].apply(parse_timestamp_naive)
+    
     # Filter to trading period
     trading_day = df[(df['time'] >= start_time) & (df['time'] <= end_time)].copy()
     
