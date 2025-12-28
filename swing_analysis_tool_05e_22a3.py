@@ -1020,7 +1020,7 @@ def find_ma_confluence_at_swings(df, swings_df, ma_columns, zone_size=24):
 # ============================================================================
 
 def main():
-    st.title(" Market Swing Analysis Tool 05e_22a Two Pass")
+    st.title(" Market Swing Analysis Tool 05e_22a3 Two Pass")
     st.markdown("**Integrated Version** - Swing Detection, MA Analysis, NY Session, Traveler/Pivot Calculations")
     st.markdown("---")
     
@@ -2518,10 +2518,7 @@ def main():
                                     # Process small feed
                                     if len(small_feed_df) > 0:
                                         st.write("  Processing Small feed...")
-                                        small_processed = process_cluster_tables_two_pass(
-                                            small_feed_df,
-                                            feed_name='Small'
-                                        )
+                                        small_processed = process_cluster_tables_two_pass(small_feed_df)
                                         st.write(f"  ✓ Small feed: {len(small_processed)} matched pairs")
                                     else:
                                         small_processed = pd.DataFrame()
@@ -2529,10 +2526,7 @@ def main():
                                     # Process big feed
                                     if len(big_feed_df) > 0:
                                         st.write("  Processing Big feed...")
-                                        big_processed = process_cluster_tables_two_pass(
-                                            big_feed_df,
-                                            feed_name='Big'
-                                        )
+                                        big_processed = process_cluster_tables_two_pass(big_feed_df)
                                         st.write(f"  ✓ Big feed: {len(big_processed)} matched pairs")
                                     else:
                                         big_processed = pd.DataFrame()
@@ -2544,10 +2538,7 @@ def main():
                                 else:
                                     # No Feed column, process as single cluster table
                                     st.write("  Processing combined cluster table...")
-                                    cluster_df = process_cluster_tables_two_pass(
-                                        small_hlc_df,
-                                        feed_name='Combined'
-                                    )
+                                    cluster_df = process_cluster_tables_two_pass(small_hlc_df)
                                     
                                     st.success(f"✅ After Pass 1 & 2: {len(cluster_df)} matched pairs")
                                 
