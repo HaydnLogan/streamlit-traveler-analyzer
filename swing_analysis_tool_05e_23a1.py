@@ -2621,7 +2621,7 @@ def main():
                                     
                                     # Import the bypass mode matcher
                                     from bypass_mode_matcher import match_travelers_bypass_mode, process_model_bypass_mode
-                                    from model_definitions_v21 import MODELS, FOGZ, P_WX012, LRG_D, MED_D, P_0s, P_1s, P_D0s, P_D1s, P_Cs, D_0s, D_1s, D_D0s, D_D1s, D_Cs
+                                    from model_definitions_v21 import MODELS
                                     
                                     import time as time_module
                                     total_start = time_module.time()
@@ -2636,13 +2636,7 @@ def main():
                                         }
                                     }
                                     
-                                    # Define Pass 1 and Pass 2 M# sets
-                                    # Pass 1: FOGZ (small M# values around 0)
-                                    pass1_ms = sorted(list(FOGZ))
-                                    
-                                    # Create model configs for each of the 23 models
-                                    model_configs = {}
-                                    
+                                    # Process each of the 23 models
                                     for model_name, model_def in MODELS.items():
                                         model_start = time_module.time()
                                         
