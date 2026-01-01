@@ -1,7 +1,7 @@
 """
 Nested Swing Detection Algorithm
 Version: 1.0
-Date: 2025-12-28
+Date: 2025-12-28; updated 1/1/2025 7 AM
 
 Detects multi-level swing patterns in price data, identifying both nested swings
 and major turning points.
@@ -330,3 +330,97 @@ def analyze_swings(
     )
     
     return nested_swings, major_points
+
+
+def calculate_zone_distances(zone_price: float,
+                            major_points: List[Dict],
+                            zone_time: datetime,
+                            ohlc_df: pd.DataFrame,
+                            lookforward_hours: int = 18) -> Dict:
+    """
+    Calculate distances moved from a zone
+    
+    Args:
+        zone_price: The zone price level
+        major_points: List of major price points from analyze_swings
+        zone_time: Time when zone was identified
+        ohlc_df: OHLC dataframe
+        lookforward_hours: Hours to look forward
+        
+    Returns:
+        Dict with turn-to-turn distances and exit information
+    """
+    
+    # Parse times
+    df = ohlc_df.copy()
+    df['time'] = pd.to_datetime(df['time'])
+    if hasattr(df['time'].dtype, 'tz') and df['time'].dtype.tz is not None:
+        df['time'] = df['time'].dt.tz_localize(None)
+    
+    zone_time = parse_timestamp_naive(zone_time)
+    end_time = zone_time + pd.Timedelta(hours=lookforward_hours)
+    
+    # Filter points to lookforward window
+    future_points = [
+        p for p in major_points 
+        if zone_time <= p['time'] <= end_time
+    ]
+    
+    if len(future_points) == 0:
+        return {
+            'touched_zone': False,
+            'num_turns': 0,
+            'distances': [],
+            'max_distance': 0,
+            'early_exit': None
+        }
+    
+    # Check if zone was touched
+    future_df = df[(df['time'] >= zone_time) & (df['time'] <= end_time)]
+    touched_zone = False
+    
+    if len(future_df) > 0:
+        touched_zone = (
+            (future_df['low'].min() <= zone_price <= future_df['high'].max()) or
+            (future_df['high'].max() >= zone_price >= future_df['low'].min())
+        )
+    
+    # Calculate distances between turns
+    distances = []
+    
+    for i in range(len(future_points) - 1):
+        current = future_points[i]
+        next_point = future_points[i + 1]
+        
+        distance = abs(next_point['price'] - current['price'])
+        from_zone = abs(current['price'] - zone_price)
+        
+        distances.append({
+            'from_price': current['price'],
+            'to_price': next_point['price'],
+            'distance': distance,
+            'from_zone_distance': from_zone,
+            'from_time': current['time'],
+            'to_time': next_point['time'],
+            'from_type': current['type'],
+            'to_type': next_point['type'],
+            'is_reversal_from': current['is_reversal'],
+            'is_reversal_to': next_point['is_reversal']
+        })
+    
+    # Check for early exits (non-reversal points)
+    early_exits = [
+        p for p in future_points 
+        if not p['is_reversal'] and p['significance_score'] > 0
+    ]
+    
+    max_distance = max([d['distance'] for d in distances]) if distances else 0
+    
+    return {
+        'touched_zone': touched_zone,
+        'num_turns': len(future_points),
+        'distances': distances,
+        'max_distance': max_distance,
+        'early_exit': early_exits[0] if early_exits else None,
+        'all_points': future_points
+    }
