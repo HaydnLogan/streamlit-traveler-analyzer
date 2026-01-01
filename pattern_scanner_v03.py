@@ -109,7 +109,7 @@ class HaydnPatternScanner:
         Comprehensive zone analysis including all pattern types
         
         Returns:
-            Dictionary with patterns and scoring
+            Dictionary with patterns, trigger analysis, and scoring
         """
         zone_df = self.traveler_df[
             (self.traveler_df['Output'] >= center_price - zone_width/2) &
@@ -138,6 +138,14 @@ class HaydnPatternScanner:
             'model_matches': self._find_model_matches(zone_df, match_tolerance),
         }
         
+        # CRITICAL: Identify trigger patterns (patterns unique to this zone)
+        trigger_patterns = self._identify_trigger_patterns(
+            patterns, 
+            center_price, 
+            zone_width, 
+            match_tolerance
+        )
+        
         score = self._calculate_zone_score(patterns)
         
         return {
@@ -145,6 +153,7 @@ class HaydnPatternScanner:
             'zone_width': zone_width,
             'num_arrivals': len(zone_df),
             'patterns': patterns,
+            'trigger_patterns': trigger_patterns,  # NEW: Identifies actual triggers
             'score': score,
             'rank': None
         }
@@ -627,6 +636,150 @@ class HaydnPatternScanner:
             model_matches[model_name] = matches
         
         return model_matches
+    
+    # ========================================================================
+    # TRIGGER PATTERN DETECTION
+    # ========================================================================
+    
+    def _identify_trigger_patterns(self, 
+                                   patterns: Dict,
+                                   center_price: float,
+                                   zone_width: float,
+                                   match_tolerance: float) -> Dict:
+        """
+        Identify which patterns are likely triggers for the turn.
+        
+        A pattern is a likely trigger if it appears IN the zone but NOT commonly
+        outside the zone. Patterns that appear everywhere are less significant.
+        
+        Args:
+            patterns: Detected patterns in the zone
+            center_price: Zone center price
+            zone_width: Zone width
+            match_tolerance: Match tolerance used
+            
+        Returns:
+            Dict with trigger likelihood for each pattern type
+        """
+        
+        # Define the zone boundaries
+        zone_min = center_price - zone_width/2
+        zone_max = center_price + zone_width/2
+        
+        # Get data outside the zone for comparison
+        outside_zone_df = self.traveler_df[
+            (self.traveler_df['Output'] < zone_min - zone_width) |
+            (self.traveler_df['Output'] > zone_max + zone_width)
+        ].copy()
+        
+        if len(outside_zone_df) == 0:
+            # If no data outside, all patterns are potential triggers
+            return {
+                'all_patterns_unique': True,
+                'trigger_likelihood': 'HIGH',
+                'reason': 'No similar patterns found outside zone'
+            }
+        
+        trigger_analysis = {
+            'pattern_specificity': {},
+            'trigger_candidates': [],
+            'common_patterns': [],
+            'overall_trigger_likelihood': 0.0
+        }
+        
+        # Check each pattern type
+        pattern_checks = {
+            'epic_same_origin': self._check_epic_outside_zone,
+            'fogz_presence': self._check_fogz_outside_zone,
+            'wild_pairs': self._check_wild_pairs_outside_zone,
+            'constellations': self._check_constellations_outside_zone,
+        }
+        
+        total_specificity = 0
+        pattern_count = 0
+        
+        for pattern_type, check_func in pattern_checks.items():
+            pattern_list = patterns.get(pattern_type, [])
+            
+            if pattern_list and len(pattern_list) > 0:
+                # Check if this pattern exists outside the zone
+                appears_outside = check_func(outside_zone_df, pattern_list, match_tolerance)
+                
+                # Calculate specificity (0 = common everywhere, 1 = unique to zone)
+                if appears_outside:
+                    specificity = 0.2  # Low specificity - appears elsewhere
+                    trigger_analysis['common_patterns'].append(pattern_type)
+                else:
+                    specificity = 1.0  # High specificity - unique to zone
+                    trigger_analysis['trigger_candidates'].append({
+                        'pattern_type': pattern_type,
+                        'count': len(pattern_list),
+                        'specificity': specificity,
+                        'reason': 'Unique to this zone'
+                    })
+                
+                trigger_analysis['pattern_specificity'][pattern_type] = specificity
+                total_specificity += specificity
+                pattern_count += 1
+        
+        # Calculate overall trigger likelihood
+        if pattern_count > 0:
+            avg_specificity = total_specificity / pattern_count
+            trigger_analysis['overall_trigger_likelihood'] = avg_specificity
+            
+            if avg_specificity >= 0.8:
+                trigger_analysis['trigger_strength'] = 'STRONG'
+            elif avg_specificity >= 0.5:
+                trigger_analysis['trigger_strength'] = 'MODERATE'
+            else:
+                trigger_analysis['trigger_strength'] = 'WEAK'
+        else:
+            trigger_analysis['trigger_strength'] = 'UNKNOWN'
+            trigger_analysis['overall_trigger_likelihood'] = 0.0
+        
+        return trigger_analysis
+    
+    def _check_epic_outside_zone(self, outside_df: pd.DataFrame, 
+                                  patterns: List[Dict], 
+                                  tolerance: float) -> bool:
+        """Check if epic same origin patterns exist outside zone"""
+        if len(patterns) == 0:
+            return False
+        
+        # Look for any epic same origin matches outside the zone
+        epic_outside = self._find_epic_same_origin(outside_df, tolerance)
+        return len(epic_outside) > 0
+    
+    def _check_fogz_outside_zone(self, outside_df: pd.DataFrame,
+                                  patterns: List[Dict],
+                                  tolerance: float) -> bool:
+        """Check if FOGZ presence exists outside zone"""
+        if len(patterns) == 0:
+            return False
+        
+        # Look for FOGZ members outside the zone
+        fogz_outside = self._find_fogz_presence(outside_df)
+        return len(fogz_outside) > 0
+    
+    def _check_wild_pairs_outside_zone(self, outside_df: pd.DataFrame,
+                                        patterns: List[Dict],
+                                        tolerance: float) -> bool:
+        """Check if wild pairs exist outside zone"""
+        if len(patterns) == 0:
+            return False
+        
+        wild_outside = self._find_wild_pairs(outside_df, tolerance)
+        return len(wild_outside) > 0
+    
+    def _check_constellations_outside_zone(self, outside_df: pd.DataFrame,
+                                            patterns: List[Dict],
+                                            tolerance: float) -> bool:
+        """Check if constellations exist outside zone"""
+        if len(patterns) == 0:
+            return False
+        
+        const_outside = self._find_constellations(outside_df, tolerance)
+        return len(const_outside) > 0
     
     # ========================================================================
     # HELPER METHODS
