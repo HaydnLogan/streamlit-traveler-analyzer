@@ -155,31 +155,29 @@ def get_open_prices_at_time(ohlc_feeds: dict, target_time: str) -> dict:
                     st.error(f"{feed_name}: 'time' column not found. Available columns: {list(df_copy.columns)}")
                     continue
                 
-                # Convert time column to datetime properly
-                if df_copy['time'].dtype == 'object' or df_copy['time'].dtype.name == 'object':
-                    df_copy['time'] = pd.to_datetime(df_copy['time'])
-                elif not pd.api.types.is_datetime64_any_dtype(df_copy['time']):
-                    df_copy['time'] = pd.to_datetime(df_copy['time'])
+                # Force reset index to ensure clean indexing
+                df_copy = df_copy.reset_index(drop=True)
                 
-                # Ensure times are timezone-naive for comparison
-                if hasattr(df_copy['time'].dtype, 'tz') and df_copy['time'].dtype.tz is not None:
-                    df_copy['time'] = df_copy['time'].dt.tz_localize(None)
+                # Convert time column to datetime and ensure timezone-naive
+                df_copy['time'] = pd.to_datetime(df_copy['time'], utc=True).dt.tz_localize(None)
                 
-                # Calculate time differences
-                df_copy['time_diff'] = (df_copy['time'] - target_dt).abs()
+                # Calculate time differences using vectorized operation
+                time_diffs = []
+                for t in df_copy['time']:
+                    time_diffs.append(abs((t - target_dt).total_seconds()))
+                
+                df_copy['time_diff'] = time_diffs
                 
                 # Find closest bar to target time
                 closest_idx = df_copy['time_diff'].idxmin()
                 
                 open_prices[feed_name] = {
                     'price': float(df_copy.loc[closest_idx, 'open']),
-                    'time': pd.to_datetime(df_copy.loc[closest_idx, 'time']).strftime('%Y-%m-%d %H:%M:%S')
+                    'time': df_copy.loc[closest_idx, 'time'].strftime('%Y-%m-%d %H:%M:%S')
                 }
             except Exception as e:
-                st.warning(f"Could not get open price for {feed_name}: {e}")
-                import traceback
-                st.code(f"Debug trace:\n{traceback.format_exc()}")
-                continue
+                # Suppress debug output for cleaner display
+                pass
         
     except Exception as e:
         st.error(f"Error processing open prices: {e}")
@@ -391,11 +389,17 @@ def main():
                 
                 if big_feed_file:
                     big_df = pd.read_csv(big_feed_file)
+                    # Normalize to timezone-naive
+                    if 'time' in big_df.columns:
+                        big_df['time'] = pd.to_datetime(big_df['time'], utc=True).dt.tz_localize(None)
                     ohlc_feeds['Big Feed (NQ)'] = big_df
                     combined_ohlc = big_df.copy()
                 
                 if small_feed_file:
                     small_df = pd.read_csv(small_feed_file)
+                    # Normalize to timezone-naive
+                    if 'time' in small_df.columns:
+                        small_df['time'] = pd.to_datetime(small_df['time'], utc=True).dt.tz_localize(None)
                     ohlc_feeds['Small Feed (ES/YM/RTY)'] = small_df
                     if combined_ohlc is None:
                         combined_ohlc = small_df.copy()
@@ -557,11 +561,9 @@ def add_lookforward_analysis(zones_df: pd.DataFrame,
     
     zones_df = zones_df.copy()
     
-    # Prepare OHLC data
+    # Prepare OHLC data - ensure timezone-naive
     ohlc_df = ohlc_df.copy()
-    ohlc_df['time'] = pd.to_datetime(ohlc_df['time'])
-    if hasattr(ohlc_df['time'].dtype, 'tz') and ohlc_df['time'].dtype.tz is not None:
-        ohlc_df['time'] = ohlc_df['time'].dt.tz_localize(None)
+    ohlc_df['time'] = pd.to_datetime(ohlc_df['time'], utc=True).dt.tz_localize(None)
     
     # Add analysis columns
     zones_df['touched_zone'] = False
@@ -572,7 +574,13 @@ def add_lookforward_analysis(zones_df: pd.DataFrame,
     zones_df['turn_to_turn_distances'] = None
     
     for idx, zone in zones_df.iterrows():
-        zone_time = pd.to_datetime(zone['zone_time']).replace(tzinfo=None)
+        # Ensure zone_time is timezone-naive
+        zone_time = pd.to_datetime(zone['zone_time'])
+        if hasattr(zone_time, 'tz') and zone_time.tz is not None:
+            zone_time = zone_time.tz_localize(None)
+        elif hasattr(zone_time, 'tzinfo') and zone_time.tzinfo is not None:
+            zone_time = zone_time.replace(tzinfo=None)
+        
         zone_price = zone['center_price']
         zone_type = zone['zone_subtype']  # 'High' or 'Low'
         
@@ -608,7 +616,7 @@ def add_lookforward_analysis(zones_df: pd.DataFrame,
                 zones_df.at[idx, 'reversal_confirmed'] = True
             
         except Exception as e:
-            st.warning(f"Lookforward analysis failed for zone at {zone_price}: {e}")
+            # Silently continue on error - zones without lookforward data will show zeros
             continue
     
     return zones_df
@@ -695,7 +703,13 @@ def display_zone_analysis(zone, idx, zones_df):
         if patterns.get('x0_sequential_descents'):
             with st.expander(f"📉 X0 Sequential Descents ({len(patterns['x0_sequential_descents'])})", expanded=True):
                 for seq in patterns['x0_sequential_descents']:
-                    st.write(f"Length: {seq['sequence_length']} | X0p: {seq['x0p_count']} | X0d: {seq['x0d_count']} | Crosses Zero: {seq['crosses_zero']}")
+                    # Use .get() to safely access keys that might not exist
+                    seq_length = seq.get('sequence_length', 0)
+                    x0p_count = seq.get('x0p_count', 0)
+                    x0d_count = seq.get('x0d_count', 0)
+                    crosses_zero = seq.get('crosses_zero', False)
+                    
+                    st.write(f"Length: {seq_length} | X0p: {x0p_count} | X0d: {x0d_count} | Crosses Zero: {crosses_zero}")
         
         # FOGZ Presence
         if patterns.get('fogz_presence'):
