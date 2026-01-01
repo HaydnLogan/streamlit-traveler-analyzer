@@ -104,9 +104,13 @@ class HaydnPatternScanner:
     def analyze_zone(self, 
                      center_price: float,
                      zone_width: float = 10.0,
-                     match_tolerance: float = 1.0) -> Dict:
+                     match_tolerance: float = 1.0,
+                     single_model: str = None) -> Dict:
         """
         Comprehensive zone analysis including all pattern types
+        
+        Args:
+            single_model: If provided, only analyze this specific model
         
         Returns:
             Dictionary with patterns, trigger analysis, and scoring
@@ -119,7 +123,25 @@ class HaydnPatternScanner:
         if len(zone_df) == 0:
             return {'error': 'No arrivals in zone'}
         
-        # Detect all pattern types
+        # If single model requested, only process that model
+        if single_model:
+            model_matches = self._find_single_model_matches(
+                zone_df, 
+                single_model, 
+                match_tolerance
+            )
+            
+            return {
+                'center_price': center_price,
+                'zone_width': zone_width,
+                'num_arrivals': len(zone_df),
+                'single_model_name': single_model,
+                'single_model_matches': model_matches,
+                'score': len(model_matches),  # Simple score based on match count
+                'rank': None
+            }
+        
+        # Detect all pattern types (full analysis)
         patterns = {
             'epic_same_origin': self._find_epic_same_origin(zone_df, match_tolerance),
             'epic_epic_pairs': self._find_epic_epic_pairs(zone_df, match_tolerance),
@@ -157,6 +179,86 @@ class HaydnPatternScanner:
             'score': score,
             'rank': None
         }
+    
+    def _find_single_model_matches(self, zone_df: pd.DataFrame, model_name: str, tolerance: float) -> List[Dict]:
+        """
+        Find matches for a single specific model
+        
+        Args:
+            zone_df: Travelers in the zone
+            model_name: Name of the model to analyze (e.g., 'FOGZ_Premium_Output')
+            tolerance: Maximum output spread for matching
+            
+        Returns:
+            List of match dictionaries in swing tool Excel format
+        """
+        from model_definitions_v21 import MODELS, get_reciprocal_lookup, apply_special_matching
+        
+        if model_name not in MODELS:
+            return []
+        
+        model = MODELS[model_name]
+        matches = []
+        
+        # Get pass1 and pass2 M# values
+        pass1_values = set(model['pass1'])
+        pass2_values = set(model['pass2'])
+        
+        # Filter zone_df for pass1 values
+        pass1_df = zone_df[zone_df['M'].isin(pass1_values)].copy()
+        
+        # Filter zone_df for pass2 values  
+        pass2_df = zone_df[zone_df['M'].isin(pass2_values)].copy()
+        
+        if len(pass1_df) == 0 or len(pass2_df) == 0:
+            return matches
+        
+        # Find matches within tolerance
+        for _, p1_row in pass1_df.iterrows():
+            for _, p2_row in pass2_df.iterrows():
+                # Skip if same arrival
+                if p1_row.name == p2_row.name:
+                    continue
+                
+                # Check output spread
+                spread = abs(p1_row['Output'] - p2_row['Output'])
+                if spread > tolerance:
+                    continue
+                
+                # Apply special matching rules if needed
+                if model.get('special_matching'):
+                    recip_lookup = get_reciprocal_lookup()
+                    if not apply_special_matching(
+                        p1_row['M'], 
+                        p2_row['M'],
+                        model['special_matching'],
+                        recip_lookup
+                    ):
+                        continue
+                
+                # Check reciprocal requirement if needed
+                if model.get('check_recip'):
+                    m1, m2 = p1_row['M'], p2_row['M']
+                    if not ((m1 > 0 and m2 < 0) or (m1 < 0 and m2 > 0)):
+                        continue
+                
+                # Create match in swing tool format
+                match = {
+                    'M1': p1_row['M'],
+                    'Origin1': p1_row['Origin'],
+                    'Output1': p1_row['Output'],
+                    'Arrival1': pd.to_datetime(p1_row['Arrival']).strftime('%Y-%m-%d %H:%M:%S'),
+                    'M2': p2_row['M'],
+                    'Origin2': p2_row['Origin'],
+                    'Output2': p2_row['Output'],
+                    'Arrival2': pd.to_datetime(p2_row['Arrival']).strftime('%Y-%m-%d %H:%M:%S'),
+                    'Output_Spread': spread,
+                    'Match_Type': 'Reciprocal' if model.get('check_recip') else 'Standard'
+                }
+                
+                matches.append(match)
+        
+        return matches
     
     # ========================================================================
     # EXISTING PATTERN DETECTORS (from v2)
@@ -895,8 +997,14 @@ class HaydnPatternScanner:
                        start_time: str,
                        end_time: str,
                        min_swing_size: float = 60,
-                       zone_width: float = 10.0) -> pd.DataFrame:
-        """Complete scan with swing detection and analysis"""
+                       zone_width: float = 10.0,
+                       match_tolerance: float = 1.0,
+                       single_model: str = None) -> pd.DataFrame:
+        """Complete scan with swing detection and analysis
+        
+        Args:
+            single_model: If provided, only analyze this specific model (e.g., 'FOGZ_Premium_Output')
+        """
         zones = self.detect_swing_zones(start_time, end_time, min_swing_size)
         
         if not zones:
@@ -907,7 +1015,8 @@ class HaydnPatternScanner:
             analysis = self.analyze_zone(
                 center_price=zone['price'],
                 zone_width=zone_width,
-                match_tolerance=1.0
+                match_tolerance=match_tolerance,
+                single_model=single_model  # Pass single_model filter
             )
             
             if 'error' not in analysis:
