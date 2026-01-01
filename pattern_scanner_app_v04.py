@@ -149,22 +149,36 @@ def get_open_prices_at_time(ohlc_feeds: dict, target_time: str) -> dict:
         for feed_name, df in ohlc_feeds.items():
             try:
                 df_copy = df.copy()
-                df_copy['time'] = pd.to_datetime(df_copy['time'])
+                
+                # Debug: Check what we have
+                if 'time' not in df_copy.columns:
+                    st.error(f"{feed_name}: 'time' column not found. Available columns: {list(df_copy.columns)}")
+                    continue
+                
+                # Convert time column to datetime properly
+                if df_copy['time'].dtype == 'object' or df_copy['time'].dtype.name == 'object':
+                    df_copy['time'] = pd.to_datetime(df_copy['time'])
+                elif not pd.api.types.is_datetime64_any_dtype(df_copy['time']):
+                    df_copy['time'] = pd.to_datetime(df_copy['time'])
                 
                 # Ensure times are timezone-naive for comparison
                 if hasattr(df_copy['time'].dtype, 'tz') and df_copy['time'].dtype.tz is not None:
                     df_copy['time'] = df_copy['time'].dt.tz_localize(None)
                 
+                # Calculate time differences
+                df_copy['time_diff'] = (df_copy['time'] - target_dt).abs()
+                
                 # Find closest bar to target time
-                df_copy['time_diff'] = abs(df_copy['time'] - target_dt)
                 closest_idx = df_copy['time_diff'].idxmin()
                 
                 open_prices[feed_name] = {
-                    'price': df_copy.loc[closest_idx, 'open'],
-                    'time': df_copy.loc[closest_idx, 'time'].strftime('%Y-%m-%d %H:%M:%S')
+                    'price': float(df_copy.loc[closest_idx, 'open']),
+                    'time': pd.to_datetime(df_copy.loc[closest_idx, 'time']).strftime('%Y-%m-%d %H:%M:%S')
                 }
             except Exception as e:
                 st.warning(f"Could not get open price for {feed_name}: {e}")
+                import traceback
+                st.code(f"Debug trace:\n{traceback.format_exc()}")
                 continue
         
     except Exception as e:
@@ -406,17 +420,19 @@ def main():
         
         # Display open prices at analysis time
         if zone_mode == "Automatic (Swing Detection)" and ohlc_feeds:
-            st.markdown("### 💵 Open Prices at Analysis Time")
             open_prices = get_open_prices_at_time(ohlc_feeds, start_time)
             
-            cols = st.columns(len(open_prices))
-            for idx, (feed_name, data) in enumerate(open_prices.items()):
-                with cols[idx]:
-                    st.metric(
-                        feed_name,
-                        f"${data['price']:.2f}",
-                        f"at {data['time']}"
-                    )
+            if len(open_prices) > 0:
+                st.markdown("### 💵 Open Prices at Analysis Time")
+                
+                cols = st.columns(len(open_prices))
+                for idx, (feed_name, data) in enumerate(open_prices.items()):
+                    with cols[idx]:
+                        st.metric(
+                            feed_name,
+                            f"${data['price']:.2f}",
+                            f"at {data['time']}"
+                        )
         
         # Run analysis
         with st.spinner("Analyzing patterns..."):
