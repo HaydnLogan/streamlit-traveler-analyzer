@@ -99,6 +99,9 @@ def get_most_recent_day0_time(traveler_df: pd.DataFrame) -> str:
         day0_df = traveler_df[traveler_df['Day'] == '[0]']
         if len(day0_df) > 0:
             most_recent = pd.to_datetime(day0_df['Arrival']).max()
+            # Ensure timezone-naive for consistency
+            if hasattr(most_recent, 'tz') and most_recent.tz is not None:
+                most_recent = most_recent.tz_localize(None)
             return most_recent.strftime('%Y-%m-%d %H:%M:%S')
     except:
         pass
@@ -116,6 +119,10 @@ def get_end_time_for_start(start_time_str: str) -> str:
     try:
         start_dt = pd.to_datetime(start_time_str)
         
+        # Ensure timezone-naive
+        if hasattr(start_dt, 'tz') and start_dt.tz is not None:
+            start_dt = start_dt.tz_localize(None)
+        
         # Trading day ends at 16:45
         end_time_of_day = start_dt.replace(hour=16, minute=45, second=0)
         
@@ -131,20 +138,37 @@ def get_end_time_for_start(start_time_str: str) -> str:
 def get_open_prices_at_time(ohlc_feeds: dict, target_time: str) -> dict:
     """Get open price for each feed at or near target time"""
     open_prices = {}
-    target_dt = pd.to_datetime(target_time)
     
-    for feed_name, df in ohlc_feeds.items():
-        df_copy = df.copy()
-        df_copy['time'] = pd.to_datetime(df_copy['time'])
+    try:
+        target_dt = pd.to_datetime(target_time)
         
-        # Find closest bar to target time
-        df_copy['time_diff'] = abs(df_copy['time'] - target_dt)
-        closest_idx = df_copy['time_diff'].idxmin()
+        # Ensure target is timezone-naive
+        if hasattr(target_dt, 'tz') and target_dt.tz is not None:
+            target_dt = target_dt.tz_localize(None)
         
-        open_prices[feed_name] = {
-            'price': df_copy.loc[closest_idx, 'open'],
-            'time': df_copy.loc[closest_idx, 'time'].strftime('%Y-%m-%d %H:%M:%S')
-        }
+        for feed_name, df in ohlc_feeds.items():
+            try:
+                df_copy = df.copy()
+                df_copy['time'] = pd.to_datetime(df_copy['time'])
+                
+                # Ensure times are timezone-naive for comparison
+                if hasattr(df_copy['time'].dtype, 'tz') and df_copy['time'].dtype.tz is not None:
+                    df_copy['time'] = df_copy['time'].dt.tz_localize(None)
+                
+                # Find closest bar to target time
+                df_copy['time_diff'] = abs(df_copy['time'] - target_dt)
+                closest_idx = df_copy['time_diff'].idxmin()
+                
+                open_prices[feed_name] = {
+                    'price': df_copy.loc[closest_idx, 'open'],
+                    'time': df_copy.loc[closest_idx, 'time'].strftime('%Y-%m-%d %H:%M:%S')
+                }
+            except Exception as e:
+                st.warning(f"Could not get open price for {feed_name}: {e}")
+                continue
+        
+    except Exception as e:
+        st.error(f"Error processing open prices: {e}")
     
     return open_prices
 
