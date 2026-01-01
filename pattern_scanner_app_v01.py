@@ -14,7 +14,7 @@ import os
 sys.path.append('/home/claude')
 sys.path.append('/mnt/user-data/uploads')
 
-from haydn_pattern_scanner_v3 import HaydnPatternScanner, MODELS, FOGZ
+from pattern_scanner_v03 import HaydnPatternScanner, MODELS, FOGZ
 
 st.set_page_config(
     page_title="Pattern Scanner",
@@ -718,7 +718,7 @@ def display_all_patterns_summary(patterns):
         'Weight': []
     }
     
-    from haydn_pattern_scanner_v3 import WEIGHTS
+    from pattern_scanner_v03 import WEIGHTS
     
     pattern_mapping = {
         'Epic Same Origin': 'epic_same_origin',
