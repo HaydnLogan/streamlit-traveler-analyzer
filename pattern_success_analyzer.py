@@ -10,7 +10,7 @@ from typing import List, Dict, Tuple
 import sys
 sys.path.append('/home/claude')
 
-from haydn_pattern_scanner_v3 import HaydnPatternScanner, MODELS, WEIGHTS
+from pattern_scanner_v03 import HaydnPatternScanner, MODELS, WEIGHTS
 
 
 class PatternSuccessAnalyzer:
