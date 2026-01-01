@@ -204,11 +204,11 @@ class HaydnPatternScanner:
         pass1_values = set(model['pass1'])
         pass2_values = set(model['pass2'])
         
-        # Filter zone_df for pass1 values
-        pass1_df = zone_df[zone_df['M'].isin(pass1_values)].copy()
+        # Filter zone_df for pass1 values (use 'M #' column name)
+        pass1_df = zone_df[zone_df['M #'].isin(pass1_values)].copy()
         
         # Filter zone_df for pass2 values  
-        pass2_df = zone_df[zone_df['M'].isin(pass2_values)].copy()
+        pass2_df = zone_df[zone_df['M #'].isin(pass2_values)].copy()
         
         if len(pass1_df) == 0 or len(pass2_df) == 0:
             return matches
@@ -229,8 +229,8 @@ class HaydnPatternScanner:
                 if model.get('special_matching'):
                     recip_lookup = get_reciprocal_lookup()
                     if not apply_special_matching(
-                        p1_row['M'], 
-                        p2_row['M'],
+                        p1_row['M #'], 
+                        p2_row['M #'],
                         model['special_matching'],
                         recip_lookup
                     ):
@@ -238,17 +238,17 @@ class HaydnPatternScanner:
                 
                 # Check reciprocal requirement if needed
                 if model.get('check_recip'):
-                    m1, m2 = p1_row['M'], p2_row['M']
+                    m1, m2 = p1_row['M #'], p2_row['M #']
                     if not ((m1 > 0 and m2 < 0) or (m1 < 0 and m2 > 0)):
                         continue
                 
                 # Create match in swing tool format
                 match = {
-                    'M1': p1_row['M'],
+                    'M1': p1_row['M #'],
                     'Origin1': p1_row['Origin'],
                     'Output1': p1_row['Output'],
                     'Arrival1': pd.to_datetime(p1_row['Arrival']).strftime('%Y-%m-%d %H:%M:%S'),
-                    'M2': p2_row['M'],
+                    'M2': p2_row['M #'],
                     'Origin2': p2_row['Origin'],
                     'Output2': p2_row['Output'],
                     'Arrival2': pd.to_datetime(p2_row['Arrival']).strftime('%Y-%m-%d %H:%M:%S'),
