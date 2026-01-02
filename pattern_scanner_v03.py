@@ -105,12 +105,25 @@ class HaydnPatternScanner:
                      center_price: float,
                      zone_width: float = 10.0,
                      match_tolerance: float = 1.0,
-                     single_model: str = None) -> Dict:
+                     single_model: str = None,
+                     # Progressive filtering parameters
+                     filter_epic_origins: bool = False,
+                     filter_same_origin: bool = False,
+                     filter_by_prox: bool = False,
+                     prox_threshold: float = None,
+                     filter_day_zero: bool = False,
+                     show_flip_matches: bool = False) -> Dict:
         """
         Comprehensive zone analysis including all pattern types
         
         Args:
             single_model: If provided, only analyze this specific model
+            filter_epic_origins: If True, only include Trinidad/Tobago
+            filter_same_origin: If True, only same origin pairs
+            filter_by_prox: If True, filter by output spread
+            prox_threshold: Max output spread for matches
+            filter_day_zero: If True, only Day [0] arrivals
+            show_flip_matches: If True, identify flip matches
         
         Returns:
             Dictionary with patterns, trigger analysis, and scoring
@@ -123,12 +136,18 @@ class HaydnPatternScanner:
         if len(zone_df) == 0:
             return {'error': 'No arrivals in zone'}
         
-        # If single model requested, only process that model
+        # If single model requested, only process that model with filters
         if single_model:
-            model_matches = self._find_single_model_matches(
+            model_matches, filtering_metrics = self._find_single_model_matches(
                 zone_df, 
                 single_model, 
-                match_tolerance
+                match_tolerance,
+                filter_epic_origins=filter_epic_origins,
+                filter_same_origin=filter_same_origin,
+                filter_by_prox=filter_by_prox,
+                prox_threshold=prox_threshold,
+                filter_day_zero=filter_day_zero,
+                show_flip_matches=show_flip_matches
             )
             
             return {
@@ -137,6 +156,7 @@ class HaydnPatternScanner:
                 'num_arrivals': len(zone_df),
                 'single_model_name': single_model,
                 'single_model_matches': model_matches,
+                'filtering_metrics': filtering_metrics,  # NEW: Progressive filtering metrics
                 'score': len(model_matches),  # Simple score based on match count
                 'rank': None
             }
@@ -180,40 +200,42 @@ class HaydnPatternScanner:
             'rank': None
         }
     
-    def _find_single_model_matches(self, zone_df: pd.DataFrame, model_name: str, tolerance: float) -> List[Dict]:
+    def _find_single_model_matches(self, 
+                                   zone_df: pd.DataFrame, 
+                                   model_name: str, 
+                                   tolerance: float,
+                                   filter_epic_origins: bool = False,
+                                   filter_same_origin: bool = False,
+                                   filter_by_prox: bool = False,
+                                   prox_threshold: float = None,
+                                   filter_day_zero: bool = False,
+                                   show_flip_matches: bool = False) -> Tuple[List[Dict], Dict]:
         """
-        Find matches for a single specific model
+        Find matches for a single specific model with progressive filtering
         
-        Args:
-            zone_df: Travelers in the zone
-            model_name: Name of the model to analyze (e.g., 'FOGZ_Premium_Output')
-            tolerance: Maximum output spread for matching
-            
         Returns:
-            List of match dictionaries in swing tool Excel format
+            Tuple of (matches, filtering_metrics)
         """
         from model_definitions_v21 import MODELS, get_reciprocal_lookup, apply_special_matching
         
         if model_name not in MODELS:
-            return []
+            return [], {}
         
         model = MODELS[model_name]
-        matches = []
         
         # Get pass1 and pass2 M# values
         pass1_values = set(model['pass1'])
         pass2_values = set(model['pass2'])
         
-        # Filter zone_df for pass1 values (use 'M #' column name)
+        # Filter zone_df for pass1 and pass2 values
         pass1_df = zone_df[zone_df['M #'].isin(pass1_values)].copy()
-        
-        # Filter zone_df for pass2 values  
         pass2_df = zone_df[zone_df['M #'].isin(pass2_values)].copy()
         
         if len(pass1_df) == 0 or len(pass2_df) == 0:
-            return matches
+            return [], {}
         
-        # Find matches within tolerance
+        # Find all matches within tolerance
+        matches = []
         for _, p1_row in pass1_df.iterrows():
             for _, p2_row in pass2_df.iterrows():
                 # Skip if same arrival
@@ -242,23 +264,146 @@ class HaydnPatternScanner:
                     if not ((m1 > 0 and m2 < 0) or (m1 < 0 and m2 > 0)):
                         continue
                 
+                # Determine which arrival is more recent (for flip detection)
+                day1 = p1_row.get('Day', 0) if 'Day' in p1_row else 0
+                day2 = p2_row.get('Day', 0) if 'Day' in p2_row else 0
+                
+                # Most recent has lower Day value (0 is today, 1 is yesterday, etc.)
+                if day1 <= day2:
+                    more_recent_m = p1_row['M #']
+                    less_recent_m = p2_row['M #']
+                else:
+                    more_recent_m = p2_row['M #']
+                    less_recent_m = p1_row['M #']
+                
+                # Determine if flip match
+                m1, m2 = p1_row['M #'], p2_row['M #']
+                is_flip = (m1 > 0 and m2 < 0) or (m1 < 0 and m2 > 0)
+                
                 # Create match in swing tool format
                 match = {
                     'M1': p1_row['M #'],
                     'Origin1': p1_row['Origin'],
                     'Output1': p1_row['Output'],
                     'Arrival1': pd.to_datetime(p1_row['Arrival']).strftime('%Y-%m-%d %H:%M:%S'),
+                    'Day1': day1,
                     'M2': p2_row['M #'],
                     'Origin2': p2_row['Origin'],
                     'Output2': p2_row['Output'],
                     'Arrival2': pd.to_datetime(p2_row['Arrival']).strftime('%Y-%m-%d %H:%M:%S'),
+                    'Day2': day2,
                     'Output_Spread': spread,
-                    'Match_Type': 'Reciprocal' if model.get('check_recip') else 'Standard'
+                    'Prox': spread,  # Prox is same as Output_Spread
+                    'Match_Type': 'Reciprocal' if model.get('check_recip') else 'Standard',
+                    'Is_Flip': is_flip,
+                    'More_Recent_M': more_recent_m,
+                    'Arrival_Output': (p1_row['Output'] + p2_row['Output']) / 2  # Average
                 }
+                
+                # Add feed info if available
+                if 'Feed' in p1_row:
+                    match['Feed1'] = p1_row['Feed']
+                if 'Feed' in p2_row:
+                    match['Feed2'] = p2_row['Feed']
+                
+                # Determine primary feed (where most recent arrival is)
+                if day1 <= day2 and 'Feed' in p1_row:
+                    match['Feed'] = p1_row['Feed']
+                elif day2 < day1 and 'Feed' in p2_row:
+                    match['Feed'] = p2_row['Feed']
+                elif 'Feed' in p1_row:
+                    match['Feed'] = p1_row['Feed']
+                else:
+                    match['Feed'] = 'Unknown'
                 
                 matches.append(match)
         
-        return matches
+        # PROGRESSIVE FILTERING - Track metrics at each step
+        filtering_metrics = {
+            'step0_initial': {
+                'count': len(matches),
+                'output_spread': self._calc_output_spread(matches),
+                'unique_outputs': self._count_unique_outputs(matches),
+                'description': 'Initial matches (within zone + tolerance)'
+            }
+        }
+        
+        # Filter 1: Day [0] only
+        if filter_day_zero:
+            matches = [m for m in matches if m['Day1'] == 0 and m['Day2'] == 0]
+            filtering_metrics['step1_day_zero'] = {
+                'count': len(matches),
+                'output_spread': self._calc_output_spread(matches),
+                'unique_outputs': self._count_unique_outputs(matches),
+                'description': 'Day [0] arrivals only (Today)'
+            }
+        
+        # Filter 2: Epic origins (Trinidad/Tobago)
+        if filter_epic_origins:
+            epic_origins = {'Trinidad', 'Tobago', 'trinidad', 'tobago'}
+            matches = [m for m in matches 
+                      if m['Origin1'] in epic_origins or m['Origin2'] in epic_origins]
+            step_key = f'step{2 if filter_day_zero else 1}_epic_origins'
+            filtering_metrics[step_key] = {
+                'count': len(matches),
+                'output_spread': self._calc_output_spread(matches),
+                'unique_outputs': self._count_unique_outputs(matches),
+                'description': 'Epic origins (Trinidad/Tobago) only'
+            }
+        
+        # Filter 3: Same origin pairs
+        if filter_same_origin:
+            matches = [m for m in matches 
+                      if m['Origin1'].lower() == m['Origin2'].lower()]
+            step_num = sum([filter_day_zero, filter_epic_origins, True])
+            step_key = f'step{step_num}_same_origin'
+            filtering_metrics[step_key] = {
+                'count': len(matches),
+                'output_spread': self._calc_output_spread(matches),
+                'unique_outputs': self._count_unique_outputs(matches),
+                'description': 'Same origin pairs (Trinidad+Trinidad or Tobago+Tobago)'
+            }
+        
+        # Filter 4: Prox threshold
+        if filter_by_prox and prox_threshold is not None:
+            matches = [m for m in matches if m['Prox'] < prox_threshold]
+            step_num = sum([filter_day_zero, filter_epic_origins, filter_same_origin, True])
+            step_key = f'step{step_num}_prox'
+            filtering_metrics[step_key] = {
+                'count': len(matches),
+                'output_spread': self._calc_output_spread(matches),
+                'unique_outputs': self._count_unique_outputs(matches),
+                'description': f'Prox < {prox_threshold} points',
+                'prox_threshold': prox_threshold
+            }
+        
+        # Calculate rarity if flip matches requested
+        if show_flip_matches:
+            flip_matches = [m for m in matches if m['Is_Flip']]
+            filtering_metrics['flip_analysis'] = {
+                'total_matches': len(matches),
+                'flip_matches': len(flip_matches),
+                'flip_percentage': (len(flip_matches) / len(matches) * 100) if len(matches) > 0 else 0,
+                'rarity_ratio': f"{len(flip_matches)} out of {filtering_metrics['step0_initial']['count']}"
+            }
+        
+        return matches, filtering_metrics
+    
+    def _calc_output_spread(self, matches: List[Dict]) -> float:
+        """Calculate output spread (max - min arrival output)"""
+        if not matches:
+            return 0.0
+        outputs = [m['Arrival_Output'] for m in matches]
+        return max(outputs) - min(outputs)
+    
+    def _count_unique_outputs(self, matches: List[Dict]) -> int:
+        """Count unique arrival output locations"""
+        if not matches:
+            return 0
+        outputs = [m['Arrival_Output'] for m in matches]
+        # Round to 2 decimals to count "unique" locations
+        unique = len(set(round(o, 2) for o in outputs))
+        return unique
     
     # ========================================================================
     # EXISTING PATTERN DETECTORS (from v2)
@@ -999,11 +1144,24 @@ class HaydnPatternScanner:
                        min_swing_size: float = 60,
                        zone_width: float = 10.0,
                        match_tolerance: float = 1.0,
-                       single_model: str = None) -> pd.DataFrame:
+                       single_model: str = None,
+                       # Progressive filtering parameters
+                       filter_epic_origins: bool = False,
+                       filter_same_origin: bool = False,
+                       filter_by_prox: bool = False,
+                       prox_threshold: float = None,
+                       filter_day_zero: bool = False,
+                       show_flip_matches: bool = False) -> pd.DataFrame:
         """Complete scan with swing detection and analysis
         
         Args:
             single_model: If provided, only analyze this specific model (e.g., 'FOGZ_Premium_Output')
+            filter_epic_origins: If True, only include Trinidad/Tobago origins
+            filter_same_origin: If True, only Trinidad+Trinidad or Tobago+Tobago
+            filter_by_prox: If True, filter by output spread (prox)
+            prox_threshold: Maximum output spread for matches
+            filter_day_zero: If True, only include Day [0] arrivals
+            show_flip_matches: If True, identify flip matches
         """
         zones = self.detect_swing_zones(start_time, end_time, min_swing_size)
         
@@ -1016,7 +1174,14 @@ class HaydnPatternScanner:
                 center_price=zone['price'],
                 zone_width=zone_width,
                 match_tolerance=match_tolerance,
-                single_model=single_model  # Pass single_model filter
+                single_model=single_model,
+                # Progressive filtering
+                filter_epic_origins=filter_epic_origins,
+                filter_same_origin=filter_same_origin,
+                filter_by_prox=filter_by_prox,
+                prox_threshold=prox_threshold,
+                filter_day_zero=filter_day_zero,
+                show_flip_matches=show_flip_matches
             )
             
             if 'error' not in analysis:
