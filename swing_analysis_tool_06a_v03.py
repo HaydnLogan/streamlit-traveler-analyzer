@@ -2871,9 +2871,9 @@ if __name__ == "__main__":
 #
 # RECENT UPDATES and Version History Summary:
 # ====================
-# 06av03 post run reveiw: bug fix to show all Recip results creates new bug.  
-# Previos bug was: same up and same down result missing, only flip resuls showed.
-# new bug: flip results now missing, only same up and down results show.
+# 06av03 post run review: bug fix to show all Recip results creates new bug.  
+# The previous bug was: same up and same down result missing, only flip results showed.
+# the new bug: flip results now missing, only same up and down results show.
 
 # 06a_v03 (2026-01-11) - Critical bug fix + export enhancements
 
