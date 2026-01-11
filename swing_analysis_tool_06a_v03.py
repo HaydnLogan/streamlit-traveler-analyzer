@@ -47,7 +47,7 @@ from model_processor_v21 import (
 )
 
 # Import Excel exporter v23 v4 with enhanced formatting
-from excel_exporter_v23_v2 import create_download_button
+from excel_exporter_v23_v4 import create_download_button
 
 # ============================================================================
 # PAGE CONFIGURATION
