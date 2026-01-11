@@ -2883,7 +2883,7 @@ if __name__ == "__main__":
 
 # 06a_v01 - Model selection, progressive display
 # 06a_v01 detail belows:  
-posted on 1/10/2025 around 7 PM
+# posted on 1/10/2025 around 7 PM
 # added Unified Excel Export Format (v23)
 # Changed: Both normal and bypass modes now use the new excel_exporter_v23 for consistent 26-column output.
 
