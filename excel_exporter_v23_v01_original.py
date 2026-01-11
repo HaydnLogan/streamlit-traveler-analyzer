@@ -1,4 +1,5 @@
 """
+*** This original produced 9 empty rows. ***
 Excel Exporter v23 - Unified Export for Both Bypass and Normal Modes
 
 This module handles Excel export for all model results with standardized 26-column format:
