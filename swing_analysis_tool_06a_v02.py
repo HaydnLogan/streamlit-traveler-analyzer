@@ -1020,7 +1020,7 @@ def find_ma_confluence_at_swings(df, swings_df, ma_columns, zone_size=24):
 # ============================================================================
 
 def main():
-    st.title(" Market Swing Analysis Tool 06a_00 Two Pass")
+    st.title(" Market Swing Analysis Tool 06a_02 Two Pass")
     st.markdown("**Integrated Version** - Swing Detection, MA Analysis, NY Session, Traveler/Pivot Calculations")
     st.markdown("---")
     
