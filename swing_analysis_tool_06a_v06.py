@@ -46,8 +46,8 @@ from model_processor_v21 import (
     create_summary_stats
 )
 
-# Import Excel exporter v23 v5 with enhanced formatting and Today/Recent identification
-from excel_exporter_v23_v5 import create_download_button
+# Import Excel exporter v23 v6 with enhanced formatting, Today/Recent identification, and export timer
+from excel_exporter_v23_v6 import create_download_button
 
 # ============================================================================
 # PAGE CONFIGURATION
