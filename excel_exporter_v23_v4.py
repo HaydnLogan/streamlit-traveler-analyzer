@@ -515,17 +515,20 @@ def export_all_models_to_excel(all_results, report_time, measurement_df=None,
         # Row 1 = Report Time, Row 2 = Timing info, Row 3 = Column headers
         worksheet.freeze_panes = 'A4'  # Freeze everything above row 4
         
-        # Set column widths (3.3677 = 40 pixels). Actual results: 2.56, 30 pixels. 4.44 gets the desired result.
+        # Set column widths (3.3677 = 40 pixels). Actual results: 2.56, 30 pixels. 4.44 gets the desired result with a 7 pixel offset.
         # Find column indices for specific columns
         header_row = 3
         col_widths = {
+            'Prox': 5.56,
             'M1': 4.44,
             'M2': 4.44,
             'R1': 4.44,
             'R2': 4.44,
-            'Arrival_Order': 4.44,
+            'Arrival_Order': 3.67,
             'Day1': 4.44,
-            'Day2': 4.44
+            'Day2': 4.44,
+            'Feed1': 5.44,
+            'Feed2': 5.44
         }
         
         for col_idx, cell in enumerate(worksheet[header_row], start=1):
