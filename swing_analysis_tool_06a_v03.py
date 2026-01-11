@@ -2869,7 +2869,7 @@ if __name__ == "__main__":
 # FILE NOTES - SWING ANALYSIS TOOL
 # ================================================================================
 #
-RECENT UPDATES and Version History Summary:
+# RECENT UPDATES and Version History Summary:
 # ====================
 # 06a_v03 (2026-01-11) - Critical bug fix + export enhancements
 
