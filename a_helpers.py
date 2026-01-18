@@ -1,3 +1,15 @@
+"""
+a_helpers.py - FIXED VERSION (01.18.26)
+
+BUGS FIXED:
+1. get_input_at_day_start(): Now correctly uses the start of the specific day being processed,
+   not the start of the week (Sunday 18:00).
+   - If report_time is "07-Jan-2026 18:00" → returns open at "07-Jan-2026 18:00"
+   - If report_time is "08-Jan-2026 09:00" → returns open at "07-Jan-2026 18:00"
+
+2. get_input_value(): Already correct - uses CSV's 'open' column at the specified time.
+"""
+
 import pandas as pd
 import numpy as np
 import datetime as dt
@@ -451,11 +463,27 @@ def get_input_value(df, report_time):
     match = df_copy[df_copy["time"] == report_time_naive]
     return match.iloc[-1]["open"] if not match.empty and "open" in match.columns else None
 
-# ✅ Get input value at day start time (17:00 or 18:00) looking back from report time
+# ✅ Get input value at day start time (17:00 or 18:00) for the specific day being processed
 def get_input_at_day_start(df, report_time, start_hour):
-    """Get input value at the most recent day start time (17:00 or 18:00) before or at report time"""
-    import streamlit as st
-
+    """
+    Get input value at the trading day start (e.g., 18:00) for the day being processed.
+    
+    FIXED BUG: Now correctly uses the start of the specific day being processed,
+    not the start of the week (Sunday 18:00).
+    
+    Args:
+        df: DataFrame with 'time' and 'open' columns
+        report_time: The datetime being processed (report_time or grab_dt)
+        start_hour: Hour when trading day starts (default 18)
+    
+    Returns:
+        The open value at the trading day start, or None if not found
+    
+    Examples:
+        - report_time = "07-Jan-2026 18:00" → returns open at "07-Jan-2026 18:00"
+        - report_time = "08-Jan-2026 09:00" → returns open at "07-Jan-2026 18:00"
+        - report_time = "08-Jan-2026 03:15" → returns open at "07-Jan-2026 18:00"
+    """
     if df is None or report_time is None:
         return None
 
@@ -464,53 +492,44 @@ def get_input_at_day_start(df, report_time, start_hour):
         """Convert any datetime to a completely naive datetime"""
         if dt is None:
             return None
-
-        # Convert to pandas Timestamp if it isn't already
         dt = pd.Timestamp(dt)
-
-        # If it has timezone info, convert to naive by removing tz info entirely
         if dt.tz is not None:
-            # Get the naive datetime components directly, don't convert to UTC
             dt = dt.tz_localize(None)
-
         return dt
 
     # Make report_time completely naive
     report_time_naive = make_naive(report_time)
 
-    # Start with the day start time on the same date as report_time
-    target_time = report_time_naive.replace(hour=start_hour, minute=0, second=0, microsecond=0)
-
-    # If the report time is before the day start time on the same day,
-    # we need to go back to the previous day's day start time
-    if report_time_naive < target_time:
-        target_time = target_time - pd.Timedelta(days=1)
+    # Determine the trading day start datetime
+    # If report time is >= start_hour, trading day started today at start_hour
+    # If report time < start_hour, trading day started yesterday at start_hour
+    if report_time_naive.hour >= start_hour:
+        # Trading day started today at start_hour
+        target_time = report_time_naive.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    else:
+        # Trading day started yesterday at start_hour
+        target_time = (report_time_naive - pd.Timedelta(days=1)).replace(hour=start_hour, minute=0, second=0, microsecond=0)
 
     # Create a working copy and ensure all times are completely naive
     df_copy = df.copy()
-
-    # Make all times in the dataframe completely naive
     try:
         df_copy["time"] = df_copy["time"].apply(make_naive)
-    except Exception as e:
+    except Exception:
         return None
 
-    # First try exact match at the target time
+    # Try exact match at the target time
     exact_match = df_copy[df_copy["time"] == target_time]
     if not exact_match.empty and "open" in exact_match.columns:
-        found_value = exact_match.iloc[-1]["open"]
-        return found_value
+        return exact_match.iloc[-1]["open"]
 
-    # If no exact match, find the closest time to the target time that's <= report_time
+    # If no exact match, find the closest time within 5 minutes
     if "time" in df_copy.columns and "open" in df_copy.columns:
-        # Filter to times that are <= report_time
-        valid_times_df = df_copy[df_copy["time"] <= report_time_naive]
-        if not valid_times_df.empty:
-            valid_times_df = valid_times_df.copy()
-            valid_times_df["time_diff"] = abs(valid_times_df["time"] - target_time)
-            closest_row = valid_times_df.loc[valid_times_df["time_diff"].idxmin()]
-            found_value = closest_row["open"]
-            return found_value
+        df_copy["time_diff"] = abs(df_copy["time"] - target_time)
+        # Only use if within 5 minutes
+        closest_matches = df_copy[df_copy["time_diff"] <= pd.Timedelta(minutes=5)]
+        if not closest_matches.empty:
+            closest_row = closest_matches.loc[closest_matches["time_diff"].idxmin()]
+            return closest_row["open"]
 
     return None
 
@@ -1314,17 +1333,3 @@ def highlight_custom_traveler_report(df, show_highlighting=True):
         styled = styled.apply(highlight_output_duplicates, subset=["Output"])
     
     return styled
-
-
-
-
-
-
-
-
-
-
-
-
-
-
