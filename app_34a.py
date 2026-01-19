@@ -640,9 +640,8 @@ def render_unified_export(traveler_reports, report_time, asset_id="", window_rad
         excel_buffer.seek(0)
         
         # Build filename with new naming convention
-        # Format: asset + RawTrav for + date + (lookback days) + radius + window
-        lookback_str = f"({lookback_days}days)" if lookback_days else ""
-        filename = f"{asset_prefix}RawTrav_for_{report_datetime_str}_{lookback_str}_{int(window_radius)}_radius_window.xlsx"
+        # Format: asset + RawTrav for + date + lookback days + radius
+        filename = f"{asset_prefix}RawTrav_for_{report_datetime_str}_{lookback_days}days_{int(window_radius)}_radius.xlsx"
         
         st.download_button(
             "📥 Download Full Range Report",
@@ -1594,8 +1593,8 @@ if st.button("🚀 Process Data"):
                     lookback_days
                 )
                 
-                # Updated naming convention: asset + RawTrav for + date + (lookback days) + radius + window
-                filename = f"{asset_id.lower()}_RawTrav_for_{trading_day_str}_({lookback_days}days)_{int(window_radius_multi)}_radius_window.xlsx"
+                # Updated naming convention: asset + RawTrav for + date + lookback days + radius
+                filename = f"{asset_id.lower()}_RawTrav_for_{trading_day_str}_{lookback_days}days_{int(window_radius_multi)}_radius.xlsx"
                 
                 st.download_button(
                     label="📥 Download Multi-Day Report",
