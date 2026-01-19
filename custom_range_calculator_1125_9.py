@@ -1,4 +1,19 @@
 """
+Custom Range Calculator 1125_9 - FIXED VERSION (01.18.26)
+Used by: Swing Analysis Tool (with window segmentation)
+
+BUGS FIXED (in addition to original features):
+1. Input @ start: Now correctly uses the start of the specific day being processed,
+   not Sunday 18:00. Changed from _most_recent_sunday_anchor() to calculating
+   the actual trading day start based on report_time.
+   **NOTE**: The v1125_7 header claimed "Issue 1 FIXED" but it actually wasn't fixed.
+
+2. Input @ Arrival: Now correctly uses the CSV's 'open' column at arrival time,
+   NOT the origin's 'C' (Close) column. Added input_arrival calculation using
+   get_open_at(hlc_df, arrival_time).
+
+3. Input @ Report: Already correct - uses the open at report_time.
+
 v1125_9. WINDOW SEGMENTATION: Break large windows into smaller segments for better performance.
 - Added segment_size parameter to process window in chunks (e.g., 75-unit segments)
 - 300-unit window (radius=150) can be split into 4 segments of 75 units each
@@ -22,48 +37,7 @@ With filtering, expected time improvements:
 - Processing only Anchor + Epic + Spain + Saturn + Jupiter: ~40-60% faster
 - Smaller result sets avoid Pandas rendering limits
 
-v1125_7. CRITICAL FIX: Corrects raw M calculation to use WINDOW RANGE instead of HLC range.
-**Issue 1 FIXED**: Input @ start now correctly captured from each feed's Open (column B)
-- Small feed Open: stored as feed_start
-- Big feed Open: stored as feed_start (processed separately)
-- Both values now displayed: "🧮 Small Feed Window: [X, Y] around Open = Z"
-
-**Issue 2 FIXED**: Raw M calculation formula corrected
-- OLD (WRONG): raw_m_low = (L - avg) / spread
-- NEW (CORRECT): raw_m_low = (window_low - avg) / spread
-- Where window_low = feed_start - window_radius
-- Where window_high = feed_start + window_radius
-
-**Issue 3 FIXED**: Window Radius slider max increased from 500 to 1000
-
-**Issue 4 FIXED**: Range column now shows window range (e.g., "24299.75-24599.75") not HLC range
-
-**Issue 5 FIXED**: Zone column removed from prep tables
-
-This matches the user's example:
-- Feed Open (Input @ start): 24449.75
-- Window Radius: 150
-- Window Low: 24449.75 - 150 = 24299.75
-- Window High: 24449.75 + 150 = 24599.75
-- Raw M Low = (24299.75 - 24343.75) / 39 = -1.1282 ✓
-- Raw M High = (24599.75 - 24343.75) / 39 = 6.5641 ✓
-
-v1125_6. CRITICAL FIX: Corrects find_valid_m_values calling pattern and adds comprehensive HLC tracking.
-- Fixed raw_m_low/raw_m_high - now correctly calculated via calculate_raw_m_values() first
-- Fixed hlc_data parameter - now passes merged dict instead of list
-- Tracks EVERY HLC examined (with H, L, C, Raw M Low/High, Results Found)
-- Processing summaries now ALWAYS display (even when 0 results) with detailed HLC examination
-- Shows which dates were examined, how many HLCs per pass, and results per HLC
-
-This fixes the root cause: we were passing L and H directly as raw_m_low/raw_m_high when these
-need to be CALCULATED values from the formula: (price - avg) / spread.
-
-v1125_5. CRITICAL FIX for M # filtering - implements pre-filtering approach.
-- Added filter_measurement_by_m_numbers() helper function
-- Pre-filters measurement file by M # BEFORE calling find_valid_m_values()
-- This ensures only M values corresponding to desired M #s are searched
-- Removed post-filtering logic (no longer needed)
-- Added diagnostic output showing M # availability and overlap with valid lists
+# Previous changes preserved in git history
 """
 
 
@@ -337,7 +311,10 @@ def find_valid_m_values(measurement_df, raw_m_low, raw_m_high, hlc_data, range_l
 
                 feed_type = "Small" if data_source == "Small CSV" else "Big"
                 input_start = hlc_data.get('input_start', 0)
-                input_arrival = hlc_data.get('C', 0)
+                
+                # FIXED BUG: Input @ Arrival should use the CSV's 'open' column at arrival time,
+                # NOT the origin's 'C' (Close) column
+                input_arrival = hlc_data.get('input_arrival', 0)
                 input_report = hlc_data.get('input_report', 0)
 
                 valid_entries.append({
@@ -391,9 +368,20 @@ def process_custom_ranges_advanced(measurement_df, small_df, report_time, custom
 
     for hlc_df, data_source in data_sources:
         feed_type = "Small" if data_source == "Small CSV" else "Big"
-        # capture once per feed
-        start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour)
-        feed_start = get_open_at(hlc_df, start_anchor)
+        # FIXED BUG: Use report_time to determine the correct day start, not Sunday anchor
+        # Calculate the trading day start (e.g., 18:00 on the day that starts this trading day)
+        if isinstance(report_time, str):
+            report_dt = clean_timestamp(report_time)
+        else:
+            report_dt = report_time
+        
+        # Determine the trading day start
+        if report_dt.hour >= day_start_hour:
+            day_start_dt = report_dt.replace(hour=day_start_hour, minute=0, second=0, microsecond=0)
+        else:
+            day_start_dt = (report_dt - timedelta(days=1)).replace(hour=day_start_hour, minute=0, second=0, microsecond=0)
+        
+        feed_start = get_open_at(hlc_df, day_start_dt)
         feed_report = get_open_at(hlc_df, clean_timestamp(report_time))
 
         for range_name, cfg in custom_ranges.items():
@@ -424,6 +412,13 @@ def process_custom_ranges_advanced(measurement_df, small_df, report_time, custom
                 for hlc in hlc_sets:
                     hlc['input_start'] = feed_start
                     hlc['input_report'] = feed_report
+                    
+                    # FIXED BUG: Add input_arrival - use feed's 'open' at arrival time
+                    arrival_time = hlc.get('datetime')
+                    if arrival_time:
+                        hlc['input_arrival'] = get_open_at(hlc_df, arrival_time)
+                    else:
+                        hlc['input_arrival'] = 0
 
                     calc = calculate_raw_m_values(hlc, range_low, range_high)
                     if not calc:
@@ -535,9 +530,20 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
 
     for hlc_df, data_source in data_sources:
         feed_type = "Small" if data_source == "Small CSV" else "Big"
-        # capture once per feed (use the usual start anchor)
-        start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour)
-        feed_start = get_open_at(hlc_df, start_anchor)
+        # FIXED BUG: Use report_time to determine the correct day start, not Sunday anchor
+        # Calculate the trading day start (e.g., 18:00 on the day that starts this trading day)
+        if isinstance(report_time, str):
+            report_dt = clean_timestamp(report_time)
+        else:
+            report_dt = report_time
+        
+        # Determine the trading day start
+        if report_dt.hour >= day_start_hour:
+            day_start_dt = report_dt.replace(hour=day_start_hour, minute=0, second=0, microsecond=0)
+        else:
+            day_start_dt = (report_dt - timedelta(days=1)).replace(hour=day_start_hour, minute=0, second=0, microsecond=0)
+        
+        feed_start = get_open_at(hlc_df, day_start_dt)
         feed_report = get_open_at(hlc_df, clean_timestamp(report_time))
 
         for origin in origins:
@@ -555,6 +561,13 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
                 # attach feed-level opens
                 hlc['input_start'] = feed_start
                 hlc['input_report'] = feed_report
+                
+                # FIXED BUG: Add input_arrival - use feed's 'open' at arrival time
+                arrival_time = hlc.get('datetime')
+                if arrival_time:
+                    hlc['input_arrival'] = get_open_at(hlc_df, arrival_time)
+                else:
+                    hlc['input_arrival'] = 0
 
                 calc = calculate_raw_m_values(hlc, lo, hi)
                 if not calc:
@@ -727,9 +740,20 @@ def process_cluster_tables_two_pass(
         
         # Process each feed separately
         for hlc_df, feed_name in hlc_df_list:
-            # Capture feed-level open values (Input @ start and Input @ report)
-            start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour)
-            feed_start = get_open_at(hlc_df, start_anchor)
+            # FIXED BUG: Use report_time to determine the correct day start, not Sunday anchor
+            # Calculate the trading day start (e.g., 18:00 on the day that starts this trading day)
+            if isinstance(report_time, str):
+                report_dt = clean_timestamp(report_time)
+            else:
+                report_dt = report_time
+            
+            # Determine the trading day start
+            if report_dt.hour >= day_start_hour:
+                day_start_dt = report_dt.replace(hour=day_start_hour, minute=0, second=0, microsecond=0)
+            else:
+                day_start_dt = (report_dt - timedelta(days=1)).replace(hour=day_start_hour, minute=0, second=0, microsecond=0)
+            
+            feed_start = get_open_at(hlc_df, day_start_dt)
             feed_report = get_open_at(hlc_df, clean_timestamp(report_time))
             
             # Calculate window range based on this feed's Open
@@ -823,6 +847,13 @@ def process_cluster_tables_two_pass(
                             hlc_item['input_start'] = feed_start
                             hlc_item['input_report'] = feed_report
                             
+                            # FIXED BUG: Add input_arrival - use feed's 'open' at arrival time
+                            arrival_time = hlc_item.get('datetime')
+                            if arrival_time:
+                                hlc_item['input_arrival'] = get_open_at(hlc_df, arrival_time)
+                            else:
+                                hlc_item['input_arrival'] = 0
+                            
                             # CRITICAL: Calculate raw M values using WINDOW range, not HLC range
                             calc = calculate_raw_m_values(hlc_item, window_low, window_high)
                             if not calc:
@@ -880,6 +911,13 @@ def process_cluster_tables_two_pass(
                         # Attach feed-level opens
                         hlc_item['input_start'] = feed_start
                         hlc_item['input_report'] = feed_report
+                        
+                        # FIXED BUG: Add input_arrival - use feed's 'open' at arrival time
+                        arrival_time = hlc_item.get('datetime')
+                        if arrival_time:
+                            hlc_item['input_arrival'] = get_open_at(hlc_df, arrival_time)
+                        else:
+                            hlc_item['input_arrival'] = 0
                         
                         # CRITICAL: Calculate raw M values using WINDOW range, not HLC range
                         calc = calculate_raw_m_values(hlc_item, window_low, window_high)
