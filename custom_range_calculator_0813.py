@@ -1,5 +1,19 @@
 """
-This is the update to version 0810.  It is still fast, prints 16,000 lines in under 17 seconds, was under 10 seconds with errors.
+Custom Range Calculator 0813 - FIXED VERSION (01.18.26)
+Used by: Traveler Report Generator (app_34a.py)
+
+BUGS FIXED:
+1. Input @ start: Now correctly uses the start of the specific day being processed,
+   not Sunday 18:00. Changed from _most_recent_sunday_anchor() to calculating
+   the actual trading day start based on report_time.
+
+2. Input @ Arrival: Now correctly uses the CSV's 'open' column at arrival time,
+   NOT the origin's 'C' (Close) column. Added input_arrival calculation using
+   get_open_at(hlc_df, arrival_time).
+
+3. Input @ Report: Already correct - uses the open at report_time.
+__________________________________________________________________
+Version 0810.  It is still fast, prints 16,000 lines in under 17 seconds, was under 10 seconds with errors.
 it fixed the missing Macedonia[-1], Macedonia[-2], Wasp-12b[-1], Wasp-12b[-2]. (under 10 seconds)
 Now addresses Input @ 1800 value for each csv, and Input @ Report for each csv..  Input @ 18:00 renamed to Input @ Start.
 Input @ start should show 2 values, but instead it shows 4 values.  
@@ -257,7 +271,12 @@ def find_valid_m_values(measurement_df, raw_m_low, raw_m_high, hlc_data, range_l
 
                 feed_type = "Small" if data_source == "Small CSV" else "Big"
                 input_start = hlc_data.get('input_start', 0)
-                input_arrival = hlc_data.get('C', 0)
+                
+                # FIXED BUG: Input @ Arrival should use the CSV's 'open' column at arrival time,
+                # NOT the origin's 'C' (Close) column
+                # Get the open value from the feed at the arrival datetime
+                input_arrival = hlc_data.get('input_arrival', 0)
+                
                 input_report = hlc_data.get('input_report', 0)
 
                 valid_entries.append({
@@ -312,9 +331,20 @@ def process_custom_ranges_advanced(measurement_df, small_df, report_time, custom
 
     for hlc_df, data_source in data_sources:
         feed_type = "Small" if data_source == "Small CSV" else "Big"
-        # capture once per feed
-        start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour)
-        feed_start = get_open_at(hlc_df, start_anchor)
+        # FIXED BUG: Use report_time to determine the correct day start, not Sunday anchor
+        # Calculate the trading day start (e.g., 18:00 on the day that starts this trading day)
+        if isinstance(report_time, str):
+            report_dt = clean_timestamp(report_time)
+        else:
+            report_dt = report_time
+        
+        # Determine the trading day start
+        if report_dt.hour >= day_start_hour:
+            day_start_dt = report_dt.replace(hour=day_start_hour, minute=0, second=0, microsecond=0)
+        else:
+            day_start_dt = (report_dt - timedelta(days=1)).replace(hour=day_start_hour, minute=0, second=0, microsecond=0)
+        
+        feed_start = get_open_at(hlc_df, day_start_dt)
         feed_report = get_open_at(hlc_df, clean_timestamp(report_time))
 
         for range_name, cfg in custom_ranges.items():
@@ -345,6 +375,13 @@ def process_custom_ranges_advanced(measurement_df, small_df, report_time, custom
                 for hlc in hlc_sets:
                     hlc['input_start'] = feed_start
                     hlc['input_report'] = feed_report
+                    
+                    # FIXED BUG: Add input_arrival - use feed's 'open' at arrival time
+                    arrival_time = hlc.get('datetime')
+                    if arrival_time:
+                        hlc['input_arrival'] = get_open_at(hlc_df, arrival_time)
+                    else:
+                        hlc['input_arrival'] = 0
 
                     calc = calculate_raw_m_values(hlc, range_low, range_high)
                     if not calc:
@@ -456,9 +493,20 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
 
     for hlc_df, data_source in data_sources:
         feed_type = "Small" if data_source == "Small CSV" else "Big"
-        # capture once per feed (use the usual start anchor)
-        start_anchor = _most_recent_sunday_anchor(report_time, day_start_hour)
-        feed_start = get_open_at(hlc_df, start_anchor)
+        # FIXED BUG: Use report_time to determine the correct day start, not Sunday anchor
+        # Calculate the trading day start (e.g., 18:00 on the day that starts this trading day)
+        if isinstance(report_time, str):
+            report_dt = clean_timestamp(report_time)
+        else:
+            report_dt = report_time
+        
+        # Determine the trading day start
+        if report_dt.hour >= day_start_hour:
+            day_start_dt = report_dt.replace(hour=day_start_hour, minute=0, second=0, microsecond=0)
+        else:
+            day_start_dt = (report_dt - timedelta(days=1)).replace(hour=day_start_hour, minute=0, second=0, microsecond=0)
+        
+        feed_start = get_open_at(hlc_df, day_start_dt)
         feed_report = get_open_at(hlc_df, clean_timestamp(report_time))
 
         for origin in origins:
@@ -476,6 +524,13 @@ def process_full_range_advanced(measurement_df, small_df, report_time, center, w
                 # attach feed-level opens
                 hlc['input_start'] = feed_start
                 hlc['input_report'] = feed_report
+                
+                # FIXED BUG: Add input_arrival - use feed's 'open' at arrival time
+                arrival_time = hlc.get('datetime')
+                if arrival_time:
+                    hlc['input_arrival'] = get_open_at(hlc_df, arrival_time)
+                else:
+                    hlc['input_arrival'] = 0
 
                 calc = calculate_raw_m_values(hlc, lo, hi)
                 if not calc:
