@@ -1358,22 +1358,28 @@ MATCHED_COL_ORDER = [
 #   U=Arrival1  V=Arrival2  W=Day1  X=Day2  Y=Arrival_Brackets
 #   Z=Model  AA=Model_Number  AB=Recent  AC=Feed1  AD=Feed2
 MATCHED_COL_WIDTHS = {
-    "A":  13.0,        # Open
+    "A":  9.67,        # Open
     "B":  8.0,         # Ref  (Output1 − Open)
-    "C":  9.88671875,  # Output1
+    "C":  9.67,        # Output1
+    "D":  9.67,        # Output2
     "E":  6.0,         # Prox
-    "F":  13.0,        # Origin1
-    "H":  7.6640625,   # Group
-    "I":  5.21875,     # M1
+    "F":  8.11,        # Origin1
+    "G":  8.11,        # Origin2
+    "H":  7.0,         # Group
+    "I":  3.67,        # M1
+    "J":  3.67,        # M2
+    "K":  3.67,        # R1
+    "L":  3.67,        # R2
     "M":  7.5546875,   # M_#s
     "N":  3.6640625,   # Arrival_Order
-    "O":  13.0,        # Match
-    "W":  5.77734375,  # Day1
+    "O":  12.0,        # Match
+    "W":  4.67,        # Day1
+    "X":  4.67,        # Day2
     "Y":  9.6640625,   # Arrival_Brackets
-    "Z":  13.0,        # Model
-    "AA": 4.33203125,  # Model_Number
+    "Z":  12.0,        # Model
+    "AA": 3.67,  # Model_Number
     "AB": 7.44140625,  # Recent
-    "AC": 13.0,        # Feed1
+    "AC": 7.34,        # Feed1
     "AD": 7.33203125,  # Feed2
 }
 
@@ -1387,7 +1393,7 @@ FILTER_META = {
     "Tco 1b": {"desc": "Test Combo 1b",     "cond": "Today; Model 7; Grp: 2 or 3; Tag1 X0"},
     "Tco 1c": {"desc": "Test Combo 1c",     "cond": "Today; Model 7; Grp: 1. SAA; Tag1: X1 and X2"},
     "Tco 1d": {"desc": "Test Combo 1d",     "cond": "Today; Model 7; Grp: 1. SAA. No tag filter"},
-    "Tco 2d": {"desc": "Test Combo 2d",     "cond": "Model 7; Arrival_Brackets: [0], [-1]"},
+    "Tco 2d": {"desc": "Test Combo 2d",     "cond": "Today; Model 7; Arrival_Brackets: [0], [-1]"},
 }
 
 _ANCHOR_SET = {"spain", "saturn", "jupiter", "kepler-62", "kepler-44"}
