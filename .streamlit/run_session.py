@@ -33,7 +33,7 @@ def main():
     ap.add_argument("-m", "--measurement", default="Meas 4_8 all.xlsx")
     ap.add_argument("--lookback", default="27")
     ap.add_argument("--asset", default="NQ", help="NQ, ES or RTY (Reporter / Recommendations asset)")
-    ap.add_argument("--pipeline", default="unified_traveler_pipeline_6_2_3.py")
+    ap.add_argument("--pipeline", default="unified_traveler_pipeline_6_2_5.py")
     ap.add_argument("--output-dir", "-o", default=".", help="Where the pipeline writes and Recommendations reads")
     ap.add_argument("--daily-goal", default="60")
     ap.add_argument("--bars", default=None, help="1-minute Gasser CSV → outcome columns (past sessions only)")
