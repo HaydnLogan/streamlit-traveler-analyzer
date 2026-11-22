@@ -4,7 +4,15 @@
 import pandas as pd
 import numpy as np
 from collections import defaultdict
-from model_definitions_v21 import RECIP_PAIRS
+for _v in ("v24", "v23", "v22", "v21"):          # newest model definitions first
+    try:
+        RECIP_PAIRS = __import__(f"model_definitions_{_v}").RECIP_PAIRS
+        print(f"  bypass_mode_matcher: RECIP_PAIRS from model_definitions_{_v}")
+        break
+    except (ImportError, AttributeError):
+        continue
+else:
+    raise ImportError("RECIP_PAIRS not found in model_definitions_v24 / v23 / v22 / v21")
 
 def match_travelers_bypass_mode(
     traveler_df,
